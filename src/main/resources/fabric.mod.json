@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "xclipsen_irc_bridge",
+  "version": "${version}",
+  "name": "Xclipsen IRC Bridge",
+  "description": "Simple Minecraft to Discord bridge for Fabric 1.21.10.",
+  "authors": [
+    "OpenAI"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "de.xclipsen.ircbridge.XclipsenIrcBridgeClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~1.21.10",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
