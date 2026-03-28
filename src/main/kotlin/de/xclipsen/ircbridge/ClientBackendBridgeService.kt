@@ -3,6 +3,8 @@ package de.xclipsen.ircbridge
 import com.google.gson.Gson
 import net.minecraft.client.MinecraftClient
 import net.minecraft.text.MutableText
+import net.minecraft.text.ClickEvent
+import net.minecraft.text.Style
 import net.minecraft.text.Text
 import net.minecraft.util.Formatting
 import org.slf4j.Logger
@@ -35,6 +37,7 @@ class ClientBackendBridgeService(
 	private var config = BridgeConfig()
 	private var lastSeenMessageId = 0L
 	private var incomingMessagesEnabled = true
+	private var previewHoverPaused = false
 
 	@Volatile
 	private var state = "stopped"
@@ -61,6 +64,7 @@ class ClientBackendBridgeService(
 	private var backlogInitialized = false
 
 	private val pendingLocalEchoes: Deque<PendingLocalEcho> = ArrayDeque()
+	private val pausedIncomingMessages: Deque<Text> = ArrayDeque()
 
 	@Synchronized
 	fun start(config: BridgeConfig) {
@@ -102,7 +106,7 @@ class ClientBackendBridgeService(
 
 	fun sendIrcMessage(playerName: String, message: String) {
 		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
-		val safeMessage = sanitizeInline(message, MAX_MESSAGE_LENGTH)
+		val safeMessage = sanitizeInline(message, MAX_OUTGOING_MESSAGE_LENGTH)
 		if (safePlayerName.isBlank() || safeMessage.isBlank()) {
 			return
 		}
@@ -119,6 +123,18 @@ class ClientBackendBridgeService(
 
 	fun setIncomingMessagesEnabled(enabled: Boolean) {
 		incomingMessagesEnabled = enabled
+	}
+
+	fun setPreviewHoverPaused(paused: Boolean) {
+		val shouldFlush: Boolean
+		synchronized(pausedIncomingMessages) {
+			shouldFlush = previewHoverPaused && !paused && pausedIncomingMessages.isNotEmpty()
+			previewHoverPaused = paused
+		}
+
+		if (shouldFlush) {
+			flushPausedIncomingMessages()
+		}
 	}
 
 	fun getLinkStatus(playerName: String): BackendLinkStatusResponse {
@@ -231,7 +247,7 @@ class ClientBackendBridgeService(
 			for (message in payload.messages) {
 				lastSeenMessageId = max(lastSeenMessageId, message.id)
 
-				val safeContent = sanitizeInline(message.content, MAX_MESSAGE_LENGTH)
+				val safeContent = sanitizeInline(message.content, MAX_INCOMING_MESSAGE_LENGTH)
 				if (safeContent.isBlank()) {
 					continue
 				}
@@ -264,7 +280,17 @@ class ClientBackendBridgeService(
 				}
 
 				if (incomingMessagesEnabled) {
-					showClientMessage(client, styleBridgeMessage(formatted))
+					val styledMessage = styleBridgeMessage(formatted)
+					if (previewHoverPaused) {
+						synchronized(pausedIncomingMessages) {
+							pausedIncomingMessages.addLast(styledMessage)
+							while (pausedIncomingMessages.size > MAX_PAUSED_INCOMING_MESSAGES) {
+								pausedIncomingMessages.removeFirst()
+							}
+						}
+					} else {
+						showClientMessage(client, styledMessage)
+					}
 				}
 			}
 		} catch (exception: IOException) {
@@ -432,6 +458,20 @@ class ClientBackendBridgeService(
 		}
 	}
 
+	private fun flushPausedIncomingMessages() {
+		val client = MinecraftClient.getInstance() ?: return
+		val drained = mutableListOf<Text>()
+		synchronized(pausedIncomingMessages) {
+			while (pausedIncomingMessages.isNotEmpty()) {
+				drained.add(pausedIncomingMessages.removeFirst())
+			}
+		}
+
+		for (message in drained) {
+			showClientMessage(client, message)
+		}
+	}
+
 	private fun styleBridgeMessage(formatted: String): Text {
 		if (formatted.startsWith("[") && formatted.contains("]")) {
 			val prefixEnd = formatted.indexOf(']') + 1
@@ -440,12 +480,61 @@ class ClientBackendBridgeService(
 
 			val text: MutableText = Text.literal(prefix).formatted(Formatting.GREEN)
 			if (rest.isNotEmpty()) {
-				text.append(Text.literal(rest).formatted(Formatting.WHITE))
+				appendLinkedText(text, rest, Style.EMPTY.withColor(Formatting.WHITE))
 			}
 			return text
 		}
 
-		return Text.literal(formatted)
+		return buildLinkedText(formatted, Style.EMPTY)
+	}
+
+	private fun buildLinkedText(content: String, defaultStyle: Style): MutableText {
+		val root = Text.empty()
+		appendLinkedText(root, content, defaultStyle)
+		return root
+	}
+
+	private fun appendLinkedText(target: MutableText, content: String, defaultStyle: Style) {
+		var cursor = 0
+
+		for (match in URL_PATTERN.findAll(content)) {
+			if (match.range.first > cursor) {
+				target.append(Text.literal(content.substring(cursor, match.range.first)).setStyle(defaultStyle))
+			}
+
+			val rawUrl = match.value
+			val normalizedUrl = trimTrailingUrlPunctuation(rawUrl)
+			val trailing = rawUrl.substring(normalizedUrl.length)
+
+			if (normalizedUrl.isNotBlank()) {
+				target.append(
+					Text.literal(normalizedUrl).setStyle(
+						defaultStyle
+							.withUnderline(true)
+							.withColor(Formatting.AQUA)
+							.withClickEvent(ClickEvent.OpenUrl(URI.create(normalizedUrl))),
+					),
+				)
+			}
+
+			if (trailing.isNotEmpty()) {
+				target.append(Text.literal(trailing).setStyle(defaultStyle))
+			}
+
+			cursor = match.range.last + 1
+		}
+
+		if (cursor < content.length) {
+			target.append(Text.literal(content.substring(cursor)).setStyle(defaultStyle))
+		}
+	}
+
+	private fun trimTrailingUrlPunctuation(url: String): String {
+		var end = url.length
+		while (end > 0 && TRAILING_URL_PUNCTUATION.indexOf(url[end - 1]) >= 0) {
+			end--
+		}
+		return url.substring(0, end)
 	}
 
 	private data class PendingLocalEcho(
@@ -459,10 +548,14 @@ class ClientBackendBridgeService(
 
 	companion object {
 		private val GSON = Gson()
-		private const val MAX_MESSAGE_LENGTH = 280
+		private val URL_PATTERN = Regex("""https?://\S+""")
+		private const val TRAILING_URL_PUNCTUATION = ".,!?;:)]}"
+		private const val MAX_OUTGOING_MESSAGE_LENGTH = 280
+		private const val MAX_INCOMING_MESSAGE_LENGTH = 2048
 		private const val MAX_NAME_LENGTH = 32
 		private const val LOCAL_ECHO_TTL_MS = 10_000L
 		private const val MAX_LOCAL_ECHOES = 32
+		private const val MAX_PAUSED_INCOMING_MESSAGES = 100
 
 		private fun safe(value: String?): String = value ?: ""
 

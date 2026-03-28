@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.minecraft.client.MinecraftClient
+import net.minecraft.client.gui.screen.ChatScreen
 import net.minecraft.text.Text
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -88,6 +89,10 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	fun configPath(): Path = configManager.path()
 
+	fun setPreviewHoverPaused(paused: Boolean) {
+		backendBridge.setPreviewHoverPaused(paused)
+	}
+
 	@Throws(IOException::class)
 	fun saveAndApplyConfig(config: BridgeConfig) {
 		configManager.save(config)
@@ -101,6 +106,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun handleEndTick(client: MinecraftClient) {
+		if (client.currentScreen !is ChatScreen) {
+			ImagePreviewManager.setHoverPreviewActive(false)
+			backendBridge.setPreviewHoverPaused(false)
+		}
+
 		if (ircChatModeExpiresAt > 0L && System.currentTimeMillis() > ircChatModeExpiresAt) {
 			ircChatModeExpiresAt = 0L
 			sendClientFeedback("IRC chat mode expired.")
