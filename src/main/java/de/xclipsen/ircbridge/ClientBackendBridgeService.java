@@ -49,6 +49,7 @@ public final class ClientBackendBridgeService {
 	private volatile long lastMessageAt;
 	private volatile String lastError = "";
 	private volatile boolean announcedConnected;
+	private volatile boolean backlogInitialized;
 	private final Deque<PendingLocalEcho> pendingLocalEchoes = new ArrayDeque<>();
 
 	public ClientBackendBridgeService(Logger logger) {
@@ -65,6 +66,7 @@ public final class ClientBackendBridgeService {
 		this.lastMessageAt = 0L;
 		this.lastError = "";
 		this.announcedConnected = false;
+		this.backlogInitialized = false;
 
 		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
 			state = "disabled";
@@ -213,6 +215,14 @@ public final class ClientBackendBridgeService {
 				return;
 			}
 
+			if (!backlogInitialized) {
+				for (BackendMessage message : payload.messages) {
+					lastSeenMessageId = Math.max(lastSeenMessageId, message.id);
+				}
+				backlogInitialized = true;
+				return;
+			}
+
 			for (BackendMessage message : payload.messages) {
 				lastSeenMessageId = Math.max(lastSeenMessageId, message.id);
 
@@ -265,6 +275,7 @@ public final class ClientBackendBridgeService {
 
 	private void bootstrapLastSeenMessageId() {
 		lastSeenMessageId = 0L;
+		backlogInitialized = false;
 	}
 
 	private void postOutgoing(BackendOutgoingMessage outgoing) {
