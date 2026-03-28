@@ -23,18 +23,28 @@ import org.slf4j.LoggerFactory;
 
 public final class XclipsenIrcBridgeClient implements ClientModInitializer {
 	private static final Logger LOGGER = LoggerFactory.getLogger("xclipsen_irc_bridge");
+	private static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.create(Identifier.of("xclipsen_irc_bridge", "general"));
 	private static XclipsenIrcBridgeClient instance;
 
 	private final BridgeConfigManager configManager = new BridgeConfigManager(LOGGER);
 	private final ClientBackendBridgeService backendBridge = new ClientBackendBridgeService(LOGGER);
+	private final KeyBinding copyAuctionHouseUnderbidKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+		"key.xclipsen_irc_bridge.copy_auction_house_underbid",
+		InputUtil.Type.KEYSYM,
+		GLFW.GLFW_KEY_U,
+		KEY_CATEGORY
+	));
+	private final AuctionHouseUnderbidFeature auctionHouseUnderbidFeature = new AuctionHouseUnderbidFeature(LOGGER, copyAuctionHouseUnderbidKey);
+	private final AutoExperimentsFeature autoExperimentsFeature = new AutoExperimentsFeature();
 	private final KeyBinding openConfigKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 		"key.xclipsen_irc_bridge.open_config",
 		InputUtil.Type.KEYSYM,
 		GLFW.GLFW_KEY_RIGHT_SHIFT,
-		KeyBinding.Category.create(Identifier.of("xclipsen_irc_bridge", "general"))
+		KEY_CATEGORY
 	));
 
 	private BridgeConfig config = new BridgeConfig();
+	private boolean ircLinkWarningShown = false;
 
 	@Override
 	public void onInitializeClient() {
@@ -42,7 +52,10 @@ public final class XclipsenIrcBridgeClient implements ClientModInitializer {
 		config = configManager.load();
 		backendBridge.start(config);
 
-		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> backendBridge.stop());
+		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+			backendBridge.stop();
+			auctionHouseUnderbidFeature.stop();
+		});
 		ClientTickEvents.END_CLIENT_TICK.register(this::handleEndTick);
 
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
@@ -55,6 +68,12 @@ public final class XclipsenIrcBridgeClient implements ClientModInitializer {
 					.executes(this::reloadConfig))
 				.then(ClientCommandManager.argument("message", StringArgumentType.greedyString())
 					.executes(this::sendIrcMessage))
+		));
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+			ClientCommandManager.literal("link")
+				.executes(this::showLinkedStatus)
+				.then(ClientCommandManager.argument("code", StringArgumentType.word())
+					.executes(this::completeLink))
 		));
 	}
 
@@ -74,6 +93,10 @@ public final class XclipsenIrcBridgeClient implements ClientModInitializer {
 		return backendBridge.testConnection();
 	}
 
+	public java.nio.file.Path configPath() {
+		return configManager.path();
+	}
+
 	public void saveAndApplyConfig(BridgeConfig config) throws java.io.IOException {
 		configManager.save(config);
 		this.config = config;
@@ -89,6 +112,9 @@ public final class XclipsenIrcBridgeClient implements ClientModInitializer {
 		while (openConfigKey.wasPressed()) {
 			openConfigScreen(client);
 		}
+
+		auctionHouseUnderbidFeature.handleEndTick(client, config);
+		autoExperimentsFeature.handleEndTick(client, config);
 	}
 
 	private void openConfigScreen(MinecraftClient client) {
@@ -117,8 +143,68 @@ public final class XclipsenIrcBridgeClient implements ClientModInitializer {
 		}
 
 		String playerName = MinecraftClient.getInstance().getSession().getUsername();
+		BackendLinkStatusResponse linkStatus = backendBridge.getLinkStatus(playerName);
+		if (!linkStatus.linked) {
+			if (!ircLinkWarningShown) {
+				context.getSource().sendError(Text.literal(linkStatus.error.isBlank()
+					? "You are not linked yet. Use /link start on Discord and /link CODE in Minecraft."
+					: linkStatus.error));
+				ircLinkWarningShown = true;
+			}
+			return 0;
+		}
+
+		ircLinkWarningShown = false;
+		cacheLinkedDisplayName(linkStatus);
 		backendBridge.sendIrcMessage(playerName, message);
 		return 1;
+	}
+
+	private int showLinkedStatus(CommandContext<FabricClientCommandSource> context) {
+		String playerName = MinecraftClient.getInstance().getSession().getUsername();
+		BackendLinkStatusResponse status = backendBridge.getLinkStatus(playerName);
+
+		if (!status.linked) {
+			context.getSource().sendFeedback(Text.literal(status.error.isBlank()
+				? "Not linked. Use /link start on Discord, then /link CODE here."
+				: status.error));
+			return 1;
+		}
+
+		ircLinkWarningShown = false;
+		cacheLinkedDisplayName(status);
+		context.getSource().sendFeedback(Text.literal("Linked usernames: " + String.join(", ", status.minecraftUsernames)));
+		return 1;
+	}
+
+	private int completeLink(CommandContext<FabricClientCommandSource> context) {
+		String playerName = MinecraftClient.getInstance().getSession().getUsername();
+		String code = StringArgumentType.getString(context, "code");
+		BackendLinkStatusResponse status = backendBridge.completeLink(playerName, code);
+
+		if (!status.error.isBlank() || !status.linked) {
+			context.getSource().sendError(Text.literal(status.error.isBlank() ? "Link failed." : status.error));
+			return 0;
+		}
+
+		ircLinkWarningShown = false;
+		cacheLinkedDisplayName(status);
+		context.getSource().sendFeedback(Text.literal("Linked successfully: " + String.join(", ", status.minecraftUsernames)));
+		return 1;
+	}
+
+	private void cacheLinkedDisplayName(BackendLinkStatusResponse status) {
+		String displayName = status != null ? status.discordDisplayName : "";
+		if (displayName == null || displayName.isBlank() || displayName.equals(config.linkedDiscordDisplayName)) {
+			return;
+		}
+
+		config.linkedDiscordDisplayName = displayName;
+		try {
+			configManager.save(config);
+		} catch (java.io.IOException exception) {
+			LOGGER.warn("Failed to persist linked Discord display name.", exception);
+		}
 	}
 
 	public static String formatStatus(BackendStatusSnapshot status) {

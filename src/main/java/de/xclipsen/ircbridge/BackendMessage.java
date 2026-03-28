@@ -5,4 +5,6 @@ public final class BackendMessage {
 	public String source = "discord";
 	public String user = "";
 	public String content = "";
+	public String title = "";
+	public String eventKey = "";
 }
