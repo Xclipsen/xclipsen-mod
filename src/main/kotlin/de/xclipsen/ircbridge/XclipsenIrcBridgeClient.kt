@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.minecraft.client.MinecraftClient
 import net.minecraft.text.Text
 import org.slf4j.Logger
@@ -21,25 +22,42 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private val backendBridge = ClientBackendBridgeService(LOGGER)
 
 	private var config = BridgeConfig()
+	private var incomingBridgeMessagesEnabled = true
 	private var ircLinkWarningShown = false
 	private var pendingConfigScreenOpen = false
+	private var ircChatModeExpiresAt = 0L
 
 	override fun onInitializeClient() {
 		instance = this
 		config = configManager.load()
 		backendBridge.start(config)
+		backendBridge.setIncomingMessagesEnabled(incomingBridgeMessagesEnabled)
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register {
 			backendBridge.stop()
 		}
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
+		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
+		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
 				ClientCommandManager.literal("irc")
 					.then(ClientCommandManager.literal("config").executes(::openConfigScreen))
+					.then(ClientCommandManager.literal("on").executes(::enableIncomingBridgeMessages))
+					.then(ClientCommandManager.literal("off").executes(::disableIncomingBridgeMessages))
 					.then(ClientCommandManager.literal("status").executes(::showStatus))
 					.then(ClientCommandManager.literal("reload").executes(::reloadConfig))
+					.then(
+						ClientCommandManager.argument("message", StringArgumentType.greedyString())
+							.executes(::sendIrcMessage),
+					),
+			)
+		}
+
+		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
+			dispatcher.register(
+				ClientCommandManager.literal("i")
 					.then(
 						ClientCommandManager.argument("message", StringArgumentType.greedyString())
 							.executes(::sendIrcMessage),
@@ -83,6 +101,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun handleEndTick(client: MinecraftClient) {
+		if (ircChatModeExpiresAt > 0L && System.currentTimeMillis() > ircChatModeExpiresAt) {
+			ircChatModeExpiresAt = 0L
+			sendClientFeedback("IRC chat mode expired.")
+		}
+
 		if (!pendingConfigScreenOpen) {
 			return
 		}
@@ -104,7 +127,22 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private fun reloadConfig(context: CommandContext<FabricClientCommandSource>): Int {
 		config = configManager.load()
 		backendBridge.start(config)
+		backendBridge.setIncomingMessagesEnabled(incomingBridgeMessagesEnabled)
 		context.source.sendFeedback(Text.literal("IRC bridge config reloaded: ${configManager.path()}"))
+		return 1
+	}
+
+	private fun enableIncomingBridgeMessages(context: CommandContext<FabricClientCommandSource>): Int {
+		incomingBridgeMessagesEnabled = true
+		backendBridge.setIncomingMessagesEnabled(true)
+		context.source.sendFeedback(Text.literal("IRC incoming messages enabled."))
+		return 1
+	}
+
+	private fun disableIncomingBridgeMessages(context: CommandContext<FabricClientCommandSource>): Int {
+		incomingBridgeMessagesEnabled = false
+		backendBridge.setIncomingMessagesEnabled(false)
+		context.source.sendFeedback(Text.literal("IRC incoming messages disabled."))
 		return 1
 	}
 
@@ -121,28 +159,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			return 0
 		}
 
-		val playerName = MinecraftClient.getInstance().session.username
-		val linkStatus = backendBridge.getLinkStatus(playerName)
-		if (!linkStatus.linked) {
-			if (!ircLinkWarningShown) {
-				context.source.sendError(
-					Text.literal(
-						if (linkStatus.error.isBlank()) {
-							"You are not linked yet. Use /link start on Discord and /link CODE in Minecraft."
-						} else {
-							linkStatus.error
-						},
-					),
-				)
-				ircLinkWarningShown = true
-			}
-			return 0
-		}
-
-		ircLinkWarningShown = false
-		cacheLinkedDisplayName(linkStatus)
-		backendBridge.sendIrcMessage(playerName, message)
-		return 1
+		return if (sendIrcMessageInternal(message, ::sendCommandError)) 1 else 0
 	}
 
 	private fun showLinkedStatus(context: CommandContext<FabricClientCommandSource>): Int {
@@ -184,6 +201,121 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		return 1
 	}
 
+	private fun enableIrcChatMode(context: CommandContext<FabricClientCommandSource>): Int {
+		ircChatModeExpiresAt = System.currentTimeMillis() + IRC_CHAT_MODE_WINDOW_MS
+		context.source.sendFeedback(
+			Text.literal("IRC chat mode enabled for 2.5 minutes. Normal chat messages will go to IRC."),
+		)
+		return 1
+	}
+
+	private fun disableIrcChatMode(context: CommandContext<FabricClientCommandSource>): Int {
+		ircChatModeExpiresAt = 0L
+		context.source.sendFeedback(Text.literal("IRC chat mode disabled."))
+		return 1
+	}
+
+	private fun handleOutgoingChatMessage(message: String): Boolean {
+		if (!isIrcChatModeActive()) {
+			return true
+		}
+
+		val trimmedMessage = message.trim()
+		if (trimmedMessage.isBlank()) {
+			return false
+		}
+
+		if (!sendIrcMessageInternal(trimmedMessage, ::sendClientError)) {
+			return false
+		}
+
+		ircChatModeExpiresAt = System.currentTimeMillis() + IRC_CHAT_MODE_WINDOW_MS
+		return false
+	}
+
+	private fun isIrcChatModeActive(): Boolean =
+		ircChatModeExpiresAt > 0L && System.currentTimeMillis() <= ircChatModeExpiresAt
+
+	private fun handleOutgoingCommand(command: String): Boolean {
+		val normalized = command.trim().lowercase()
+		if (normalized == "chat i") {
+			enableIrcChatMode()
+			return false
+		}
+
+		if (normalized == "chat off") {
+			disableIrcChatMode()
+			return false
+		}
+
+		if (!isIrcChatModeActive()) {
+			return true
+		}
+
+		if (shouldDisableIrcChatMode(normalized)) {
+			disableIrcChatMode()
+		}
+
+		return true
+	}
+
+	private fun shouldDisableIrcChatMode(command: String): Boolean {
+		val parts = command.split(Regex("\\s+")).filter { it.isNotBlank() }
+		if (parts.size < 2 || parts[0] != "chat") {
+			return false
+		}
+
+		return when (parts[1]) {
+			"a", "all", "p", "party", "g", "guild", "o", "officer", "sc", "skyblock-coop" -> true
+			else -> false
+		}
+	}
+
+	private fun sendIrcMessageInternal(message: String, errorHandler: (String) -> Unit): Boolean {
+		val playerName = MinecraftClient.getInstance().session.username
+		val linkStatus = backendBridge.getLinkStatus(playerName)
+		if (!linkStatus.linked) {
+			if (!ircLinkWarningShown) {
+				errorHandler(
+					if (linkStatus.error.isBlank()) {
+						"You are not linked yet. Use /link start on Discord and /link CODE in Minecraft."
+					} else {
+						linkStatus.error
+					},
+				)
+				ircLinkWarningShown = true
+			}
+			return false
+		}
+
+		ircLinkWarningShown = false
+		cacheLinkedDisplayName(linkStatus)
+		backendBridge.sendIrcMessage(playerName, message)
+		return true
+	}
+
+	private fun sendCommandError(message: String) {
+		MinecraftClient.getInstance().player?.sendMessage(Text.literal(message), false)
+	}
+
+	private fun enableIrcChatMode() {
+		ircChatModeExpiresAt = System.currentTimeMillis() + IRC_CHAT_MODE_WINDOW_MS
+		sendClientFeedback("IRC chat mode enabled for 2.5 minutes. Normal chat messages will go to IRC.")
+	}
+
+	private fun sendClientFeedback(message: String) {
+		MinecraftClient.getInstance().player?.sendMessage(Text.literal(message), false)
+	}
+
+	private fun disableIrcChatMode() {
+		ircChatModeExpiresAt = 0L
+		sendClientFeedback("IRC chat mode disabled.")
+	}
+
+	private fun sendClientError(message: String) {
+		MinecraftClient.getInstance().player?.sendMessage(Text.literal(message), false)
+	}
+
 	private fun cacheLinkedDisplayName(status: BackendLinkStatusResponse?) {
 		val displayName = status?.discordDisplayName.orEmpty()
 		if (displayName.isBlank() || displayName == config.linkedDiscordDisplayName) {
@@ -200,6 +332,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	companion object {
 		private val LOGGER: Logger = LoggerFactory.getLogger("xclipsen_irc_bridge")
+		private const val IRC_CHAT_MODE_WINDOW_MS = 150 * 1000L
 
 		@JvmStatic
 		var instance: XclipsenIrcBridgeClient? = null

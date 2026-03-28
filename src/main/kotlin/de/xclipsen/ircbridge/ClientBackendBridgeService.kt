@@ -34,6 +34,7 @@ class ClientBackendBridgeService(
 	private var scheduler: ScheduledExecutorService? = null
 	private var config = BridgeConfig()
 	private var lastSeenMessageId = 0L
+	private var incomingMessagesEnabled = true
 
 	@Volatile
 	private var state = "stopped"
@@ -114,6 +115,10 @@ class ClientBackendBridgeService(
 			this.message = safeMessage
 		}
 		outboundExecutor.execute { postOutgoing(outgoing) }
+	}
+
+	fun setIncomingMessagesEnabled(enabled: Boolean) {
+		incomingMessagesEnabled = enabled
 	}
 
 	fun getLinkStatus(playerName: String): BackendLinkStatusResponse {
@@ -258,7 +263,9 @@ class ClientBackendBridgeService(
 					)
 				}
 
-				showClientMessage(client, styleBridgeMessage(formatted))
+				if (incomingMessagesEnabled) {
+					showClientMessage(client, styleBridgeMessage(formatted))
+				}
 			}
 		} catch (exception: IOException) {
 			state = "error"
