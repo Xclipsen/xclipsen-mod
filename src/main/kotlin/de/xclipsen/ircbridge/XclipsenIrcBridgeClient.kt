@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.screen.ChatScreen
@@ -16,6 +17,8 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Path
+import java.util.Locale
+import kotlin.collections.ArrayDeque
 import kotlin.math.max
 
 class XclipsenIrcBridgeClient : ClientModInitializer {
@@ -27,6 +30,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private var ircLinkWarningShown = false
 	private var pendingConfigScreenOpen = false
 	private var ircChatModeExpiresAt = 0L
+	private val recentCoopRelays: ArrayDeque<CoopRelayDedupEntry> = ArrayDeque()
 
 	override fun onInitializeClient() {
 		instance = this
@@ -40,6 +44,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
+		ClientReceiveMessageEvents.GAME.register { message, _ -> handleIncomingCoopChat(message) }
+		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ -> handleIncomingCoopChat(message) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
@@ -269,6 +275,111 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		return true
 	}
 
+	private fun handleIncomingCoopChat(message: Text?) {
+		val parsed = parseCoopChatMessage(message) ?: return
+		val localPlayer = MinecraftClient.getInstance().session?.username.orEmpty()
+		if (localPlayer.isBlank()) {
+			return
+		}
+
+		val dedupeKey = "${parsed.playerName.lowercase(Locale.ROOT)}|${parsed.message.lowercase(Locale.ROOT)}"
+		if (!recordCoopRelayKey(dedupeKey)) {
+			return
+		}
+
+		backendBridge.relayCoopChat(localPlayer, parsed.playerName, parsed.message)
+	}
+
+	private fun parseCoopChatMessage(message: Text?): CoopChatMessage? {
+		val raw = message?.string ?: return null
+		val normalized = normalizeCoopLine(raw)
+		if (!normalized.startsWith("Co-op >")) {
+			return null
+		}
+
+		val withoutPrefix = normalized.removePrefix("Co-op >").trim()
+		val colonIndex = withoutPrefix.indexOf(':')
+		if (colonIndex <= 0) {
+			return null
+		}
+
+		val namePart = stripRankPrefixes(withoutPrefix.substring(0, colonIndex).trim())
+		val content = withoutPrefix.substring(colonIndex + 1).trim()
+		if (namePart.isEmpty() || content.isEmpty()) {
+			return null
+		}
+
+		if (!USERNAME_PATTERN.matches(namePart)) {
+			return null
+		}
+
+		return CoopChatMessage(namePart, content)
+	}
+
+	private fun normalizeCoopLine(raw: String): String {
+		var clean = stripMinecraftFormatting(raw)
+		clean = AMPERSAND_COLOR_PATTERN.replace(clean, "")
+		return clean.replace('\r', ' ').replace('\n', ' ').replace("\\s+".toRegex(), " ").trim()
+	}
+
+	private fun stripMinecraftFormatting(input: String): String {
+		if (!input.contains('§')) {
+			return input
+		}
+
+		val builder = StringBuilder(input.length)
+		var skip = false
+		for (character in input) {
+			if (skip) {
+				skip = false
+				continue
+			}
+
+			if (character == '§') {
+				skip = true
+				continue
+			}
+
+			builder.append(character)
+		}
+
+		return builder.toString()
+	}
+
+	private fun stripRankPrefixes(value: String): String {
+		var current = value.trim()
+		while (current.startsWith("[")) {
+			val closing = current.indexOf(']')
+			if (closing <= 0) {
+				break
+			}
+			current = current.substring(closing + 1).trimStart()
+		}
+		return current
+	}
+
+	private fun recordCoopRelayKey(key: String): Boolean {
+		synchronized(recentCoopRelays) {
+			pruneExpiredCoopRelays()
+			if (recentCoopRelays.any { it.key == key }) {
+				return false
+			}
+
+			recentCoopRelays.addLast(CoopRelayDedupEntry(key, System.currentTimeMillis() + COOP_RELAY_TTL_MS))
+			while (recentCoopRelays.size > MAX_COOP_RELAY_HISTORY) {
+				recentCoopRelays.removeFirst()
+			}
+			return true
+		}
+	}
+
+	private fun pruneExpiredCoopRelays() {
+		val now = System.currentTimeMillis()
+		while (recentCoopRelays.isNotEmpty() && recentCoopRelays.first().expiresAt < now) {
+			recentCoopRelays.removeFirst()
+		}
+	}
+
 	private fun shouldDisableIrcChatMode(command: String): Boolean {
 		val parts = command.split(Regex("\\s+")).filter { it.isNotBlank() }
 		if (parts.size < 2 || parts[0] != "chat") {
@@ -343,6 +454,10 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	companion object {
 		private val LOGGER: Logger = LoggerFactory.getLogger("xclipsen_irc_bridge")
 		private const val IRC_CHAT_MODE_WINDOW_MS = 150 * 1000L
+		private const val COOP_RELAY_TTL_MS = 10_000L
+		private const val MAX_COOP_RELAY_HISTORY = 64
+		private val AMPERSAND_COLOR_PATTERN = Regex("(?i)&[0-9A-FK-OR]")
+		private val USERNAME_PATTERN = Regex("^[A-Za-z0-9_]{3,16}$")
 
 		@JvmStatic
 		var instance: XclipsenIrcBridgeClient? = null
@@ -369,4 +484,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		private fun secondsAgo(timestamp: Long): Long = max(0L, (System.currentTimeMillis() - timestamp) / 1000L)
 	}
+
+	private data class CoopChatMessage(val playerName: String, val message: String)
+
+	private data class CoopRelayDedupEntry(val key: String, val expiresAt: Long)
 }

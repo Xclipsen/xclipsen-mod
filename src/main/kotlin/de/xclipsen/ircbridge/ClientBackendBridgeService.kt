@@ -121,6 +121,23 @@ class ClientBackendBridgeService(
 		outboundExecutor.execute { postOutgoing(outgoing) }
 	}
 
+	fun relayCoopChat(localPlayerName: String, coopPlayerName: String, message: String) {
+		val safeForwarder = sanitizeInline(localPlayerName, MAX_NAME_LENGTH)
+		val safeAuthor = sanitizeInline(coopPlayerName, MAX_NAME_LENGTH)
+		val safeMessage = sanitizeInline(message, MAX_OUTGOING_MESSAGE_LENGTH)
+		if (safeForwarder.isBlank() || safeAuthor.isBlank() || safeMessage.isBlank()) {
+			return
+		}
+
+		val outgoing = BackendOutgoingMessage().apply {
+			type = "coop"
+			playerName = safeForwarder
+			this.forwardedPlayerName = safeAuthor
+			this.message = safeMessage
+		}
+		outboundExecutor.execute { postOutgoing(outgoing) }
+	}
+
 	fun setIncomingMessagesEnabled(enabled: Boolean) {
 		incomingMessagesEnabled = enabled
 	}
@@ -263,6 +280,11 @@ class ClientBackendBridgeService(
 				val formatted = when (message.source) {
 					"irc" -> TextFormatter.apply(
 						config.ircCommandFormat,
+						"%player%", safeUser,
+						"%message%", safeContent,
+					)
+					"coop" -> TextFormatter.apply(
+						config.coopChatFormat,
 						"%player%", safeUser,
 						"%message%", safeContent,
 					)

@@ -31,6 +31,7 @@ class BackendOutgoingMessage {
 	@JvmField var type: String = "chat"
 	@JvmField var playerName: String = ""
 	@JvmField var message: String = ""
+	@JvmField var forwardedPlayerName: String = ""
 }
 
 class BackendStatusSnapshot(
@@ -50,6 +51,7 @@ class BridgeConfig {
 	@JvmField var discordToMinecraftFormat: String = "[Discord] <%user%> %message%"
 	@JvmField var ircCommandFormat: String = "[IRC] <%player%> %message%"
 	@JvmField var eventPingFormat: String = "[Event] %event%: %message%"
+	@JvmField var coopChatFormat: String = "[Co-op] <%player%> %message%"
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
 		it.backendBaseUrl = backendBaseUrl
@@ -59,6 +61,7 @@ class BridgeConfig {
 		it.discordToMinecraftFormat = discordToMinecraftFormat
 		it.ircCommandFormat = ircCommandFormat
 		it.eventPingFormat = eventPingFormat
+		it.coopChatFormat = coopChatFormat
 	}
 }
 

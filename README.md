@@ -5,6 +5,7 @@ Fabric-Clientmod fuer Minecraft `1.21.10`, die einen einfachen IRC-aehnlichen Ch
 ## Features
 
 - zeigt Discord- und IRC-Nachrichten lokal im Client-Chat an
+- spiegelt Hypixel-Co-op-Chat automatisch nach Discord/IRC sobald ein verlinkter Client online ist
 - `/irc <nachricht>` als Client-Befehl, ganz ohne Minecraft-Servermod
 - `/irc reload` zum Neuladen der JSON-Konfiguration
 - optionaler Backend-Modus, damit die Discord-Verbindung als separater Dienst dauerhaft online bleibt

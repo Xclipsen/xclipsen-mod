@@ -58,6 +58,7 @@ class BridgeConfigManager(
 		value.discordToMinecraftFormat = normalizedTemplate(value.discordToMinecraftFormat, "[Discord] <%user%> %message%")
 		value.ircCommandFormat = normalizedTemplate(value.ircCommandFormat, "[IRC] <%player%> %message%")
 		value.eventPingFormat = normalizedTemplate(value.eventPingFormat, "[Event] %event%: %message%")
+		value.coopChatFormat = normalizedTemplate(value.coopChatFormat, "[Co-op] <%player%> %message%")
 		value.backendPollIntervalMs = max(500L, min(60_000L, value.backendPollIntervalMs))
 		return value
 	}

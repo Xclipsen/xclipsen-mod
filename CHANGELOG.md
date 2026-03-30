@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.0
+
+- Added automatic Hypixel co-op chat relaying into IRC/Discord whenever a linked client is online.
+- Added a configurable `[Co-op]` chat format so forwarded co-op lines can be themed to your liking.
+
 ## v0.2.1
 
 - Added Discord image-link previews inside Minecraft chat hover.

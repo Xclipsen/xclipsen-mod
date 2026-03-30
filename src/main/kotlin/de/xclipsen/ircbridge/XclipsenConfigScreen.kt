@@ -18,6 +18,7 @@ class XclipsenConfigScreen(
 	private lateinit var discordFormatField: TextFieldWidget
 	private lateinit var ircFormatField: TextFieldWidget
 	private lateinit var eventPingFormatField: TextFieldWidget
+	private lateinit var coopFormatField: TextFieldWidget
 	private lateinit var saveButton: ButtonWidget
 	private lateinit var cancelButton: ButtonWidget
 	private lateinit var testConnectionButton: ButtonWidget
@@ -42,6 +43,8 @@ class XclipsenConfigScreen(
 		discordFormatField = addField(left, y, fieldWidth, workingCopy.discordToMinecraftFormat, "Expected: text format using %user% and %message%")
 		y += 28
 		ircFormatField = addField(left, y, fieldWidth, workingCopy.ircCommandFormat, "Expected: text format using %player% and %message%")
+		y += 28
+		coopFormatField = addField(left, y, fieldWidth, workingCopy.coopChatFormat, "Expected: text format using %player% and %message%")
 		y += 28
 
 		testConnectionButton = addDrawableChild(
@@ -89,6 +92,8 @@ class XclipsenConfigScreen(
 		drawLabel(context, "Discord Format", left, y - 10)
 		y += 28
 		drawLabel(context, "IRC Format", left, y - 10)
+		y += 28
+		drawLabel(context, "Co-op Format", left, y - 10)
 
 		if (statusMessage.string.isNotEmpty()) {
 			context.drawCenteredTextWithShadow(textRenderer, statusMessage, centerX, height - 20, 0xFF8080)
@@ -101,6 +106,7 @@ class XclipsenConfigScreen(
 		workingCopy.eventPingFormat = eventPingFormatField.text
 		workingCopy.discordToMinecraftFormat = discordFormatField.text
 		workingCopy.ircCommandFormat = ircFormatField.text
+		workingCopy.coopChatFormat = coopFormatField.text
 
 		try {
 			workingCopy.backendPollIntervalMs = backendPollIntervalField.text.trim().toLong()
@@ -140,6 +146,7 @@ class XclipsenConfigScreen(
 		candidate.eventPingFormat = eventPingFormatField.text
 		candidate.discordToMinecraftFormat = discordFormatField.text
 		candidate.ircCommandFormat = ircFormatField.text
+		candidate.coopChatFormat = coopFormatField.text
 
 		try {
 			candidate.backendPollIntervalMs = backendPollIntervalField.text.trim().toLong()
@@ -174,6 +181,7 @@ class XclipsenConfigScreen(
 		setVisible(eventPingFormatField, true)
 		setVisible(discordFormatField, true)
 		setVisible(ircFormatField, true)
+		setVisible(coopFormatField, true)
 		setVisible(testConnectionButton, true)
 	}
 
@@ -194,6 +202,8 @@ class XclipsenConfigScreen(
 		position(discordFormatField, left, y)
 		y += 28
 		position(ircFormatField, left, y)
+		y += 28
+		position(coopFormatField, left, y)
 		y += 28
 		position(testConnectionButton, left, y)
 	}

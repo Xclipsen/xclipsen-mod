@@ -63,6 +63,56 @@ tasks.jar {
 	archiveClassifier.set("dev")
 }
 
+val prismTargetDirs = listOf(
+	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test/minecraft/mods",
+	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test 2/minecraft/mods",
+)
+
+fun Project.findRemappedModJar(): File {
+	return fileTree(layout.buildDirectory.dir("libs")) {
+		include("*.jar")
+		exclude("*-sources.jar", "*-dev.jar", "*-dev-shadow.jar")
+	}
+		.files
+		.sortedBy { it.name }
+		.lastOrNull()
+		?: throw GradleException("No remapped mod jar found in build/libs")
+}
+
+tasks.register("deployPrismMods") {
+	group = "distribution"
+	description = "Builds the mod and copies the remapped jar to the configured PrismLauncher test instances."
+	dependsOn("build")
+
+	doLast {
+		val modJar = project.findRemappedModJar()
+
+		prismTargetDirs.forEach { targetDir ->
+			val target = file(targetDir)
+			if (!target.isDirectory) {
+				throw GradleException("Target directory does not exist: $targetDir")
+			}
+
+			fileTree(target) {
+				include("xclipsen-irc-bridge-*.jar")
+			}.files.forEach(File::delete)
+
+			copy {
+				from(modJar)
+				into(target)
+			}
+
+			println("Deployed ${modJar.name} to $targetDir")
+		}
+	}
+}
+
+tasks.register("xmodTest") {
+	group = "distribution"
+	description = "Alias for deployPrismMods."
+	dependsOn("deployPrismMods")
+}
+
 publishing {
 	publications {
 		create<MavenPublication>("mavenJava") {
