@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1
+
+- Added a client-side glow outline for shulkers and shulker projectiles.
+- Added `/shulkerglow` and `/irc shulkerglow` controls for toggling the glow setting.
+
 ## v0.3.0
 
 - Added automatic Hypixel co-op chat relaying into IRC/Discord whenever a linked client is online.

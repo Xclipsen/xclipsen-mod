@@ -56,6 +56,13 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 					.then(ClientCommandManager.literal("status").executes(::showStatus))
 					.then(ClientCommandManager.literal("reload").executes(::reloadConfig))
 					.then(
+						ClientCommandManager.literal("shulkerglow")
+							.executes(::showShulkerGlowStatus)
+							.then(ClientCommandManager.literal("on").executes { setShulkerGlow(it, true) })
+							.then(ClientCommandManager.literal("off").executes { setShulkerGlow(it, false) })
+							.then(ClientCommandManager.literal("toggle").executes(::toggleShulkerGlow)),
+					)
+					.then(
 						ClientCommandManager.argument("message", StringArgumentType.greedyString())
 							.executes(::sendIrcMessage),
 					),
@@ -80,6 +87,16 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 						ClientCommandManager.argument("code", StringArgumentType.word())
 							.executes(::completeLink),
 					),
+			)
+		}
+
+		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
+			dispatcher.register(
+				ClientCommandManager.literal("shulkerglow")
+					.executes(::showShulkerGlowStatus)
+					.then(ClientCommandManager.literal("on").executes { setShulkerGlow(it, true) })
+					.then(ClientCommandManager.literal("off").executes { setShulkerGlow(it, false) })
+					.then(ClientCommandManager.literal("toggle").executes(::toggleShulkerGlow)),
 			)
 		}
 	}
@@ -166,6 +183,26 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		val status = backendBridge.testConnection()
 		context.source.sendFeedback(Text.literal(formatStatus(status)))
 		return 1
+	}
+
+	private fun showShulkerGlowStatus(context: CommandContext<FabricClientCommandSource>): Int {
+		context.source.sendFeedback(Text.literal("Shulker glow is ${if (config.shulkerGlowEnabled) "enabled" else "disabled"}."))
+		return 1
+	}
+
+	private fun toggleShulkerGlow(context: CommandContext<FabricClientCommandSource>): Int =
+		setShulkerGlow(context, !config.shulkerGlowEnabled)
+
+	private fun setShulkerGlow(context: CommandContext<FabricClientCommandSource>, enabled: Boolean): Int {
+		config.shulkerGlowEnabled = enabled
+		return try {
+			configManager.save(config)
+			context.source.sendFeedback(Text.literal("Shulker glow ${if (enabled) "enabled" else "disabled"}."))
+			1
+		} catch (_: IOException) {
+			context.source.sendError(Text.literal("Failed to save shulker glow setting."))
+			0
+		}
 	}
 
 	private fun sendIrcMessage(context: CommandContext<FabricClientCommandSource>): Int {

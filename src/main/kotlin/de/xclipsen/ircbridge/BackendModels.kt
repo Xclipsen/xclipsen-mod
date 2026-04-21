@@ -52,6 +52,7 @@ class BridgeConfig {
 	@JvmField var ircCommandFormat: String = "[IRC] <%player%> %message%"
 	@JvmField var eventPingFormat: String = "[Event] %event%: %message%"
 	@JvmField var coopChatFormat: String = "[Co-op] <%player%> %message%"
+	@JvmField var shulkerGlowEnabled: Boolean = true
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
 		it.backendBaseUrl = backendBaseUrl
@@ -62,6 +63,7 @@ class BridgeConfig {
 		it.ircCommandFormat = ircCommandFormat
 		it.eventPingFormat = eventPingFormat
 		it.coopChatFormat = coopChatFormat
+		it.shulkerGlowEnabled = shulkerGlowEnabled
 	}
 }
 
