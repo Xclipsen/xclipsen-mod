@@ -7,6 +7,7 @@ Fabric-Clientmod fuer Minecraft `1.21.10`, die einen einfachen IRC-aehnlichen Ch
 - zeigt Discord- und IRC-Nachrichten lokal im Client-Chat an
 - spiegelt Hypixel-Co-op-Chat automatisch nach Discord/IRC sobald ein verlinkter Client online ist
 - `/irc <nachricht>` als Client-Befehl, ganz ohne Minecraft-Servermod
+- `/xclipsen` oder `/irc config` oeffnet die ClickGUI-aehnliche Settings-Oberflaeche
 - `/irc reload` zum Neuladen der JSON-Konfiguration
 - Shulker und Shulker-Projektile bekommen clientseitig einen Glow-Outline-Effekt, der durch Waende sichtbar ist
 - `/shulkerglow on|off|toggle` oder `/irc shulkerglow on|off|toggle` zum Umschalten des Shulker-Glows

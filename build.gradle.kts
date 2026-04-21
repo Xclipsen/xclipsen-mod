@@ -63,9 +63,10 @@ tasks.jar {
 	archiveClassifier.set("dev")
 }
 
+val prismInstancesDir = "${System.getProperty("user.home")}/instances"
 val prismTargetDirs = listOf(
-	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test/minecraft/mods",
-	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test 2/minecraft/mods",
+	"$prismInstancesDir/1.21.10 test/minecraft/mods",
+	"$prismInstancesDir/1.21.10 test 2/minecraft/mods",
 )
 
 fun Project.findRemappedModJar(): File {
@@ -79,32 +80,46 @@ fun Project.findRemappedModJar(): File {
 		?: throw GradleException("No remapped mod jar found in build/libs")
 }
 
+fun Project.copyRemappedModToPrismTargets() {
+	val modJar = findRemappedModJar()
+
+	prismTargetDirs.forEach { targetDir ->
+		val target = file(targetDir)
+		if (!target.isDirectory) {
+			throw GradleException("Target directory does not exist: $targetDir")
+		}
+
+		fileTree(target) {
+			include("xclipsen-irc-bridge-*.jar")
+		}.files.forEach(File::delete)
+
+		copy {
+			from(modJar)
+			into(target)
+		}
+
+		println("Deployed ${modJar.name} to $targetDir")
+	}
+}
+
+tasks.register("copyPrismMods") {
+	group = "distribution"
+	description = "Copies the remapped mod jar to the configured PrismLauncher test instances."
+	dependsOn("remapJar")
+
+	doLast {
+		project.copyRemappedModToPrismTargets()
+	}
+}
+
+tasks.named("build") {
+	finalizedBy("copyPrismMods")
+}
+
 tasks.register("deployPrismMods") {
 	group = "distribution"
 	description = "Builds the mod and copies the remapped jar to the configured PrismLauncher test instances."
 	dependsOn("build")
-
-	doLast {
-		val modJar = project.findRemappedModJar()
-
-		prismTargetDirs.forEach { targetDir ->
-			val target = file(targetDir)
-			if (!target.isDirectory) {
-				throw GradleException("Target directory does not exist: $targetDir")
-			}
-
-			fileTree(target) {
-				include("xclipsen-irc-bridge-*.jar")
-			}.files.forEach(File::delete)
-
-			copy {
-				from(modJar)
-				into(target)
-			}
-
-			println("Deployed ${modJar.name} to $targetDir")
-		}
-	}
 }
 
 tasks.register("xmodTest") {

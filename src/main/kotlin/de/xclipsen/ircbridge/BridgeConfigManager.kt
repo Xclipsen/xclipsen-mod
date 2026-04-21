@@ -60,6 +60,9 @@ class BridgeConfigManager(
 		value.eventPingFormat = normalizedTemplate(value.eventPingFormat, "[Event] %event%: %message%")
 		value.coopChatFormat = normalizedTemplate(value.coopChatFormat, "[Co-op] <%player%> %message%")
 		value.backendPollIntervalMs = max(500L, min(60_000L, value.backendPollIntervalMs))
+		value.shulkerGlowColorHex = normalizedHexColor(value.shulkerGlowColorHex, "#36C5F0")
+		value.shulkerProjectileGlowColorHex = normalizedHexColor(value.shulkerProjectileGlowColorHex, "#FF4D4D")
+		value.shulkerTracerLineColorHex = normalizedHexColor(value.shulkerTracerLineColorHex, "#36C5F0")
 		return value
 	}
 
@@ -114,7 +117,16 @@ class BridgeConfigManager(
 		}
 	}
 
+	private fun normalizedHexColor(value: String?, fallback: String): String {
+		val candidate = safeString(value, fallback).trim().removePrefix("#")
+		if (!HEX_COLOR_PATTERN.matches(candidate)) {
+			return fallback
+		}
+		return "#${candidate.uppercase(Locale.ROOT)}"
+	}
+
 	companion object {
 		private val GSON: Gson = GsonBuilder().setPrettyPrinting().create()
+		private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 	}
 }

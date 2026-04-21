@@ -15,4 +15,11 @@ abstract class EntityGlowMixin {
 			cir.returnValue = true
 		}
 	}
+
+	@Inject(method = ["getTeamColorValue"], at = [At("HEAD")], cancellable = true)
+	private fun forceShulkerGlowColor(cir: CallbackInfoReturnable<Int>) {
+		ShulkerGlowFeature.colorValue(this as Entity)?.let {
+			cir.returnValue = it
+		}
+	}
 }

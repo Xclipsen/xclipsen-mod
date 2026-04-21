@@ -52,7 +52,15 @@ class BridgeConfig {
 	@JvmField var ircCommandFormat: String = "[IRC] <%player%> %message%"
 	@JvmField var eventPingFormat: String = "[Event] %event%: %message%"
 	@JvmField var coopChatFormat: String = "[Co-op] <%player%> %message%"
+	@JvmField var ircBridgeEnabled: Boolean = false
+	@JvmField var hideonleafHelperEnabled: Boolean = false
 	@JvmField var shulkerGlowEnabled: Boolean = true
+	@JvmField var shulkerGlowColorHex: String = "#36C5F0"
+	@JvmField var shulkerProjectileGlowColorHex: String = "#FF4D4D"
+	@JvmField var shulkerTracerLineEnabled: Boolean = true
+	@JvmField var shulkerTracerLineColorHex: String = "#36C5F0"
+	@JvmField var hideonleafLostFightAlertEnabled: Boolean = true
+	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
 		it.backendBaseUrl = backendBaseUrl
@@ -63,8 +71,30 @@ class BridgeConfig {
 		it.ircCommandFormat = ircCommandFormat
 		it.eventPingFormat = eventPingFormat
 		it.coopChatFormat = coopChatFormat
+		it.ircBridgeEnabled = ircBridgeEnabled
+		it.hideonleafHelperEnabled = hideonleafHelperEnabled
 		it.shulkerGlowEnabled = shulkerGlowEnabled
+		it.shulkerGlowColorHex = shulkerGlowColorHex
+		it.shulkerProjectileGlowColorHex = shulkerProjectileGlowColorHex
+		it.shulkerTracerLineEnabled = shulkerTracerLineEnabled
+		it.shulkerTracerLineColorHex = shulkerTracerLineColorHex
+		it.hideonleafLostFightAlertEnabled = hideonleafLostFightAlertEnabled
+		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
+}
+
+class HudElementPlacement() {
+	@JvmField var x: Float = -1f
+	@JvmField var y: Float = -1f
+	@JvmField var scale: Float = 1f
+
+	constructor(x: Float, y: Float, scale: Float) : this() {
+		this.x = x
+		this.y = y
+		this.scale = scale
+	}
+
+	fun copy(): HudElementPlacement = HudElementPlacement(x, y, scale)
 }
 
 class HealthResponse {

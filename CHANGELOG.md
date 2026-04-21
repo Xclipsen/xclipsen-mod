@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added a ClickGUI-style settings screen and `/xclipsen` command alias.
+
 ## v0.3.1
 
 - Added a client-side glow outline for shulkers and shulker projectiles.

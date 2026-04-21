@@ -10,9 +10,16 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.screen.ChatScreen
+import net.minecraft.client.gui.screen.Screen
+import net.minecraft.client.sound.PositionedSoundInstance
+import net.minecraft.sound.SoundEvents
 import net.minecraft.text.Text
+import net.minecraft.util.Identifier
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -29,14 +36,15 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private var incomingBridgeMessagesEnabled = true
 	private var ircLinkWarningShown = false
 	private var pendingConfigScreenOpen = false
+	private var pendingHudEditorOpen = false
 	private var ircChatModeExpiresAt = 0L
+	private var lastHideonleafLostFightAlertAt = 0L
 	private val recentCoopRelays: ArrayDeque<CoopRelayDedupEntry> = ArrayDeque()
 
 	override fun onInitializeClient() {
 		instance = this
 		config = configManager.load()
-		backendBridge.start(config)
-		backendBridge.setIncomingMessagesEnabled(incomingBridgeMessagesEnabled)
+		applyBackendBridgeConfig()
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register {
 			backendBridge.stop()
@@ -44,13 +52,18 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
-		ClientReceiveMessageEvents.GAME.register { message, _ -> handleIncomingCoopChat(message) }
-		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ -> handleIncomingCoopChat(message) }
+		ClientReceiveMessageEvents.GAME.register { message, _ -> handleIncomingMessage(message) }
+		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ -> handleIncomingMessage(message) }
+		HudElementRegistry.attachElementAfter(VanillaHudElements.CHAT, Identifier.of("xclipsen", "hud")) { context, _ ->
+			XclipsenHudManager.render(context)
+		}
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
 				ClientCommandManager.literal("irc")
 					.then(ClientCommandManager.literal("config").executes(::openConfigScreen))
+					.then(ClientCommandManager.literal("hud").executes(::openHudEditor))
 					.then(ClientCommandManager.literal("on").executes(::enableIncomingBridgeMessages))
 					.then(ClientCommandManager.literal("off").executes(::disableIncomingBridgeMessages))
 					.then(ClientCommandManager.literal("status").executes(::showStatus))
@@ -92,6 +105,14 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
+				ClientCommandManager.literal("xclipsen")
+					.executes(::openConfigScreen)
+					.then(ClientCommandManager.literal("config").executes(::openConfigScreen))
+					.then(ClientCommandManager.literal("settings").executes(::openConfigScreen))
+					.then(ClientCommandManager.literal("hud").executes(::openHudEditor)),
+			)
+
+			dispatcher.register(
 				ClientCommandManager.literal("shulkerglow")
 					.executes(::showShulkerGlowStatus)
 					.then(ClientCommandManager.literal("on").executes { setShulkerGlow(it, true) })
@@ -120,11 +141,21 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	fun saveAndApplyConfig(config: BridgeConfig) {
 		configManager.save(config)
 		this.config = config
-		backendBridge.start(config)
+		applyBackendBridgeConfig()
+	}
+
+	@Throws(IOException::class)
+	fun saveCurrentConfig() {
+		configManager.save(config)
 	}
 
 	private fun openConfigScreen(context: CommandContext<FabricClientCommandSource>): Int {
 		pendingConfigScreenOpen = true
+		return 1
+	}
+
+	private fun openHudEditor(context: CommandContext<FabricClientCommandSource>): Int {
+		pendingHudEditorOpen = true
 		return 1
 	}
 
@@ -139,12 +170,15 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			sendClientFeedback("IRC chat mode expired.")
 		}
 
-		if (!pendingConfigScreenOpen) {
-			return
+		if (pendingConfigScreenOpen) {
+			pendingConfigScreenOpen = false
+			openConfigScreen(client)
 		}
 
-		pendingConfigScreenOpen = false
-		openConfigScreen(client)
+		if (pendingHudEditorOpen) {
+			pendingHudEditorOpen = false
+			openHudEditor(client, client.currentScreen)
+		}
 	}
 
 	private fun openConfigScreen(client: MinecraftClient?) {
@@ -157,26 +191,53 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		}
 	}
 
+	fun openHudEditorScreen(parent: Screen?) {
+		openHudEditor(MinecraftClient.getInstance(), parent)
+	}
+
+	private fun openHudEditor(client: MinecraftClient?, parent: Screen?) {
+		if (client == null) {
+			return
+		}
+
+		client.execute {
+			client.setScreen(XclipsenHudEditorScreen(parent, this))
+		}
+	}
+
 	private fun reloadConfig(context: CommandContext<FabricClientCommandSource>): Int {
 		config = configManager.load()
-		backendBridge.start(config)
-		backendBridge.setIncomingMessagesEnabled(incomingBridgeMessagesEnabled)
+		applyBackendBridgeConfig()
 		context.source.sendFeedback(Text.literal("IRC bridge config reloaded: ${configManager.path()}"))
 		return 1
 	}
 
 	private fun enableIncomingBridgeMessages(context: CommandContext<FabricClientCommandSource>): Int {
 		incomingBridgeMessagesEnabled = true
-		backendBridge.setIncomingMessagesEnabled(true)
+		applyIncomingBridgeState()
 		context.source.sendFeedback(Text.literal("IRC incoming messages enabled."))
 		return 1
 	}
 
 	private fun disableIncomingBridgeMessages(context: CommandContext<FabricClientCommandSource>): Int {
 		incomingBridgeMessagesEnabled = false
-		backendBridge.setIncomingMessagesEnabled(false)
+		applyIncomingBridgeState()
 		context.source.sendFeedback(Text.literal("IRC incoming messages disabled."))
 		return 1
+	}
+
+	private fun applyIncomingBridgeState() {
+		backendBridge.setIncomingMessagesEnabled(config.ircBridgeEnabled && incomingBridgeMessagesEnabled)
+	}
+
+	private fun applyBackendBridgeConfig() {
+		if (!config.ircBridgeEnabled) {
+			backendBridge.stop()
+			return
+		}
+
+		backendBridge.start(config)
+		applyIncomingBridgeState()
 	}
 
 	private fun showStatus(context: CommandContext<FabricClientCommandSource>): Int {
@@ -312,7 +373,39 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		return true
 	}
 
+	private fun handleIncomingMessage(message: Text?) {
+		handleHideonleafLostFightAlert(message)
+		handleIncomingCoopChat(message)
+	}
+
+	private fun handleHideonleafLostFightAlert(message: Text?) {
+		if (!config.hideonleafHelperEnabled || !config.hideonleafLostFightAlertEnabled) {
+			return
+		}
+
+		val normalized = normalizeCoopLine(message?.string ?: return)
+		if (!normalized.contains(HIDEONLEAF_LOST_FIGHT_MESSAGE)) {
+			return
+		}
+
+		val now = System.currentTimeMillis()
+		if (now - lastHideonleafLostFightAlertAt < HIDEONLEAF_ALERT_DEDUPE_MS) {
+			return
+		}
+		lastHideonleafLostFightAlertAt = now
+
+		val client = MinecraftClient.getInstance()
+		client.execute {
+			XclipsenHudManager.showHideonleafLostFightAlert()
+			client.soundManager.play(PositionedSoundInstance.master(SoundEvents.BLOCK_NOTE_BLOCK_PLING, 1.5f))
+		}
+	}
+
 	private fun handleIncomingCoopChat(message: Text?) {
+		if (!config.ircBridgeEnabled) {
+			return
+		}
+
 		val parsed = parseCoopChatMessage(message) ?: return
 		val localPlayer = MinecraftClient.getInstance().session?.username.orEmpty()
 		if (localPlayer.isBlank()) {
@@ -430,6 +523,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun sendIrcMessageInternal(message: String, errorHandler: (String) -> Unit): Boolean {
+		if (!config.ircBridgeEnabled) {
+			errorHandler("IRC Bridge module is disabled.")
+			return false
+		}
+
 		val playerName = MinecraftClient.getInstance().session.username
 		val linkStatus = backendBridge.getLinkStatus(playerName)
 		if (!linkStatus.linked) {
@@ -493,6 +591,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		private const val IRC_CHAT_MODE_WINDOW_MS = 150 * 1000L
 		private const val COOP_RELAY_TTL_MS = 10_000L
 		private const val MAX_COOP_RELAY_HISTORY = 64
+		private const val HIDEONLEAF_LOST_FIGHT_MESSAGE = "Hideonleaf lost the fight..."
+		private const val HIDEONLEAF_ALERT_DEDUPE_MS = 1_500L
 		private val AMPERSAND_COLOR_PATTERN = Regex("(?i)&[0-9A-FK-OR]")
 		private val USERNAME_PATTERN = Regex("^[A-Za-z0-9_]{3,16}$")
 
