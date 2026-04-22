@@ -58,8 +58,13 @@ class BridgeConfig {
 	@JvmField var shulkerGlowColorHex: String = "#36C5F0"
 	@JvmField var shulkerProjectileGlowColorHex: String = "#FF4D4D"
 	@JvmField var shulkerTracerLineEnabled: Boolean = true
+	@JvmField var shulkerTracerLineMode: Int = 1
 	@JvmField var shulkerTracerLineColorHex: String = "#36C5F0"
+	@JvmField var shulkerTracerLineWidth: Float = 2.0f
 	@JvmField var hideonleafLostFightAlertEnabled: Boolean = true
+	@JvmField var hideonleafLostFightAlertSoundId: String = "minecraft:block.note_block.pling"
+	@JvmField var hideonleafLostFightAlertSoundVolume: Float = 1.0f
+	@JvmField var hideonleafLostFightAlertSoundPitch: Float = 1.5f
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
@@ -77,8 +82,13 @@ class BridgeConfig {
 		it.shulkerGlowColorHex = shulkerGlowColorHex
 		it.shulkerProjectileGlowColorHex = shulkerProjectileGlowColorHex
 		it.shulkerTracerLineEnabled = shulkerTracerLineEnabled
+		it.shulkerTracerLineMode = shulkerTracerLineMode
 		it.shulkerTracerLineColorHex = shulkerTracerLineColorHex
+		it.shulkerTracerLineWidth = shulkerTracerLineWidth
 		it.hideonleafLostFightAlertEnabled = hideonleafLostFightAlertEnabled
+		it.hideonleafLostFightAlertSoundId = hideonleafLostFightAlertSoundId
+		it.hideonleafLostFightAlertSoundVolume = hideonleafLostFightAlertSoundVolume
+		it.hideonleafLostFightAlertSoundPitch = hideonleafLostFightAlertSoundPitch
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
 }

@@ -17,7 +17,6 @@ import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.screen.ChatScreen
 import net.minecraft.client.gui.screen.Screen
 import net.minecraft.client.sound.PositionedSoundInstance
-import net.minecraft.sound.SoundEvents
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import org.slf4j.Logger
@@ -397,8 +396,19 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		val client = MinecraftClient.getInstance()
 		client.execute {
 			XclipsenHudManager.showHideonleafLostFightAlert()
-			client.soundManager.play(PositionedSoundInstance.master(SoundEvents.BLOCK_NOTE_BLOCK_PLING, 1.5f))
+			playHideonleafLostFightSound()
 		}
+	}
+
+	fun playHideonleafLostFightSound(config: BridgeConfig = this.config) {
+		val sound = SoundCatalog.soundEvent(config.hideonleafLostFightAlertSoundId)
+		MinecraftClient.getInstance().soundManager.play(
+			PositionedSoundInstance.master(
+				sound,
+				config.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f),
+				config.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 1.0f),
+			),
+		)
 	}
 
 	private fun handleIncomingCoopChat(message: Text?) {

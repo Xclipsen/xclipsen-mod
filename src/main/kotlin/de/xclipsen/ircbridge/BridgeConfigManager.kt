@@ -63,6 +63,12 @@ class BridgeConfigManager(
 		value.shulkerGlowColorHex = normalizedHexColor(value.shulkerGlowColorHex, "#36C5F0")
 		value.shulkerProjectileGlowColorHex = normalizedHexColor(value.shulkerProjectileGlowColorHex, "#FF4D4D")
 		value.shulkerTracerLineColorHex = normalizedHexColor(value.shulkerTracerLineColorHex, "#36C5F0")
+		value.shulkerTracerLineMode = if (value.shulkerTracerLineEnabled) value.shulkerTracerLineMode.coerceIn(0, 3) else 0
+		value.shulkerTracerLineEnabled = value.shulkerTracerLineMode > 0
+		value.shulkerTracerLineWidth = value.shulkerTracerLineWidth.coerceIn(1.0f, 8.0f)
+		value.hideonleafLostFightAlertSoundId = SoundCatalog.normalizeSoundId(value.hideonleafLostFightAlertSoundId)
+		value.hideonleafLostFightAlertSoundVolume = value.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 1.0f)
+		value.hideonleafLostFightAlertSoundPitch = value.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f)
 		return value
 	}
 

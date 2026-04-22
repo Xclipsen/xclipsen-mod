@@ -19,6 +19,9 @@ class XclipsenConfigScreen(
 	private var openedSection: ConfigSection? = null
 	private var openColorField: ConfigField? = null
 	private var draggingColorPicker: ColorPickerDragTarget? = null
+	private var soundDropdownOpen = false
+	private var soundScrollOffset = 0
+	private var draggingSlider: SliderDragTarget? = null
 	private var statusMessage: Text = Text.empty()
 	private val colorPickerOpen: Boolean
 		get() = openColorField != null
@@ -34,6 +37,7 @@ class XclipsenConfigScreen(
 	private lateinit var shulkerGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerProjectileGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
+	private lateinit var lostFightSoundSearchField: TextFieldWidget
 	private lateinit var shulkerGlowButton: ButtonWidget
 	private lateinit var testConnectionButton: ButtonWidget
 	private lateinit var saveButton: ButtonWidget
@@ -62,6 +66,7 @@ class XclipsenConfigScreen(
 		shulkerGlowColorHexField = registerField(ConfigField.SHULKER_GLOW_COLOR, workingCopy.shulkerGlowColorHex, "#36C5F0")
 		shulkerProjectileGlowColorHexField = registerField(ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, workingCopy.shulkerProjectileGlowColorHex, "#FF4D4D")
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
+		lostFightSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 
 		testConnectionButton = addDrawableChild(
 			ButtonWidget.builder(Text.literal("Test Connection")) { testConnection() }.dimensions(0, 0, 120, 20).build(),
@@ -118,7 +123,9 @@ class XclipsenConfigScreen(
 			if (!menu.contains(mouseX, mouseY)) {
 				openedSection = null
 				openColorField = null
+				soundDropdownOpen = false
 				draggingColorPicker = null
+				draggingSlider = null
 				layoutWidgets()
 				return true
 			}
@@ -141,7 +148,9 @@ class XclipsenConfigScreen(
 			} else if (button == RIGHT_MOUSE_BUTTON) {
 				openedSection = clickedSection
 				openColorField = null
+				soundDropdownOpen = false
 				draggingColorPicker = null
+				draggingSlider = null
 			}
 			layoutWidgets()
 			return true
@@ -152,6 +161,12 @@ class XclipsenConfigScreen(
 
 	override fun mouseDragged(click: Click, offsetX: Double, offsetY: Double): Boolean {
 		val dragTarget = draggingColorPicker
+		val sliderTarget = draggingSlider
+		if (openedSection == ConfigSection.HIDEONLEAF_HELPER && sliderTarget != null) {
+			updateSliderFromMouse(click.x().toInt(), sliderTarget)
+			return true
+		}
+
 		if (openedSection == ConfigSection.HIDEONLEAF_HELPER && dragTarget != null) {
 			updateColorFromPicker(click.x().toInt(), click.y().toInt(), dragTarget)
 			return true
@@ -162,7 +177,22 @@ class XclipsenConfigScreen(
 
 	override fun mouseReleased(click: Click): Boolean {
 		draggingColorPicker = null
+		draggingSlider = null
 		return super.mouseReleased(click)
+	}
+
+	override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, verticalAmount: Double): Boolean {
+		if (openedSection == ConfigSection.HIDEONLEAF_HELPER && soundDropdownOpen) {
+			val list = soundListBounds(settingsBounds())
+			if (list.contains(mouseX.toInt(), mouseY.toInt())) {
+				val filtered = SoundCatalog.filtered(lostFightSoundSearchField.text)
+				val maxScroll = (filtered.size - SOUND_VISIBLE_ROWS).coerceAtLeast(0)
+				soundScrollOffset = (soundScrollOffset - verticalAmount.toInt()).coerceIn(0, maxScroll)
+				return true
+			}
+		}
+
+		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
 	}
 
 	private fun toggleModule(section: ConfigSection) {
@@ -213,8 +243,13 @@ class XclipsenConfigScreen(
 		candidate.coopChatFormat = coopFormatField.text
 		candidate.ircBridgeEnabled = workingCopy.ircBridgeEnabled
 		candidate.hideonleafHelperEnabled = workingCopy.hideonleafHelperEnabled
-		candidate.shulkerTracerLineEnabled = workingCopy.shulkerTracerLineEnabled
+		candidate.shulkerTracerLineMode = workingCopy.shulkerTracerLineMode.coerceIn(0, 3)
+		candidate.shulkerTracerLineEnabled = candidate.shulkerTracerLineMode > 0
+		candidate.shulkerTracerLineWidth = workingCopy.shulkerTracerLineWidth
 		candidate.hideonleafLostFightAlertEnabled = workingCopy.hideonleafLostFightAlertEnabled
+		candidate.hideonleafLostFightAlertSoundId = SoundCatalog.normalizeSoundId(workingCopy.hideonleafLostFightAlertSoundId)
+		candidate.hideonleafLostFightAlertSoundVolume = workingCopy.hideonleafLostFightAlertSoundVolume
+		candidate.hideonleafLostFightAlertSoundPitch = workingCopy.hideonleafLostFightAlertSoundPitch
 		candidate.hudElements = mod.config().hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		candidate.shulkerGlowColorHex = normalizedHexColor(shulkerGlowColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Glow color must be #RRGGBB.")
@@ -281,6 +316,13 @@ class XclipsenConfigScreen(
 		setVisible(shulkerGlowButton, false)
 		setVisible(saveButton, false)
 		setVisible(cancelButton, false)
+		if (section == ConfigSection.HIDEONLEAF_HELPER && soundDropdownOpen) {
+			val search = soundSearchBounds(menu)
+			lostFightSoundSearchField.setDimensionsAndPosition(search.width(), 18, search.left, search.top)
+			setVisible(lostFightSoundSearchField, true)
+		} else {
+			setVisible(lostFightSoundSearchField, false)
+		}
 
 		searchField.setDimensionsAndPosition(SEARCH_WIDTH, 22, (width / 2) - (SEARCH_WIDTH / 2), height - 40)
 	}
@@ -378,8 +420,16 @@ class XclipsenConfigScreen(
 		drawColorSetting(context, shulkerGlowColorBounds(menu), "Shulker Color", ConfigField.SHULKER_GLOW_COLOR, mouseX, mouseY)
 		drawColorSetting(context, projectileGlowColorBounds(menu), "Projectile Color", ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, mouseX, mouseY)
 		drawColorSetting(context, tracerLineColorBounds(menu), "Line Color", ConfigField.SHULKER_TRACER_LINE_COLOR, mouseX, mouseY)
-		drawToggleSetting(context, tracerLineBounds(menu), "Nearest Shulker Line", workingCopy.shulkerTracerLineEnabled, mouseX, mouseY)
+		drawIntSliderSetting(context, tracerLineBounds(menu), "Shulker Line", workingCopy.shulkerTracerLineMode, 0, 3, mouseX, mouseY)
+		drawSliderSetting(context, tracerLineWidthBounds(menu), "Line Width", workingCopy.shulkerTracerLineWidth, 1.0f, 8.0f, mouseX, mouseY)
 		drawToggleSetting(context, lostFightAlertBounds(menu), "Lost Fight Alert", workingCopy.hideonleafLostFightAlertEnabled, mouseX, mouseY)
+		drawSoundSetting(context, lostFightSoundBounds(menu), "Alert Sound", workingCopy.hideonleafLostFightAlertSoundId, mouseX, mouseY)
+		if (soundDropdownOpen) {
+			drawSoundDropdown(context, menu, mouseX, mouseY)
+		}
+		drawSliderSetting(context, lostFightVolumeBounds(menu), "Volume", workingCopy.hideonleafLostFightAlertSoundVolume, 0.0f, 1.0f, mouseX, mouseY)
+		drawSliderSetting(context, lostFightPitchBounds(menu), "Pitch", workingCopy.hideonleafLostFightAlertSoundPitch, 0.1f, 2.0f, mouseX, mouseY)
+		drawButtonSetting(context, playLostFightSoundBounds(menu), "Play Sound", mouseX, mouseY)
 		if (colorPickerOpen) {
 			drawColorPicker(context, menu, mouseX, mouseY)
 		}
@@ -428,6 +478,91 @@ class XclipsenConfigScreen(
 
 		val knobX = switchX + if (enabled) switchWidth - 8 else 0
 		context.fill(knobX, switchY - 1, knobX + 8, switchY + 7, if (enabled) ACCENT else 0xFFA0A0A0.toInt())
+	}
+
+	private fun drawSliderSetting(
+		context: DrawContext,
+		row: Bounds,
+		label: String,
+		value: Float,
+		min: Float,
+		max: Float,
+		mouseX: Int,
+		mouseY: Int,
+	) {
+		val hovered = row.contains(mouseX, mouseY)
+		drawSettingBackground(context, row, hovered)
+		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
+		context.drawTextWithShadow(textRenderer, String.format(Locale.ROOT, "%.2f", value), row.right - 42, row.top + 4, TEXT_MUTED)
+
+		val barLeft = row.left + 8
+		val barRight = row.right - 8
+		val barY = row.bottom - 7
+		val progress = ((value - min) / (max - min)).coerceIn(0.0f, 1.0f)
+		val fillRight = barLeft + ((barRight - barLeft) * progress).toInt()
+		context.fill(barLeft, barY, barRight, barY + 3, 0x78282828)
+		context.fill(barLeft, barY, fillRight, barY + 3, ACCENT)
+		context.fill(fillRight - 2, barY - 2, fillRight + 2, barY + 5, TEXT_WHITE)
+	}
+
+	private fun drawIntSliderSetting(
+		context: DrawContext,
+		row: Bounds,
+		label: String,
+		value: Int,
+		min: Int,
+		max: Int,
+		mouseX: Int,
+		mouseY: Int,
+	) {
+		val hovered = row.contains(mouseX, mouseY)
+		drawSettingBackground(context, row, hovered)
+		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
+		context.drawTextWithShadow(textRenderer, value.coerceIn(min, max).toString(), row.right - 18, row.top + 4, TEXT_MUTED)
+
+		val barLeft = row.left + 8
+		val barRight = row.right - 8
+		val barY = row.bottom - 7
+		val progress = ((value.coerceIn(min, max) - min).toFloat() / (max - min).coerceAtLeast(1)).coerceIn(0.0f, 1.0f)
+		val fillRight = barLeft + ((barRight - barLeft) * progress).toInt()
+		context.fill(barLeft, barY, barRight, barY + 3, 0x78282828)
+		context.fill(barLeft, barY, fillRight, barY + 3, ACCENT)
+		context.fill(fillRight - 2, barY - 2, fillRight + 2, barY + 5, TEXT_WHITE)
+	}
+
+	private fun drawSoundSetting(context: DrawContext, row: Bounds, label: String, soundId: String, mouseX: Int, mouseY: Int) {
+		val hovered = row.contains(mouseX, mouseY)
+		drawSettingBackground(context, row, hovered || soundDropdownOpen)
+		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
+		context.drawTextWithShadow(textRenderer, trimToWidth(SoundCatalog.displayName(soundId), 92), row.right - 100, row.top + 4, TEXT_MUTED)
+		if (soundDropdownOpen) {
+			context.fill(row.left, row.bottom - 1, row.right, row.bottom, ACCENT)
+		}
+	}
+
+	private fun drawSoundDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		val search = soundSearchBounds(menu)
+		val list = soundListBounds(menu)
+		context.fill(search.left - 4, search.top - 4, search.right + 4, list.bottom + 4, INPUT_BACKGROUND)
+		context.fill(search.left, search.top, search.right, search.bottom, 0xC80F0F0F.toInt())
+		context.fill(search.left, search.bottom - 1, search.right, search.bottom, if (lostFightSoundSearchField.isFocused) ACCENT else 0x1EFFFFFF)
+
+		val filtered = SoundCatalog.filtered(lostFightSoundSearchField.text)
+		val maxScroll = (filtered.size - SOUND_VISIBLE_ROWS).coerceAtLeast(0)
+		soundScrollOffset = soundScrollOffset.coerceIn(0, maxScroll)
+
+		context.enableScissor(list.left, list.top, list.right, list.bottom)
+		filtered.drop(soundScrollOffset).take(SOUND_VISIBLE_ROWS).forEachIndexed { index, sound ->
+			val row = Bounds(list.left, list.top + (index * SOUND_ROW_HEIGHT), list.right, list.top + ((index + 1) * SOUND_ROW_HEIGHT))
+			val hovered = row.contains(mouseX, mouseY)
+			val selected = sound.id == workingCopy.hideonleafLostFightAlertSoundId
+			if (hovered) {
+				context.fill(row.left, row.top, row.right, row.bottom, HOVER)
+			}
+			val textColor = if (selected) ACCENT else if (hovered) TEXT_WHITE else TEXT_MUTED
+			context.drawTextWithShadow(textRenderer, trimToWidth(sound.name, SOUND_LIST_TEXT_WIDTH), row.left + 4, row.top + 3, textColor)
+		}
+		context.disableScissor()
 	}
 
 	private fun drawButtonSetting(context: DrawContext, row: Bounds, label: String, mouseX: Int, mouseY: Int) {
@@ -646,19 +781,69 @@ class XclipsenConfigScreen(
 			}
 			if (clickedColorField != null) {
 				openColorField = if (openColorField == clickedColorField) null else clickedColorField
+				soundDropdownOpen = false
 				draggingColorPicker = null
 				return true
 			}
 
 			if (tracerLineBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
-				workingCopy.shulkerTracerLineEnabled = !workingCopy.shulkerTracerLineEnabled
+				draggingSlider = SliderDragTarget.LINE_MODE
+				updateSliderFromMouse(mouseX, SliderDragTarget.LINE_MODE)
+				return true
+			}
+
+			if (tracerLineWidthBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.LINE_WIDTH
+				updateSliderFromMouse(mouseX, SliderDragTarget.LINE_WIDTH)
 				return true
 			}
 
 			if (lostFightAlertBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				workingCopy.hideonleafLostFightAlertEnabled = !workingCopy.hideonleafLostFightAlertEnabled
+				return true
+			}
+
+			if (lostFightSoundBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				openColorField = null
+				soundDropdownOpen = !soundDropdownOpen
+				soundScrollOffset = 0
+				layoutWidgets()
+				return true
+			}
+
+			if (soundDropdownOpen && soundListBounds(menu).contains(mouseX, mouseY)) {
+				val index = soundScrollOffset + ((mouseY - soundListBounds(menu).top) / SOUND_ROW_HEIGHT)
+				val filtered = SoundCatalog.filtered(lostFightSoundSearchField.text)
+				if (index in filtered.indices) {
+					readWorkingCopyFromFields(updateStatus = false)
+					workingCopy.hideonleafLostFightAlertSoundId = filtered[index].id
+					soundDropdownOpen = false
+					layoutWidgets()
+				}
+				return true
+			}
+
+			if (lostFightVolumeBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.ALERT_VOLUME
+				updateSliderFromMouse(mouseX, SliderDragTarget.ALERT_VOLUME)
+				return true
+			}
+
+			if (lostFightPitchBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.ALERT_PITCH
+				updateSliderFromMouse(mouseX, SliderDragTarget.ALERT_PITCH)
+				return true
+			}
+
+			if (playLostFightSoundBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				mod.playHideonleafLostFightSound(workingCopy)
 				return true
 			}
 
@@ -750,20 +935,68 @@ class XclipsenConfigScreen(
 		readWorkingCopyFromFields(updateStatus = false)
 	}
 
+	private fun updateSliderFromMouse(mouseX: Int, target: SliderDragTarget) {
+		val menu = settingsBounds()
+		val bounds = when (target) {
+			SliderDragTarget.LINE_MODE -> tracerLineBounds(menu)
+			SliderDragTarget.LINE_WIDTH -> tracerLineWidthBounds(menu)
+			SliderDragTarget.ALERT_VOLUME -> lostFightVolumeBounds(menu)
+			SliderDragTarget.ALERT_PITCH -> lostFightPitchBounds(menu)
+		}
+		val min = when (target) {
+			SliderDragTarget.LINE_MODE -> 0.0f
+			SliderDragTarget.LINE_WIDTH -> 1.0f
+			SliderDragTarget.ALERT_VOLUME -> 0.0f
+			SliderDragTarget.ALERT_PITCH -> 0.1f
+		}
+		val max = when (target) {
+			SliderDragTarget.LINE_MODE -> 3.0f
+			SliderDragTarget.LINE_WIDTH -> 8.0f
+			SliderDragTarget.ALERT_VOLUME -> 1.0f
+			SliderDragTarget.ALERT_PITCH -> 2.0f
+		}
+		val barLeft = bounds.left + 8
+		val barRight = bounds.right - 8
+		val progress = ((mouseX - barLeft).toFloat() / (barRight - barLeft).coerceAtLeast(1)).coerceIn(0.0f, 1.0f)
+		val rawValue = min + ((max - min) * progress)
+		val value = when (target) {
+			SliderDragTarget.LINE_MODE -> roundToStep(rawValue, 1.0f)
+			SliderDragTarget.LINE_WIDTH -> roundToStep(rawValue, 0.1f)
+			SliderDragTarget.ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
+			SliderDragTarget.ALERT_PITCH -> roundToStep(rawValue, 0.05f)
+		}.coerceIn(min, max)
+
+		when (target) {
+			SliderDragTarget.LINE_MODE -> {
+				workingCopy.shulkerTracerLineMode = value.toInt()
+				workingCopy.shulkerTracerLineEnabled = value.toInt() > 0
+			}
+			SliderDragTarget.LINE_WIDTH -> workingCopy.shulkerTracerLineWidth = value
+			SliderDragTarget.ALERT_VOLUME -> workingCopy.hideonleafLostFightAlertSoundVolume = value
+			SliderDragTarget.ALERT_PITCH -> workingCopy.hideonleafLostFightAlertSoundPitch = value
+		}
+	}
+
+	private fun roundToStep(value: Float, step: Float): Float {
+		return (kotlin.math.round(value / step) * step)
+	}
+
 	private fun colorSvBounds(menu: Bounds): Bounds {
-		return Bounds(menu.left + 48, menu.top + 129, menu.right - 18, menu.top + 201)
+		val top = colorPickerTop(menu)
+		return Bounds(menu.left + 48, top + 20, menu.right - 18, top + 92)
 	}
 
 	private fun colorHueBounds(menu: Bounds): Bounds {
-		return Bounds(menu.left + 18, menu.top + 129, menu.left + 36, menu.top + 201)
+		val top = colorPickerTop(menu)
+		return Bounds(menu.left + 18, top + 20, menu.left + 36, top + 92)
 	}
 
 	private fun colorTitleY(menu: Bounds): Int {
-		return menu.top + 113
+		return colorPickerTop(menu) + 4
 	}
 
 	private fun colorHexY(menu: Bounds): Int {
-		return menu.top + 209
+		return colorPickerTop(menu) + 100
 	}
 
 	private fun shulkerGlowColorBounds(menu: Bounds): Bounds {
@@ -771,20 +1004,71 @@ class XclipsenConfigScreen(
 	}
 
 	private fun projectileGlowColorBounds(menu: Bounds): Bounds {
-		return Bounds(menu.left + 10, menu.top + 90, menu.right - 10, menu.top + 110)
+		val top = shulkerGlowColorBounds(menu).bottom + SETTING_GAP + colorPickerSpaceAfter(ConfigField.SHULKER_GLOW_COLOR)
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
 
 	private fun tracerLineColorBounds(menu: Bounds): Bounds {
-		return Bounds(menu.left + 10, menu.top + 115, menu.right - 10, menu.top + 135)
+		val top = projectileGlowColorBounds(menu).bottom + SETTING_GAP + colorPickerSpaceAfter(ConfigField.SHULKER_PROJECTILE_GLOW_COLOR)
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
 
 	private fun tracerLineBounds(menu: Bounds): Bounds {
-		val top = if (colorPickerOpen) menu.top + 230 else menu.top + 140
+		val top = tracerLineColorBounds(menu).bottom + SETTING_GAP + colorPickerSpaceAfter(ConfigField.SHULKER_TRACER_LINE_COLOR)
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun colorPickerTop(menu: Bounds): Int {
+		val field = openColorField ?: return menu.top + 90
+		return when (field) {
+			ConfigField.SHULKER_GLOW_COLOR -> shulkerGlowColorBounds(menu).bottom + SETTING_GAP
+			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> projectileGlowColorBounds(menu).bottom + SETTING_GAP
+			ConfigField.SHULKER_TRACER_LINE_COLOR -> tracerLineColorBounds(menu).bottom + SETTING_GAP
+			else -> menu.top + 90
+		}
+	}
+
+	private fun colorPickerSpaceAfter(field: ConfigField): Int {
+		return if (openColorField == field) COLOR_PICKER_BLOCK_HEIGHT else 0
+	}
+
+	private fun tracerLineWidthBounds(menu: Bounds): Bounds {
+		val top = tracerLineBounds(menu).bottom + SETTING_GAP
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
 
 	private fun lostFightAlertBounds(menu: Bounds): Bounds {
-		val top = if (colorPickerOpen) menu.top + 255 else menu.top + 165
+		val top = tracerLineWidthBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun lostFightSoundBounds(menu: Bounds): Bounds {
+		val top = lostFightAlertBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun soundSearchBounds(menu: Bounds): Bounds {
+		val top = lostFightSoundBounds(menu).bottom + 4
+		return Bounds(menu.left + 18, top, menu.right - 18, top + 18)
+	}
+
+	private fun soundListBounds(menu: Bounds): Bounds {
+		val top = soundSearchBounds(menu).bottom + 4
+		return Bounds(menu.left + 18, top, menu.right - 18, top + (SOUND_VISIBLE_ROWS * SOUND_ROW_HEIGHT))
+	}
+
+	private fun lostFightVolumeBounds(menu: Bounds): Bounds {
+		val top = if (soundDropdownOpen) soundListBounds(menu).bottom + SETTING_GAP else lostFightSoundBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun lostFightPitchBounds(menu: Bounds): Bounds {
+		val top = lostFightVolumeBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun playLostFightSoundBounds(menu: Bounds): Bounds {
+		val top = lostFightPitchBounds(menu).bottom + SETTING_GAP
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
 
@@ -848,6 +1132,13 @@ class XclipsenConfigScreen(
 		HUE,
 	}
 
+	private enum class SliderDragTarget {
+		LINE_MODE,
+		LINE_WIDTH,
+		ALERT_VOLUME,
+		ALERT_PITCH,
+	}
+
 	private enum class ConfigSection(
 		val label: String,
 		val description: String,
@@ -895,7 +1186,7 @@ class XclipsenConfigScreen(
 		private const val POPUP_WIDTH = 200
 		private const val POPUP_HEIGHT = 250
 		private const val IRC_POPUP_HEIGHT = 390
-		private const val HIDEONLEAF_POPUP_HEIGHT = 310
+		private const val HIDEONLEAF_POPUP_HEIGHT = 450
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20
 		private const val TEXT_INPUT_SETTING_HEIGHT = 38
@@ -903,8 +1194,12 @@ class XclipsenConfigScreen(
 		private const val COLOR_INPUT_WIDTH = 134
 		private const val SETTING_GAP = 5
 		private const val SEARCH_WIDTH = 150
+		private const val SOUND_VISIBLE_ROWS = 6
+		private const val SOUND_ROW_HEIGHT = 15
+		private const val SOUND_LIST_TEXT_WIDTH = 145
 		private const val DEFAULT_GLOW_COLOR = 0x36C5F0
 		private const val COLOR_PICKER_STEP = 2
+		private const val COLOR_PICKER_BLOCK_HEIGHT = 122
 		private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 
 		private fun copyOf(source: BridgeConfig): BridgeConfig = source.copy()
