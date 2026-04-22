@@ -63,6 +63,10 @@ object HideonleafShardTracker {
 	// Fetches live Bazaar prices from the bot backend every 5 minutes.
 
 	private const val PRICE_REFRESH_INTERVAL_MINUTES = 5L
+
+	// ── AFK detection ────────────────────────────────────────────────────
+	// Timer pauses after this many ms without any drop or kill.
+	private const val AFK_THRESHOLD_MS = 1 * 60 * 1_000L   // 1 minute
 	private var priceScheduler: ScheduledExecutorService? = null
 
 	/** Last successful prices from the backend (display name → sell price). Updated on background thread. */
@@ -86,6 +90,15 @@ object HideonleafShardTracker {
 	@Volatile
 	var sessionActive: Boolean = false
 		private set
+
+	/** True while the per-session stopwatch is actually counting up. */
+	@Volatile
+	var timerRunning: Boolean = false
+		private set
+
+	/** Epoch-ms of the last recorded drop or kill — used for AFK detection. */
+	@Volatile
+	private var lastActivityAt: Long = 0L
 
 	private var sessionStartedAt: Long = 0L
 
@@ -188,6 +201,7 @@ object HideonleafShardTracker {
 		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled) return
 		if (!LocationTracker.isOnGalatea) return
 
+		lastActivityAt = System.currentTimeMillis()
 		totalData.kills++
 		sessionData.kills++
 		saveData()
@@ -197,6 +211,7 @@ object HideonleafShardTracker {
 
 	fun addItem(name: String, amount: Long) {
 		ensureSessionActive()
+		lastActivityAt = System.currentTimeMillis()
 
 		val canonicalName = canonicalize(name)
 		addToData(totalData, canonicalName, amount)
@@ -217,8 +232,10 @@ object HideonleafShardTracker {
 
 	fun resetSession() {
 		sessionData = TrackerData()
-		sessionStartedAt = System.currentTimeMillis()
+		sessionStartedAt = 0L
 		sessionActive = false
+		timerRunning = false
+		lastActivityAt = 0L
 	}
 
 	fun resetTotal() {
@@ -231,14 +248,69 @@ object HideonleafShardTracker {
 		showingSession = !showingSession
 	}
 
+	// ── Timer pause / resume ─────────────────────────────────────────────
+
+	/**
+	 * Called every client tick. Pauses the stopwatch when the player is not
+	 * on Galatea or has been AFK (no drops / kills) for longer than
+	 * [AFK_THRESHOLD_MS]. Resumes automatically once both conditions clear.
+	 */
+	fun onTick() {
+		if (!sessionActive) return
+
+		val onGalatea = LocationTracker.isOnGalatea
+		val now = System.currentTimeMillis()
+		val isAfk = lastActivityAt > 0L && (now - lastActivityAt) > AFK_THRESHOLD_MS
+		val shouldRun = onGalatea && !isAfk
+
+		if (shouldRun && !timerRunning) resumeTimer()
+		else if (!shouldRun && timerRunning) {
+			// When AFK: cut the timer back to the last activity so the idle
+			// minute is not counted towards the session duration.
+			if (isAfk) pauseTimer(effectiveEndMs = lastActivityAt)
+			else pauseTimer()
+		}
+	}
+
+	/**
+	 * Stops the stopwatch and adds the elapsed time to [sessionData].
+	 *
+	 * @param effectiveEndMs  The "real" end of active play in epoch-ms.
+	 *   Defaults to now. Pass [lastActivityAt] when pausing due to AFK so
+	 *   the idle period before the pause is not billed to the session.
+	 */
+	private fun pauseTimer(effectiveEndMs: Long = System.currentTimeMillis()) {
+		if (!timerRunning) return
+		val elapsed = (effectiveEndMs - sessionStartedAt).coerceAtLeast(0L)
+		sessionData.totalDurationMs += elapsed
+		sessionStartedAt = 0L
+		timerRunning = false
+	}
+
+	private fun resumeTimer() {
+		if (!sessionActive || timerRunning) return
+		sessionStartedAt = System.currentTimeMillis()
+		timerRunning = true
+	}
+
 	// ── Display data ─────────────────────────────────────────────────────
 
 	fun displayData(): TrackerData = if (showingSession) sessionData else totalData
 
 	fun sessionDurationMs(): Long {
 		if (!sessionActive) return sessionData.totalDurationMs
+		if (!timerRunning) return sessionData.totalDurationMs
 		return sessionData.totalDurationMs + (System.currentTimeMillis() - sessionStartedAt)
 	}
+
+	/** True when the session is active but the stopwatch is paused. */
+	val isTimerPaused: Boolean get() = sessionActive && !timerRunning
+
+	/**
+	 * When paused: true = paused due to AFK (still on Galatea),
+	 * false = paused because the player left Galatea.
+	 */
+	val afkPauseActive: Boolean get() = isTimerPaused && LocationTracker.isOnGalatea
 
 	fun totalProfit(data: TrackerData): Double {
 		return data.items.values.sumOf { it.amount * it.pricePerUnit }
@@ -284,6 +356,7 @@ object HideonleafShardTracker {
 		if (!sessionActive) {
 			sessionActive = true
 			sessionStartedAt = System.currentTimeMillis()
+			timerRunning = true
 		}
 	}
 
@@ -465,7 +538,12 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 		lines += TrackerLine("Per Hour: §a${HideonleafShardTracker.formatCoins(profitPerHour)}/h", MUTED_COLOR)
 		if (data.kills > 0)
 			lines += TrackerLine("Kills: §e${formatNumber(data.kills)}", MUTED_COLOR)
-		lines += TrackerLine("Time: §f${HideonleafShardTracker.formatDuration(durationMs)}", MUTED_COLOR)
+		val timerSuffix = when {
+			!example && HideonleafShardTracker.afkPauseActive  -> " §6[AFK]"
+			!example && HideonleafShardTracker.isTimerPaused   -> " §c[Pausiert]"
+			else -> ""
+		}
+		lines += TrackerLine("Time: §f${HideonleafShardTracker.formatDuration(durationMs)}$timerSuffix", MUTED_COLOR)
 
 		// ── Compute dimensions ────────────────────────────────────────
 		var maxTextWidth = 0

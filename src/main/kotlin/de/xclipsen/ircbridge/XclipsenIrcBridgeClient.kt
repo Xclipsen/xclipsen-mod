@@ -184,6 +184,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun handleEndTick(client: MinecraftClient) {
 		LocationTracker.onTick(client)
+		HideonleafShardTracker.onTick()
 
 		if (client.currentScreen !is ChatScreen) {
 			ImagePreviewManager.setHoverPreviewActive(false)
