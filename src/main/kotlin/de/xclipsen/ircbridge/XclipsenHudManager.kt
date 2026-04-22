@@ -2,10 +2,12 @@ package de.xclipsen.ircbridge
 
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.gui.screen.Screen
 
 object XclipsenHudManager {
 	val elements: List<XclipsenHudElement> = listOf(
 		HideonleafLostFightHudElement,
+		HideonleafShardTrackerHudElement,
 	)
 
 	fun render(context: DrawContext) {
@@ -16,6 +18,18 @@ object XclipsenHudManager {
 		elements.forEach { element ->
 			element.renderElement(context, example = false)
 		}
+	}
+
+	/**
+	 * Called by ScreenMouseClickHandler for every left-click on any Screen.
+	 * Returns true if the click was consumed (prevents the screen from also handling it).
+	 */
+	fun handleScreenClick(mouseX: Int, mouseY: Int, button: Int): Boolean {
+		if (button != 0) return false
+		val client = MinecraftClient.getInstance()
+		// Don't intercept clicks inside our own editor or config screens
+		if (client.currentScreen is XclipsenHudEditorScreen) return false
+		return HideonleafShardTrackerHudElement.handleClick(mouseX, mouseY)
 	}
 
 	fun showHideonleafLostFightAlert() {

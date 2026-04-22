@@ -5,7 +5,7 @@ Fabric-Clientmod fuer Minecraft `1.21.10` mit modularen Client-Features.
 ## Module
 
 - `IRC Bridge`: Discord-/IRC-Nachrichten lokal im Client-Chat, Hypixel-Co-op-Relay und `/irc <nachricht>`.
-- `Hideonleaf Helper`: Shulker Glow, Shulker-Linie, Lost-Fight-Alert und konfigurierbare Sounds.
+- `Hideonleaf Helper`: Shulker Glow, Shulker-Linie, Lost-Fight-Alert, Shard-Tracker und konfigurierbare Sounds.
 - `Time Changer`: clientseitige Zeit-Presets wie Day, Noon, Sunset, Night, Midnight, Sunrise und Real Time.
 - `Status`: Config-Pfad, Backend-Status und HUD-Editor.
 

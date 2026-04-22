@@ -188,6 +188,32 @@ class ClientBackendBridgeService(
 		}
 	}
 
+	/**
+	 * Fetches current Bazaar prices from the bot backend.
+	 * Returns null when the backend is unreachable or not configured.
+	 * Must NOT be called on the main thread — blocks until the HTTP response arrives.
+	 */
+	fun fetchSkyblockPrices(): BackendPricePayload? {
+		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) return null
+
+		return try {
+			val request = requestBuilder(backendUrl("/api/skyblock/prices")).GET().build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			if (response.statusCode() != 200) {
+				logger.debug("Price fetch returned HTTP {}", response.statusCode())
+				null
+			} else {
+				GSON.fromJson(response.body(), BackendPricePayload::class.java)
+			}
+		} catch (exception: IOException) {
+			logger.debug("Price fetch failed: {}", exception.message)
+			null
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
 	fun completeLink(playerName: String, code: String): BackendLinkStatusResponse {
 		val outgoing = BackendLinkCompleteRequest().apply {
 			this.playerName = sanitizeInline(playerName, MAX_NAME_LENGTH)

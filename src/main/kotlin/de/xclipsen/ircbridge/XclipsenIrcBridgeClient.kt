@@ -43,7 +43,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	override fun onInitializeClient() {
 		instance = this
 		config = configManager.load()
+		HideonleafShardTracker.init()
 		applyBackendBridgeConfig()
+
+		// Register HUD click handler via Fabric ScreenEvents
+		ScreenMouseClickHandler.register()
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register {
 			backendBridge.stop()
@@ -118,10 +122,30 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 					.then(ClientCommandManager.literal("off").executes { setShulkerGlow(it, false) })
 					.then(ClientCommandManager.literal("toggle").executes(::toggleShulkerGlow)),
 			)
+
+			dispatcher.register(
+				ClientCommandManager.literal("shardtracker")
+					.executes(::showShardTrackerStatus)
+					.then(ClientCommandManager.literal("reset").executes(::resetShardTrackerSession))
+					.then(ClientCommandManager.literal("resetall").executes(::resetShardTrackerTotal))
+					.then(ClientCommandManager.literal("toggle").executes(::toggleShardTrackerView))
+					.then(ClientCommandManager.literal("on").executes { setShardTracker(it, true) })
+					.then(ClientCommandManager.literal("off").executes { setShardTracker(it, false) }),
+			)
+
+			dispatcher.register(
+				ClientCommandManager.literal("st")
+					.executes(::showShardTrackerStatus)
+					.then(ClientCommandManager.literal("reset").executes(::resetShardTrackerSession))
+					.then(ClientCommandManager.literal("resetall").executes(::resetShardTrackerTotal))
+					.then(ClientCommandManager.literal("toggle").executes(::toggleShardTrackerView)),
+			)
 		}
 	}
 
 	fun config(): BridgeConfig = config
+
+	fun backendBridge(): ClientBackendBridgeService = backendBridge
 
 	fun backendStatus(): BackendStatusSnapshot = backendBridge.status()
 
@@ -159,6 +183,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun handleEndTick(client: MinecraftClient) {
+		LocationTracker.onTick(client)
+
 		if (client.currentScreen !is ChatScreen) {
 			ImagePreviewManager.setHoverPreviewActive(false)
 			backendBridge.setPreviewHoverPaused(false)
@@ -374,11 +400,16 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun handleIncomingMessage(message: Text?) {
 		handleHideonleafLostFightAlert(message)
+		HideonleafShardTracker.processChat(message)
 		handleIncomingCoopChat(message)
 	}
 
 	private fun handleHideonleafLostFightAlert(message: Text?) {
 		if (!config.hideonleafHelperEnabled) {
+			return
+		}
+
+		if (!LocationTracker.isOnGalatea) {
 			return
 		}
 
@@ -396,6 +427,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		val client = MinecraftClient.getInstance()
 		client.execute {
 			ShulkerTracerRenderer.markCurrentTargetCompleted()
+			HideonleafShardTracker.recordKill()
 			if (!config.hideonleafLostFightAlertEnabled) {
 				return@execute
 			}
@@ -585,6 +617,61 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun sendClientError(message: String) {
 		MinecraftClient.getInstance().player?.sendMessage(Text.literal(message), false)
+	}
+
+	private fun showShardTrackerStatus(context: CommandContext<FabricClientCommandSource>): Int {
+		val data = HideonleafShardTracker.displayData()
+		val duration = HideonleafShardTracker.sessionDurationMs()
+		val profit = HideonleafShardTracker.totalProfit(data)
+		val perHour = HideonleafShardTracker.profitPerHour(data, duration)
+		val view = if (HideonleafShardTracker.showingSession) "Session" else "Total"
+
+		context.source.sendFeedback(Text.literal(buildString {
+			append("§b§lShard Tracker ($view)§r\n")
+			for ((name, item) in data.items) {
+				append("  §e${item.amount}x §f$name")
+				val value = item.amount * item.pricePerUnit
+				if (value > 0) append(" §a(${HideonleafShardTracker.formatCoins(value)})")
+				append("\n")
+			}
+			if (data.items.isEmpty()) append("  §7No drops yet.\n")
+			append("§aProfit: ${HideonleafShardTracker.formatCoins(profit)} §7| ")
+			append("§aPer Hour: ${HideonleafShardTracker.formatCoins(perHour)}/h §7| ")
+			append("§fTime: ${HideonleafShardTracker.formatDuration(duration)}")
+			if (data.kills > 0) append(" §7| §eKills: ${data.kills}")
+		}))
+		return 1
+	}
+
+	private fun resetShardTrackerSession(context: CommandContext<FabricClientCommandSource>): Int {
+		HideonleafShardTracker.resetSession()
+		context.source.sendFeedback(Text.literal("§aShard tracker session reset."))
+		return 1
+	}
+
+	private fun resetShardTrackerTotal(context: CommandContext<FabricClientCommandSource>): Int {
+		HideonleafShardTracker.resetTotal()
+		context.source.sendFeedback(Text.literal("§aShard tracker fully reset (session + total)."))
+		return 1
+	}
+
+	private fun toggleShardTrackerView(context: CommandContext<FabricClientCommandSource>): Int {
+		HideonleafShardTracker.toggleView()
+		val view = if (HideonleafShardTracker.showingSession) "Session" else "Total"
+		context.source.sendFeedback(Text.literal("§aShard tracker now showing: §e$view"))
+		return 1
+	}
+
+	private fun setShardTracker(context: CommandContext<FabricClientCommandSource>, enabled: Boolean): Int {
+		config.shardTrackerEnabled = enabled
+		return try {
+			configManager.save(config)
+			context.source.sendFeedback(Text.literal("§aShard tracker ${if (enabled) "enabled" else "disabled"}."))
+			1
+		} catch (_: IOException) {
+			context.source.sendError(Text.literal("Failed to save shard tracker setting."))
+			0
+		}
 	}
 
 	private fun cacheLinkedDisplayName(status: BackendLinkStatusResponse?) {

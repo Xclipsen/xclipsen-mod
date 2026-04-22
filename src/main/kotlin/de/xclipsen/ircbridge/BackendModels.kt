@@ -65,6 +65,7 @@ class BridgeConfig {
 	@JvmField var hideonleafLostFightAlertSoundId: String = "minecraft:block.note_block.pling"
 	@JvmField var hideonleafLostFightAlertSoundVolume: Float = 1.0f
 	@JvmField var hideonleafLostFightAlertSoundPitch: Float = 1.5f
+	@JvmField var shardTrackerEnabled: Boolean = true
 	@JvmField var timeChangerEnabled: Boolean = false
 	@JvmField var timeChangerMode: Int = 0
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
@@ -91,6 +92,7 @@ class BridgeConfig {
 		it.hideonleafLostFightAlertSoundId = hideonleafLostFightAlertSoundId
 		it.hideonleafLostFightAlertSoundVolume = hideonleafLostFightAlertSoundVolume
 		it.hideonleafLostFightAlertSoundPitch = hideonleafLostFightAlertSoundPitch
+		it.shardTrackerEnabled = shardTrackerEnabled
 		it.timeChangerEnabled = timeChangerEnabled
 		it.timeChangerMode = timeChangerMode
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
@@ -113,6 +115,20 @@ class HudElementPlacement() {
 
 class HealthResponse {
 	@JvmField var status: String = ""
+}
+
+/** Response from GET /api/skyblock/prices */
+class BackendPricePayload {
+	@JvmField var prices: Map<String, ItemPrice> = emptyMap()
+}
+
+class ItemPrice {
+	/** Instant-buy price per unit from the Bazaar buy-summary. */
+	@JvmField var buyPrice: Double = 0.0
+	/** Instant-sell price per unit from the Bazaar sell-summary. */
+	@JvmField var sellPrice: Double = 0.0
+	/** Unix-ms timestamp when the Bot last fetched this from Hypixel. */
+	@JvmField var lastUpdated: Long = 0L
 }
 
 object TextFormatter {

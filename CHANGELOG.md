@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.4.2
 
 - Added a ClickGUI-style settings screen and `/xclipsen` command alias.
+- Added a Hideonleaf shard profit tracker with HUD display, session/total view, commands, and backend price refresh.
+- Fixed startup crash caused by directly loading a helper class from the Mixin package.
+
+## v0.4.1
+
+- Added Hideonleaf helper rendering improvements and time changer support.
 
 ## v0.3.1
 
