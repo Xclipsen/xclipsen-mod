@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.client.gl.UniformType;
 import net.minecraft.util.Identifier;
 
 public final class XclipsenRenderLayers {
@@ -14,6 +15,8 @@ public final class XclipsenRenderLayers {
 		.withLocation(Identifier.of("xclipsen", "shulker_xray_lines"))
 		.withVertexShader("core/position_color")
 		.withFragmentShader("core/position_color")
+		.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+		.withUniform("Projection", UniformType.UNIFORM_BUFFER)
 		.withCull(false)
 		.withBlend(BlendFunction.TRANSLUCENT)
 		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
