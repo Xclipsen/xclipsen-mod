@@ -22,4 +22,11 @@ abstract class EntityGlowMixin {
 			cir.returnValue = it
 		}
 	}
+
+	@Inject(method = ["shouldRender(D)Z"], at = [At("HEAD")], cancellable = true)
+	private fun forceShulkerGlowRenderDistance(distance: Double, cir: CallbackInfoReturnable<Boolean>) {
+		if (ShulkerGlowFeature.shouldGlow(this as Entity)) {
+			cir.returnValue = true
+		}
+	}
 }

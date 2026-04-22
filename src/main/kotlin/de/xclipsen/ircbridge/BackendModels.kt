@@ -65,6 +65,8 @@ class BridgeConfig {
 	@JvmField var hideonleafLostFightAlertSoundId: String = "minecraft:block.note_block.pling"
 	@JvmField var hideonleafLostFightAlertSoundVolume: Float = 1.0f
 	@JvmField var hideonleafLostFightAlertSoundPitch: Float = 1.5f
+	@JvmField var timeChangerEnabled: Boolean = false
+	@JvmField var timeChangerMode: Int = 0
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
@@ -89,6 +91,8 @@ class BridgeConfig {
 		it.hideonleafLostFightAlertSoundId = hideonleafLostFightAlertSoundId
 		it.hideonleafLostFightAlertSoundVolume = hideonleafLostFightAlertSoundVolume
 		it.hideonleafLostFightAlertSoundPitch = hideonleafLostFightAlertSoundPitch
+		it.timeChangerEnabled = timeChangerEnabled
+		it.timeChangerMode = timeChangerMode
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
 }

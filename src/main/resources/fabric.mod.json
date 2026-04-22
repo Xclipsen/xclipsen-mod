@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "xclipsen_irc_bridge",
+  "id": "xclipsen_mod",
   "version": "${version}",
-  "name": "Xclipsen IRC Bridge",
-  "description": "Simple Minecraft to Discord bridge for Fabric ${minecraft_version}.",
+  "name": "Xclipsen Mod",
+  "description": "Modular client utilities for Fabric ${minecraft_version}.",
   "authors": [
     "OpenAI"
   ],
@@ -16,7 +16,7 @@
     ]
   },
   "mixins": [
-    "xclipsen-irc-bridge.mixins.json"
+    "xclipsen-mod.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.18.4",

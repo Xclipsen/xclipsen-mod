@@ -16,11 +16,13 @@ import kotlin.math.min
 class BridgeConfigManager(
 	private val logger: Logger,
 ) {
-	private val pathInternal: Path = FabricLoader.getInstance().configDir.resolve("xclipsen-irc-bridge.json")
+	private val pathInternal: Path = FabricLoader.getInstance().configDir.resolve("xclipsen-mod.json")
+	private val legacyPath: Path = FabricLoader.getInstance().configDir.resolve("xclipsen-irc-bridge.json")
 
 	fun load(): BridgeConfig {
 		return try {
 			Files.createDirectories(pathInternal.parent)
+			migrateLegacyConfig()
 
 			if (Files.notExists(pathInternal)) {
 				val defaults = normalized(BridgeConfig())
@@ -50,6 +52,15 @@ class BridgeConfigManager(
 
 	fun normalize(config: BridgeConfig): BridgeConfig = normalized(config)
 
+	private fun migrateLegacyConfig() {
+		if (Files.exists(pathInternal) || Files.notExists(legacyPath)) {
+			return
+		}
+
+		Files.copy(legacyPath, pathInternal)
+		logger.info("Migrated legacy config {} to {}", legacyPath, pathInternal)
+	}
+
 	private fun normalized(config: BridgeConfig?): BridgeConfig {
 		val value = config ?: BridgeConfig()
 		value.backendBaseUrl = normalizeBackendBaseUrl(value.backendBaseUrl)
@@ -69,6 +80,7 @@ class BridgeConfigManager(
 		value.hideonleafLostFightAlertSoundId = SoundCatalog.normalizeSoundId(value.hideonleafLostFightAlertSoundId)
 		value.hideonleafLostFightAlertSoundVolume = value.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 1.0f)
 		value.hideonleafLostFightAlertSoundPitch = value.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f)
+		value.timeChangerMode = value.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
 		return value
 	}
 

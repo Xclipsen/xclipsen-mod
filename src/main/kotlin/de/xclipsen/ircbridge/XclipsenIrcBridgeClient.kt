@@ -602,7 +602,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	companion object {
-		private val LOGGER: Logger = LoggerFactory.getLogger("xclipsen_irc_bridge")
+		private val LOGGER: Logger = LoggerFactory.getLogger("xclipsen_mod")
 		private const val IRC_CHAT_MODE_WINDOW_MS = 150 * 1000L
 		private const val COOP_RELAY_TTL_MS = 10_000L
 		private const val MAX_COOP_RELAY_HISTORY = 64

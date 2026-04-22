@@ -90,7 +90,7 @@ fun Project.copyRemappedModToPrismTargets() {
 		}
 
 		fileTree(target) {
-			include("xclipsen-irc-bridge-*.jar")
+			include("xclipsen-irc-bridge-*.jar", "xclipsen-mod-*.jar")
 		}.files.forEach(File::delete)
 
 		copy {

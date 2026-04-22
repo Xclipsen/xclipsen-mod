@@ -47,7 +47,7 @@ class XclipsenConfigScreen(
 
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
-		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.HIDEONLEAF_HELPER)),
+		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.HIDEONLEAF_HELPER, ConfigSection.TIME_CHANGER)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.STATUS)),
 	)
 
@@ -205,6 +205,7 @@ class XclipsenConfigScreen(
 		when (section) {
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled = !workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled = !workingCopy.hideonleafHelperEnabled
+			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled = !workingCopy.timeChangerEnabled
 			else -> return
 		}
 
@@ -267,6 +268,8 @@ class XclipsenConfigScreen(
 		candidate.hideonleafLostFightAlertSoundId = SoundCatalog.normalizeSoundId(workingCopy.hideonleafLostFightAlertSoundId)
 		candidate.hideonleafLostFightAlertSoundVolume = workingCopy.hideonleafLostFightAlertSoundVolume
 		candidate.hideonleafLostFightAlertSoundPitch = workingCopy.hideonleafLostFightAlertSoundPitch
+		candidate.timeChangerEnabled = workingCopy.timeChangerEnabled
+		candidate.timeChangerMode = workingCopy.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
 		candidate.hudElements = mod.config().hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		candidate.shulkerGlowColorHex = normalizedHexColor(shulkerGlowColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Glow color must be #RRGGBB.")
@@ -390,6 +393,7 @@ class XclipsenConfigScreen(
 		return when (section) {
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled
+			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled
 			else -> true
 		}
 	}
@@ -412,6 +416,7 @@ class XclipsenConfigScreen(
 		when (section) {
 			ConfigSection.IRC_BRIDGE -> drawIrcBridgeSettings(context, menu, mouseX, mouseY)
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, menu, mouseX, mouseY)
+			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
 			ConfigSection.STATUS -> drawStatusSettings(context, menu, mouseX, mouseY)
 		}
 
@@ -457,6 +462,10 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Config", mod.configPath().toString(), mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Backend", XclipsenIrcBridgeClient.formatStatus(status), mouseX, mouseY)
 		drawButtonSetting(context, hudEditorBounds(menu), "Open HUD Editor", mouseX, mouseY)
+	}
+
+	private fun drawTimeChangerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawOptionSetting(context, timeChangerModeBounds(menu), "Time", ClientTimeChanger.displayName(workingCopy.timeChangerMode), mouseX, mouseY)
 	}
 
 	private fun drawTextInputSetting(
@@ -601,6 +610,16 @@ class XclipsenConfigScreen(
 		drawSettingBackground(context, row, hovered)
 		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
 		context.drawTextWithShadow(textRenderer, trimToWidth(value, TEXT_INPUT_WIDTH), row.left + 8, row.top + 20, TEXT_MUTED)
+	}
+
+	private fun drawOptionSetting(context: DrawContext, row: Bounds, label: String, value: String, mouseX: Int, mouseY: Int) {
+		val hovered = row.contains(mouseX, mouseY)
+		drawSettingBackground(context, row, hovered)
+		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 6, TEXT_WHITE)
+		context.drawTextWithShadow(textRenderer, trimToWidth(value, 110), row.right - 118, row.top + 6, TEXT_MUTED)
+		if (hovered) {
+			context.fill(row.right - 14, row.top + 7, row.right - 9, row.top + 12, ACCENT)
+		}
 	}
 
 	private fun drawColorSetting(context: DrawContext, row: Bounds, label: String, field: ConfigField, mouseX: Int, mouseY: Int) {
@@ -768,6 +787,7 @@ class XclipsenConfigScreen(
 		val targetHeight = when (openedSection) {
 			ConfigSection.IRC_BRIDGE -> IRC_POPUP_HEIGHT
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
+			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
 			else -> POPUP_HEIGHT
 		}
 		val menuHeight = targetHeight.coerceAtMost((height - 80).coerceAtLeast(targetHeight))
@@ -883,6 +903,12 @@ class XclipsenConfigScreen(
 
 		if (section == ConfigSection.IRC_BRIDGE && testConnectionBounds(menu).contains(mouseX, mouseY)) {
 			testConnection()
+			return true
+		}
+
+		if (section == ConfigSection.TIME_CHANGER && timeChangerModeBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.timeChangerMode = (workingCopy.timeChangerMode + 1) % ClientTimeChanger.modeCount
 			return true
 		}
 
@@ -1107,6 +1133,10 @@ class XclipsenConfigScreen(
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
 
+	private fun timeChangerModeBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
 	private fun trimToWidth(value: String, maxWidth: Int): String {
 		if (textRenderer.getWidth(value) <= maxWidth) {
 			return value
@@ -1163,6 +1193,7 @@ class XclipsenConfigScreen(
 	) {
 		IRC_BRIDGE("IRC Bridge", "Backend connection and IRC message formats.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
+		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
 		STATUS("Status", "Current config path and backend state."),
 	}
 
@@ -1204,6 +1235,7 @@ class XclipsenConfigScreen(
 		private const val POPUP_HEIGHT = 250
 		private const val IRC_POPUP_HEIGHT = 390
 		private const val HIDEONLEAF_POPUP_HEIGHT = 450
+		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20
 		private const val TEXT_INPUT_SETTING_HEIGHT = 38

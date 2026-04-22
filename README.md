@@ -1,35 +1,28 @@
-# Xclipsen IRC Bridge
+# Xclipsen Mod
 
-Fabric-Clientmod fuer Minecraft `1.21.10`, die einen einfachen IRC-aehnlichen Chatkanal mit Discord bridged.
+Fabric-Clientmod fuer Minecraft `1.21.10` mit modularen Client-Features.
 
-## Features
+## Module
 
-- zeigt Discord- und IRC-Nachrichten lokal im Client-Chat an
-- spiegelt Hypixel-Co-op-Chat automatisch nach Discord/IRC sobald ein verlinkter Client online ist
-- `/irc <nachricht>` als Client-Befehl, ganz ohne Minecraft-Servermod
-- `/xclipsen` oder `/irc config` oeffnet die ClickGUI-aehnliche Settings-Oberflaeche
-- `/irc reload` zum Neuladen der JSON-Konfiguration
-- Shulker und Shulker-Projektile bekommen clientseitig einen Glow-Outline-Effekt, der durch Waende sichtbar ist
-- `/shulkerglow on|off|toggle` oder `/irc shulkerglow on|off|toggle` zum Umschalten des Shulker-Glows
-- optionaler Backend-Modus, damit die Discord-Verbindung als separater Dienst dauerhaft online bleibt
+- `IRC Bridge`: Discord-/IRC-Nachrichten lokal im Client-Chat, Hypixel-Co-op-Relay und `/irc <nachricht>`.
+- `Hideonleaf Helper`: Shulker Glow, Shulker-Linie, Lost-Fight-Alert und konfigurierbare Sounds.
+- `Time Changer`: clientseitige Zeit-Presets wie Day, Noon, Sunset, Night, Midnight, Sunrise und Real Time.
+- `Status`: Config-Pfad, Backend-Status und HUD-Editor.
 
 ## Einrichtung
 
 1. `./gradlew build`
 2. Die erzeugte Jar aus `build/libs/` in den `mods/`-Ordner des Clients legen.
 3. Minecraft mit Fabric starten.
-4. `config/xclipsen-irc-bridge.json` ausfuellen:
-   - `bridgeMode`: `backend`
-   - `backendBaseUrl`: URL deines bestehenden Bots, z. B. `http://127.0.0.1:8765`
-   - `backendAuthToken`: shared secret, das auch im Bot gesetzt ist
-5. Client neu starten oder `/irc reload` ausfuehren.
+4. `/xclipsen` oeffnen und die gewuenschten Module aktivieren.
+5. Optional `config/xclipsen-mod.json` bearbeiten oder `/irc reload` zum Neuladen ausfuehren.
 
 ## Backend-Modus
 
 Dieses Repo enthaelt nur noch den Fabric-Clientmod. Das Backend laeuft in deinem bestehenden Discord-Bot-Projekt `Xclipsen Bot`.
 
-1. Mod-Config in `config/xclipsen-irc-bridge.json`:
-   - `bridgeMode = "backend"`
+1. Mod-Config in `config/xclipsen-mod.json`:
+   - `ircBridgeEnabled = true`
    - `backendBaseUrl = "http://DEIN-SERVER:8765"`
    - `backendAuthToken = "dein-shared-secret"`
 2. Im Bot-Projekt `.env` setzen:

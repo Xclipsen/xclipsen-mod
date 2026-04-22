@@ -236,7 +236,7 @@ object ImagePreviewManager {
 
 						client.execute {
 							try {
-								val textureId = Identifier.of("xclipsen_irc_bridge", "preview/${url.hashCode().toUInt().toString(16)}")
+								val textureId = Identifier.of("xclipsen_mod", "preview/${url.hashCode().toUInt().toString(16)}")
 								client.textureManager.registerTexture(textureId, NativeImageBackedTexture({ "IRC preview" }, image))
 								state.set(LoadedPreview(textureId, width, height))
 							} catch (exception: Exception) {

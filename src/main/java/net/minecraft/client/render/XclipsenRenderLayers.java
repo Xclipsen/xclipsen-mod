@@ -12,7 +12,7 @@ import net.minecraft.util.Identifier;
 
 public final class XclipsenRenderLayers {
 	private static final RenderPipeline XRAY_LINE_PIPELINE = RenderPipeline.builder()
-		.withLocation(Identifier.of("xclipsen", "shulker_xray_lines"))
+		.withLocation(Identifier.of("xclipsen_mod", "shulker_xray_lines"))
 		.withVertexShader("core/position_color")
 		.withFragmentShader("core/position_color")
 		.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
