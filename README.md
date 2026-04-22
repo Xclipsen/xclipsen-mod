@@ -1,13 +1,31 @@
 # Xclipsen Mod
 
-Fabric-Clientmod fuer Minecraft `1.21.10` mit modularen Client-Features.
+Fabric-Clientmod fuer Minecraft `1.21.10`.
 
-## Module
+Aktuelle Version: `0.4.2`
 
-- `IRC Bridge`: Discord-/IRC-Nachrichten lokal im Client-Chat, Hypixel-Co-op-Relay und `/irc <nachricht>`.
-- `Hideonleaf Helper`: Shulker Glow, Shulker-Linie, Lost-Fight-Alert, Shard-Tracker und konfigurierbare Sounds.
+## Kurzuebersicht
+
+- `Settings GUI`: ClickGUI-style Konfigurationsscreen unter `/xclipsen`, `/xclipsen config` oder `/irc config`.
+- `IRC Bridge`: Discord-/IRC-Nachrichten im Minecraft-Chat, `/irc <nachricht>`, `/i <nachricht>` und temporaerer IRC-Chatmodus.
+- `Account Link`: Minecraft-Account per `/link CODE` mit dem Discord-/Bot-Backend verbinden.
+- `Hypixel Co-op Relay`: Hypixel-Co-op-Chat automatisch ins Backend weiterleiten, wenn die Bridge aktiv und der Account gelinkt ist.
+- `Image Preview`: Discord-/Chat-Bildlinks als Hover-Preview im Chat anzeigen, inklusive Shift-Grossansicht.
+- `Hideonleaf Helper`: Shulker Glow, Projektil-Glow, Tracer-Linie, Lost-Fight-Alert und konfigurierbarer Alert-Sound.
+- `Shard Tracker`: Hideonleaf-Shards und Drops tracken, Session/Total-HUD anzeigen, Profit pro Stunde berechnen und Bazaar-Preise vom Backend aktualisieren.
+- `HUD Editor`: HUD-Elemente verschieben, skalieren und zuruecksetzen ueber `/xclipsen hud` oder `/irc hud`.
 - `Time Changer`: clientseitige Zeit-Presets wie Day, Noon, Sunset, Night, Midnight, Sunrise und Real Time.
-- `Status`: Config-Pfad, Backend-Status und HUD-Editor.
+
+## Commands
+
+- `/xclipsen` - Settings oeffnen.
+- `/xclipsen hud` - HUD-Editor oeffnen.
+- `/irc <nachricht>` oder `/i <nachricht>` - Nachricht ans Backend senden.
+- `/irc on|off|status|reload` - Bridge lokal steuern und Status anzeigen.
+- `/link CODE` - Minecraft-Account mit dem Backend-Linkcode verbinden.
+- `/shulkerglow on|off|toggle` - Shulker Glow schnell umschalten.
+- `/shardtracker` oder `/st` - Shard-Tracker-Status anzeigen.
+- `/shardtracker reset|resetall|toggle|on|off` - Shard-Tracker steuern.
 
 ## Einrichtung
 
