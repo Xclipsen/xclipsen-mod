@@ -378,7 +378,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun handleHideonleafLostFightAlert(message: Text?) {
-		if (!config.hideonleafHelperEnabled || !config.hideonleafLostFightAlertEnabled) {
+		if (!config.hideonleafHelperEnabled) {
 			return
 		}
 
@@ -395,6 +395,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		val client = MinecraftClient.getInstance()
 		client.execute {
+			ShulkerTracerRenderer.markCurrentTargetCompleted()
+			if (!config.hideonleafLostFightAlertEnabled) {
+				return@execute
+			}
+
 			XclipsenHudManager.showHideonleafLostFightAlert()
 			playHideonleafLostFightSound()
 		}

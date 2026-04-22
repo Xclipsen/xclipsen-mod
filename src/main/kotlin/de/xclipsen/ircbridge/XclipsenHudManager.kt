@@ -52,13 +52,10 @@ private object HideonleafLostFightHudElement : XclipsenHudElement(
 		val client = MinecraftClient.getInstance()
 		val text = "Hideonleaf lost the fight..."
 		val textWidth = client.textRenderer.getWidth(text)
-		val width = (textWidth + 18).coerceAtLeast(DEFAULT_WIDTH)
-		val height = 22
+		val width = textWidth.coerceAtLeast(DEFAULT_WIDTH)
+		val height = client.textRenderer.fontHeight
 
-		context.fill(0, 0, width, height, 0xE6111111.toInt())
-		context.fill(0, 0, width, 2, 0xFF36C5F0.toInt())
-		context.fill(0, height - 1, width, height, 0x70000000)
-		context.drawCenteredTextWithShadow(client.textRenderer, text, width / 2, 7, 0xFFFFFFFF.toInt())
+		context.drawCenteredTextWithShadow(client.textRenderer, text, width / 2, 0, 0xFFFFFFFF.toInt())
 
 		if (example) {
 			context.drawTextWithShadow(client.textRenderer, "Alert", 5, height + 4, 0xFFA0A0A0.toInt())

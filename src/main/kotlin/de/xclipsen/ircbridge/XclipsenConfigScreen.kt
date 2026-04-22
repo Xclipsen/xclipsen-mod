@@ -5,7 +5,9 @@ import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.Screen
 import net.minecraft.client.gui.widget.ButtonWidget
 import net.minecraft.client.gui.widget.TextFieldWidget
+import net.minecraft.client.input.KeyInput
 import net.minecraft.text.Text
+import org.lwjgl.glfw.GLFW
 import java.awt.Color
 import java.io.IOException
 import java.util.Locale
@@ -121,12 +123,7 @@ class XclipsenConfigScreen(
 		openedSection?.let { section ->
 			val menu = settingsBounds()
 			if (!menu.contains(mouseX, mouseY)) {
-				openedSection = null
-				openColorField = null
-				soundDropdownOpen = false
-				draggingColorPicker = null
-				draggingSlider = null
-				layoutWidgets()
+				closeOpenedSection()
 				return true
 			}
 
@@ -157,6 +154,15 @@ class XclipsenConfigScreen(
 		}
 
 		return super.mouseClicked(click, doubled)
+	}
+
+	override fun keyPressed(input: KeyInput): Boolean {
+		if (input.key() == GLFW.GLFW_KEY_ESCAPE && openedSection != null) {
+			closeOpenedSection()
+			return true
+		}
+
+		return super.keyPressed(input)
 	}
 
 	override fun mouseDragged(click: Click, offsetX: Double, offsetY: Double): Boolean {
@@ -207,6 +213,17 @@ class XclipsenConfigScreen(
 		} catch (_: IOException) {
 			statusMessage = Text.literal("Failed to save module state.")
 		}
+	}
+
+	private fun closeOpenedSection() {
+		readWorkingCopyFromFields(updateStatus = false)
+		openedSection = null
+		openColorField = null
+		soundDropdownOpen = false
+		soundScrollOffset = 0
+		draggingColorPicker = null
+		draggingSlider = null
+		layoutWidgets()
 	}
 
 	private fun save() {

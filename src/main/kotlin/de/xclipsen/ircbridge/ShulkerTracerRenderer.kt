@@ -2,14 +2,19 @@ package de.xclipsen.ircbridge
 
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
 import net.minecraft.client.MinecraftClient
+import net.minecraft.client.world.ClientWorld
 import net.minecraft.client.render.VertexConsumerProvider
 import net.minecraft.client.render.XclipsenRenderLayers
 import net.minecraft.entity.mob.ShulkerEntity
 import net.minecraft.util.math.Vec3d
 import org.joml.Vector3f
+import java.util.UUID
 import kotlin.math.sqrt
 
 object ShulkerTracerRenderer {
+	private val completedShulkerIds = LinkedHashSet<UUID>()
+	private var lastWorld: ClientWorld? = null
+
 	fun render(context: WorldRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		val lineMode = config.shulkerTracerLineMode.coerceIn(0, 3)
@@ -24,17 +29,13 @@ object ShulkerTracerRenderer {
 		}
 
 		val cameraPos = context.gameRenderer().camera.pos
-		val shulkerCenters = world.entities
-			.asSequence()
-			.filterIsInstance<ShulkerEntity>()
-			.filter { it.isAlive && !it.isRemoved }
-			.sortedBy { it.squaredDistanceTo(cameraPos) }
-			.take(lineMode)
-			.map { it.boundingBox.center }
-			.toList()
-		if (shulkerCenters.isEmpty()) {
+		val availableShulkers = currentAvailableShulkers(world)
+			.filterNot { completedShulkerIds.contains(it.id) }
+		val shulkerPath = buildNearestShulkerPath(cameraPos, availableShulkers, lineMode)
+		if (shulkerPath.isEmpty()) {
 			return
 		}
+		val shulkerCenters = shulkerPath.map { it.center }
 
 		val color = parseColor(config.shulkerTracerLineColorHex) ?: DEFAULT_LINE_COLOR
 		val start = crosshairStart(context, cameraPos)
@@ -44,6 +45,49 @@ object ShulkerTracerRenderer {
 			drawLine(context, cameraPos, previous, center, color, lineWidth)
 			previous = center
 		}
+	}
+
+	fun markCurrentTargetCompleted() {
+		val client = MinecraftClient.getInstance()
+		val world = client.world ?: return
+		val cameraPos = client.gameRenderer.camera.pos
+		val nextTarget = buildNearestShulkerPath(
+			cameraPos,
+			currentAvailableShulkers(world).filterNot { completedShulkerIds.contains(it.id) },
+			1,
+		).firstOrNull() ?: return
+
+		completedShulkerIds += nextTarget.id
+	}
+
+	private fun currentAvailableShulkers(world: ClientWorld): List<ShulkerTarget> {
+		if (world !== lastWorld) {
+			completedShulkerIds.clear()
+			lastWorld = world
+		}
+
+		val available = world.entities
+			.asSequence()
+			.filterIsInstance<ShulkerEntity>()
+			.filter { it.isAlive && !it.isRemoved }
+			.map { ShulkerTarget(it.uuid, it.boundingBox.center) }
+			.toList()
+		return available
+	}
+
+	private fun buildNearestShulkerPath(start: Vec3d, availableShulkers: List<ShulkerTarget>, maxCount: Int): List<ShulkerTarget> {
+		val remaining = availableShulkers.toMutableList()
+		val path = ArrayList<ShulkerTarget>(maxCount.coerceAtMost(remaining.size))
+		var currentOrigin = start
+
+		while (path.size < maxCount && remaining.isNotEmpty()) {
+			val next = remaining.minByOrNull { it.center.squaredDistanceTo(currentOrigin) } ?: break
+			path += next
+			remaining -= next
+			currentOrigin = next.center
+		}
+
+		return path
 	}
 
 	private fun crosshairStart(context: WorldRenderContext, cameraPos: Vec3d): Vec3d {
@@ -98,4 +142,9 @@ object ShulkerTracerRenderer {
 	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 	private const val CROSSHAIR_OFFSET = 2.0
 	private const val DEFAULT_LINE_COLOR = 0x36C5F0
+
+	private data class ShulkerTarget(
+		val id: UUID,
+		val center: Vec3d,
+	)
 }
