@@ -70,14 +70,9 @@ val prismTargetDirs = listOf(
 )
 
 fun Project.findRemappedModJar(): File {
-	return fileTree(layout.buildDirectory.dir("libs")) {
-		include("*.jar")
-		exclude("*-sources.jar", "*-dev.jar", "*-dev-shadow.jar")
-	}
-		.files
-		.sortedBy { it.name }
-		.lastOrNull()
-		?: throw GradleException("No remapped mod jar found in build/libs")
+	val jarName = "${base.archivesName.get()}-${project.version}.jar"
+	return layout.buildDirectory.dir("libs").get().file(jarName).asFile
+		.also { if (!it.exists()) throw GradleException("Remapped mod jar not found: ${it.path}") }
 }
 
 fun Project.copyRemappedModToPrismTargets() {

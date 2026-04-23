@@ -434,6 +434,7 @@ class XclipsenConfigScreen(
 		drawTextInputSetting(context, menu, 4, "IRC Format", ircFormatField, mouseX, mouseY)
 		drawTextInputSetting(context, menu, 5, "Event Ping Format", eventPingFormatField, mouseX, mouseY)
 		drawTextInputSetting(context, menu, 6, "Co-op Format", coopFormatField, mouseX, mouseY)
+		drawToggleSetting(context, coopRelayToggleBounds(menu), "Co-op Relay", workingCopy.coopChatRelayEnabled, mouseX, mouseY)
 		drawButtonSetting(context, testConnectionBounds(menu), "Test Connection", mouseX, mouseY)
 	}
 
@@ -901,6 +902,12 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (section == ConfigSection.IRC_BRIDGE && coopRelayToggleBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.coopChatRelayEnabled = !workingCopy.coopChatRelayEnabled
+			return true
+		}
+
 		if (section == ConfigSection.IRC_BRIDGE && testConnectionBounds(menu).contains(mouseX, mouseY)) {
 			testConnection()
 			return true
@@ -1121,8 +1128,13 @@ class XclipsenConfigScreen(
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + rowHeight)
 	}
 
-	private fun testConnectionBounds(menu: Bounds): Bounds {
+	private fun coopRelayToggleBounds(menu: Bounds): Bounds {
 		val rowTop = menu.top + 40 + (7 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
+		return Bounds(menu.left + 10, rowTop, menu.left + 10 + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
+	}
+
+	private fun testConnectionBounds(menu: Bounds): Bounds {
+		val rowTop = coopRelayToggleBounds(menu).bottom + SETTING_GAP
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
@@ -1233,7 +1245,7 @@ class XclipsenConfigScreen(
 		private const val PANEL_ROW_HEIGHT = 16
 		private const val POPUP_WIDTH = 200
 		private const val POPUP_HEIGHT = 250
-		private const val IRC_POPUP_HEIGHT = 390
+		private const val IRC_POPUP_HEIGHT = 420
 		private const val HIDEONLEAF_POPUP_HEIGHT = 450
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val SETTING_WIDTH = 180

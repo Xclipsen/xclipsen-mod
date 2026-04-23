@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.4
+
+- Added Co-op Relay toggle in IRC Bridge settings to disable forwarding co-op chat to IRC.
+
+## v0.4.3
+
+- No changelog entry.
+
 ## v0.4.2
 
 - Added a ClickGUI-style settings screen and `/xclipsen` command alias.

@@ -53,6 +53,7 @@ class BridgeConfig {
 	@JvmField var eventPingFormat: String = "[Event] %event%: %message%"
 	@JvmField var coopChatFormat: String = "[Co-op] <%player%> %message%"
 	@JvmField var ircBridgeEnabled: Boolean = false
+	@JvmField var coopChatRelayEnabled: Boolean = true
 	@JvmField var hideonleafHelperEnabled: Boolean = false
 	@JvmField var shulkerGlowEnabled: Boolean = true
 	@JvmField var shulkerGlowColorHex: String = "#36C5F0"
@@ -80,6 +81,7 @@ class BridgeConfig {
 		it.eventPingFormat = eventPingFormat
 		it.coopChatFormat = coopChatFormat
 		it.ircBridgeEnabled = ircBridgeEnabled
+		it.coopChatRelayEnabled = coopChatRelayEnabled
 		it.hideonleafHelperEnabled = hideonleafHelperEnabled
 		it.shulkerGlowEnabled = shulkerGlowEnabled
 		it.shulkerGlowColorHex = shulkerGlowColorHex

@@ -454,6 +454,10 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			return
 		}
 
+		if (!config.coopChatRelayEnabled) {
+			return
+		}
+
 		val parsed = parseCoopChatMessage(message) ?: return
 		val localPlayer = MinecraftClient.getInstance().session?.username.orEmpty()
 		if (localPlayer.isBlank()) {
