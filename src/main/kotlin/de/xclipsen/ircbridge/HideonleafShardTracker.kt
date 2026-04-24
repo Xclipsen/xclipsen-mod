@@ -350,9 +350,9 @@ object HideonleafShardTracker {
 
 	// ── Display data ─────────────────────────────────────────────────────
 
-	fun displayData(): TrackerData = if (showingSession) sessionData else totalData
+	fun displayData(): TrackerData = if (showingSession) sessionData else displayTotalData()
 
-	fun selectedDurationMs(): Long = if (showingSession) sessionDurationMs() else totalDurationMs()
+	fun selectedDurationMs(): Long = if (showingSession) sessionDurationMs() else totalDurationMs().coerceAtLeast(sessionDurationMs())
 
 	fun selectedDurationAvailable(): Boolean = if (showingSession) true else isTotalDurationReliable()
 
@@ -627,7 +627,7 @@ object HideonleafShardTracker {
 	}
 
 	private fun applyRemoteSnapshot(remote: BackendHideonleafStatsUpload) {
-		if (remote.updatedAt <= 0L || remote.updatedAt <= lastAppliedRemoteUpdatedAt || remote.updatedAt < lastLocalMutationAt) {
+		if (remote.updatedAt <= 0L || remote.updatedAt <= lastAppliedRemoteUpdatedAt || remote.updatedAt <= lastLocalMutationAt) {
 			return
 		}
 
@@ -645,6 +645,10 @@ object HideonleafShardTracker {
 		}
 
 		if (hasMeaningfulTrackerData(totalData) && !isRemoteSupersetOfLocal(remoteData, totalData)) {
+			return
+		}
+
+		if (hasMeaningfulTrackerData(sessionData) && !isRemoteSupersetOfLocal(remoteData, sessionData)) {
 			return
 		}
 
@@ -733,6 +737,44 @@ object HideonleafShardTracker {
 			kills = kills.coerceAtLeast(0L),
 			totalDurationMs = totalDurationMs.coerceAtLeast(0L),
 		)
+
+	private fun displayTotalData(): TrackerData {
+		if (!hasMeaningfulTrackerData(sessionData)) {
+			return totalData
+		}
+
+		val mergedItems = totalData.items.mapValues { (_, item) ->
+			TrackedItem(
+				amount = item.amount,
+				timesDropped = item.timesDropped,
+				pricePerUnit = item.pricePerUnit,
+			)
+		}.toMutableMap()
+
+		for ((name, sessionItem) in sessionData.items) {
+			val totalItem = mergedItems[name]
+			if (totalItem == null) {
+				mergedItems[name] = TrackedItem(
+					amount = sessionItem.amount,
+					timesDropped = sessionItem.timesDropped,
+					pricePerUnit = sessionItem.pricePerUnit,
+				)
+				continue
+			}
+
+			totalItem.amount = maxOf(totalItem.amount, sessionItem.amount)
+			totalItem.timesDropped = maxOf(totalItem.timesDropped, sessionItem.timesDropped)
+			if (sessionItem.pricePerUnit > totalItem.pricePerUnit) {
+				totalItem.pricePerUnit = sessionItem.pricePerUnit
+			}
+		}
+
+		return TrackerData(
+			items = mergedItems,
+			kills = maxOf(totalData.kills, sessionData.kills),
+			totalDurationMs = maxOf(totalData.totalDurationMs, sessionData.totalDurationMs),
+		)
+	}
 
 	// ── Formatting helpers ───────────────────────────────────────────────
 
