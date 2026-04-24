@@ -447,7 +447,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			PositionedSoundInstance.master(
 				sound,
 				config.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f),
-				config.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 1.0f),
+				config.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 2.0f),
 			),
 		)
 	}

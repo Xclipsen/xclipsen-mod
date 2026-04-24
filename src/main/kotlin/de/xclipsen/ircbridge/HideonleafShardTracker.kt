@@ -27,7 +27,10 @@ object HideonleafShardTracker {
 
 	private val LOGGER = LoggerFactory.getLogger("xclipsen_shard_tracker")
 	private val GSON: Gson = GsonBuilder().setPrettyPrinting().create()
-	private val DATA_PATH: Path = FabricLoader.getInstance().configDir.resolve("xclipsen-shard-tracker.json")
+	private val BASE_DIR: Path = FabricLoader.getInstance().configDir.resolve("Xclipsen")
+	private val DATA_DIR: Path = BASE_DIR.resolve("hideonleaf-tracker")
+	private val LEGACY_DATA_PATH: Path = FabricLoader.getInstance().configDir.resolve("xclipsen-shard-tracker.json")
+	private val LEGACY_DATA_DIR: Path = FabricLoader.getInstance().configDir.resolve("xclipsen-shard-tracker")
 	private val syncExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
 		Thread(runnable, "xclipsen-hideonleaf-sync").apply { isDaemon = true }
 	}
@@ -87,6 +90,8 @@ object HideonleafShardTracker {
 
 	private var totalData: TrackerData = TrackerData()
 	private var sessionData: TrackerData = TrackerData()
+	private var activePlayerName: String = ""
+	private var activeDataPath: Path? = null
 
 	@Volatile
 	var showingSession: Boolean = true
@@ -140,9 +145,8 @@ object HideonleafShardTracker {
 	// ── Initialisation ───────────────────────────────────────────────────
 
 	fun init() {
-		totalData = loadData()
-		legacyTotalDurationUnknown = totalData.totalDurationMs <= 0L && hasMeaningfulTrackerData(totalData)
-		shareDirty = hasMeaningfulTrackerData(totalData)
+		resetActiveTrackerState()
+		ensureActivePlayerLoaded()
 		resetSession()
 		startPriceRefresher()
 	}
@@ -201,6 +205,7 @@ object HideonleafShardTracker {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled) return
 		if (!LocationTracker.isOnGalatea) return
+		if (!ensureActivePlayerLoaded()) return
 
 		val raw = message?.string ?: return
 		val clean = stripFormatting(raw).trim()
@@ -224,6 +229,7 @@ object HideonleafShardTracker {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled) return
 		if (!LocationTracker.isOnGalatea) return
+		if (!ensureActivePlayerLoaded()) return
 
 		ensureSessionActive()
 		lastActivityAt = System.currentTimeMillis()
@@ -237,6 +243,7 @@ object HideonleafShardTracker {
 	// ── Manual item add (for testing / commands) ─────────────────────────
 
 	fun addItem(name: String, amount: Long) {
+		if (!ensureActivePlayerLoaded()) return
 		ensureSessionActive()
 		lastActivityAt = System.currentTimeMillis()
 
@@ -277,11 +284,7 @@ object HideonleafShardTracker {
 	}
 
 	fun shutdown() {
-		if (timerRunning) {
-			pauseTimer()
-		} else {
-			saveData()
-		}
+		flushCurrentPlayerState()
 	}
 
 	fun toggleView() {
@@ -296,6 +299,7 @@ object HideonleafShardTracker {
 	 * [AFK_THRESHOLD_MS]. Resumes automatically once both conditions clear.
 	 */
 	fun onTick() {
+		ensureActivePlayerLoaded()
 		refreshLegacyDurationReliability()
 		if (!sessionActive) {
 			maybeSyncRemoteStats()
@@ -411,30 +415,116 @@ object HideonleafShardTracker {
 
 	// ── Persistence ──────────────────────────────────────────────────────
 
-	private fun loadData(): TrackerData {
+	private fun ensureActivePlayerLoaded(): Boolean {
+		val playerName = MinecraftClient.getInstance().session?.username?.trim().orEmpty()
+		if (playerName.isBlank()) {
+			return activePlayerName.isNotBlank()
+		}
+
+		if (activePlayerName.equals(playerName, ignoreCase = true)) {
+			return true
+		}
+
+		switchActivePlayer(playerName)
+		return true
+	}
+
+	private fun switchActivePlayer(playerName: String) {
+		flushCurrentPlayerState()
+		activePlayerName = playerName
+		activeDataPath = playerDataPath(playerName)
+		totalData = loadData(activeDataPath!!, playerName)
+		applyLivePricesToData(totalData, livePrices)
+		resetSession()
+		resetSyncStateForLoadedData()
+		LOGGER.info("Shard tracker: switched active tracker storage to {} ({})", playerName, activeDataPath)
+	}
+
+	private fun flushCurrentPlayerState() {
+		if (activePlayerName.isBlank() || activeDataPath == null) {
+			return
+		}
+
+		if (timerRunning) {
+			val elapsed = (System.currentTimeMillis() - sessionStartedAt).coerceAtLeast(0L)
+			sessionData.totalDurationMs += elapsed
+			totalData.totalDurationMs += elapsed
+			if (totalData.totalDurationMs > 0L) {
+				legacyTotalDurationUnknown = false
+			}
+			sessionStartedAt = 0L
+			timerRunning = false
+		}
+
+		saveData()
+	}
+
+	private fun resetActiveTrackerState() {
+		totalData = TrackerData()
+		sessionData = TrackerData()
+		activePlayerName = ""
+		activeDataPath = null
+		resetSyncStateForLoadedData()
+	}
+
+	private fun resetSyncStateForLoadedData() {
+		legacyTotalDurationUnknown = totalData.totalDurationMs <= 0L && hasMeaningfulTrackerData(totalData)
+		shareDirty = hasMeaningfulTrackerData(totalData)
+		lastShareUploadAt = 0L
+		hideonleafSyncInFlight = false
+		lastRemoteSyncAt = 0L
+		lastAppliedRemoteUpdatedAt = 0L
+		lastLocalMutationAt = 0L
+		initialRemoteSyncCompleted = false
+	}
+
+	private fun loadData(path: Path, playerName: String): TrackerData {
 		return try {
-			if (Files.notExists(DATA_PATH)) {
+			Files.createDirectories(DATA_DIR)
+			migrateLegacyDataIfNeeded(path, playerName)
+			if (Files.notExists(path)) {
 				TrackerData()
 			} else {
-				Files.newBufferedReader(DATA_PATH).use { reader ->
+				Files.newBufferedReader(path).use { reader ->
 					GSON.fromJson(reader, TrackerData::class.java) ?: TrackerData()
 				}
 			}
 		} catch (exception: Exception) {
-			LOGGER.warn("Failed to load shard tracker data from {}", DATA_PATH, exception)
+			LOGGER.warn("Failed to load shard tracker data from {}", path, exception)
 			TrackerData()
 		}
 	}
 
+	private fun migrateLegacyDataIfNeeded(path: Path, playerName: String) {
+		if (Files.exists(path)) {
+			return
+		}
+
+		val legacyPlayerPath = LEGACY_DATA_DIR.resolve(path.fileName.toString())
+		when {
+			Files.exists(legacyPlayerPath) -> {
+				Files.createDirectories(path.parent)
+				Files.move(legacyPlayerPath, path)
+				LOGGER.info("Migrated legacy player tracker data {} to {}", legacyPlayerPath, path)
+			}
+			Files.exists(LEGACY_DATA_PATH) -> {
+				Files.createDirectories(path.parent)
+				Files.move(LEGACY_DATA_PATH, path)
+				LOGGER.info("Migrated legacy shard tracker data to player-scoped file {} for {}", path, playerName)
+			}
+		}
+	}
+
 	private fun saveData() {
+		val path = activeDataPath ?: return
 		try {
 			refreshLegacyDurationReliability()
-			Files.createDirectories(DATA_PATH.parent)
-			Files.newBufferedWriter(DATA_PATH).use { writer ->
+			Files.createDirectories(path.parent)
+			Files.newBufferedWriter(path).use { writer ->
 				GSON.toJson(buildPersistedTotalData(), writer)
 			}
 		} catch (exception: IOException) {
-			LOGGER.warn("Failed to save shard tracker data to {}", DATA_PATH, exception)
+			LOGGER.warn("Failed to save shard tracker data to {}", path, exception)
 		}
 	}
 
@@ -455,6 +545,18 @@ object HideonleafShardTracker {
 		if (!sessionActive) return totalData.totalDurationMs
 		if (!timerRunning) return totalData.totalDurationMs
 		return totalData.totalDurationMs + (System.currentTimeMillis() - sessionStartedAt)
+	}
+
+	private fun playerDataPath(playerName: String): Path {
+		return DATA_DIR.resolve("${sanitizePlayerNameForFilename(playerName)}.json")
+	}
+
+	private fun sanitizePlayerNameForFilename(playerName: String): String {
+		val sanitized = playerName.trim()
+			.lowercase(Locale.ROOT)
+			.replace("[^a-z0-9._-]".toRegex(), "_")
+			.trim('_')
+		return if (sanitized.isBlank()) "unknown" else sanitized
 	}
 
 	private fun refreshLegacyDurationReliability() {

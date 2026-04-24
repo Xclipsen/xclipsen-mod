@@ -464,7 +464,7 @@ class XclipsenConfigScreen(
 		if (soundDropdownOpen) {
 			drawSoundDropdown(context, menu, mouseX, mouseY)
 		}
-		drawSliderSetting(context, lostFightVolumeBounds(menu), "Volume", workingCopy.hideonleafLostFightAlertSoundVolume, 0.0f, 1.0f, mouseX, mouseY)
+		drawSliderSetting(context, lostFightVolumeBounds(menu), "Volume", workingCopy.hideonleafLostFightAlertSoundVolume, 0.0f, 2.0f, mouseX, mouseY)
 		drawSliderSetting(context, lostFightPitchBounds(menu), "Pitch", workingCopy.hideonleafLostFightAlertSoundPitch, 0.1f, 2.0f, mouseX, mouseY)
 		drawButtonSetting(context, playLostFightSoundBounds(menu), "Play Sound", mouseX, mouseY)
 		drawButtonSetting(
@@ -1050,7 +1050,7 @@ class XclipsenConfigScreen(
 		val max = when (target) {
 			SliderDragTarget.LINE_MODE -> 3.0f
 			SliderDragTarget.LINE_WIDTH -> 8.0f
-			SliderDragTarget.ALERT_VOLUME -> 1.0f
+			SliderDragTarget.ALERT_VOLUME -> 2.0f
 			SliderDragTarget.ALERT_PITCH -> 2.0f
 		}
 		val barLeft = bounds.left + 8
