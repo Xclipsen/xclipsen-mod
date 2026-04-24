@@ -42,6 +42,8 @@ object HideonleafShardTracker {
 	private val DROP_PATTERNS: List<Regex> = listOf(
 		// PRIMARY: "You caught x2 Hideonleaf Shards!" (exact server format)
 		Regex("^You caught x(?<amount>\\d+)\\s+(?<item>.+?)!?\\s*$"),
+		// Single drop: "You caught a Hideonleaf Shard!"
+		Regex("^You caught (?:a|an)\\s+(?<item>.+?)!?\\s*$"),
 		// Fallback: "+1 Hideonleaf Shard" / "+5 Shards"
 		Regex("^\\+(?<amount>\\d+)\\s+(?<item>.+?)\\s*$"),
 		// Fallback: "RARE DROP! Hideonleaf Shard (1x)"
@@ -213,7 +215,10 @@ object HideonleafShardTracker {
 		for (pattern in DROP_PATTERNS) {
 			val match = pattern.matchEntire(clean) ?: continue
 			val itemName = match.groups["item"]?.value?.trim() ?: continue
-			val amount = match.groups["amount"]?.value?.toLongOrNull() ?: 1L
+			val amount = runCatching { match.groups["amount"]?.value }
+				.getOrNull()
+				?.toLongOrNull()
+				?: 1L
 			if (amount <= 0) continue
 			if (!isTrackedItem(itemName)) continue
 
@@ -602,9 +607,25 @@ object HideonleafShardTracker {
 	}
 
 	private fun canonicalize(name: String): String {
-		return name.trim().split("\\s+".toRegex()).joinToString(" ") { part ->
+		val canonical = name.trim().split("\\s+".toRegex()).joinToString(" ") { part ->
 			part.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
 		}
+		return normalizeKnownItemName(canonical)
+	}
+
+	private fun normalizeKnownItemName(name: String): String {
+		if (livePrices.containsKey(name) || DEFAULT_PRICES.containsKey(name)) {
+			return name
+		}
+
+		if (name.endsWith(" Shard")) {
+			val plural = "${name}s"
+			if (livePrices.containsKey(plural) || DEFAULT_PRICES.containsKey(plural)) {
+				return plural
+			}
+		}
+
+		return name
 	}
 
 	private fun stripFormatting(input: String): String {
