@@ -17,13 +17,14 @@ class XclipsenConfigScreen(
 	private val mod: XclipsenIrcBridgeClient,
 ) : Screen(Text.literal("Xclipsen Settings")) {
 	private var workingCopy: BridgeConfig = copyOf(mod.config())
-	private var selectedSection = ConfigSection.IRC_BRIDGE
+	private var selectedSection = ConfigSection.SETUP
 	private var openedSection: ConfigSection? = null
 	private var openColorField: ConfigField? = null
 	private var draggingColorPicker: ColorPickerDragTarget? = null
 	private var soundDropdownOpen = false
 	private var soundScrollOffset = 0
 	private var draggingSlider: SliderDragTarget? = null
+	private var awaitingHideonleafResetConfirmation = false
 	private var statusMessage: Text = Text.empty()
 	private val colorPickerOpen: Boolean
 		get() = openColorField != null
@@ -48,7 +49,7 @@ class XclipsenConfigScreen(
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.HIDEONLEAF_HELPER, ConfigSection.TIME_CHANGER)),
-		ConfigPanel("SYSTEM", listOf(ConfigSection.STATUS)),
+		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
 	)
 
 	override fun init() {
@@ -142,6 +143,12 @@ class XclipsenConfigScreen(
 			statusMessage = Text.empty()
 			if (button == LEFT_MOUSE_BUTTON && clickedSection.toggleable) {
 				toggleModule(clickedSection)
+			} else if (button == LEFT_MOUSE_BUTTON && !clickedSection.toggleable) {
+				openedSection = clickedSection
+				openColorField = null
+				soundDropdownOpen = false
+				draggingColorPicker = null
+				draggingSlider = null
 			} else if (button == RIGHT_MOUSE_BUTTON) {
 				openedSection = clickedSection
 				openColorField = null
@@ -224,6 +231,7 @@ class XclipsenConfigScreen(
 		soundScrollOffset = 0
 		draggingColorPicker = null
 		draggingSlider = null
+		awaitingHideonleafResetConfirmation = false
 		layoutWidgets()
 	}
 
@@ -265,6 +273,7 @@ class XclipsenConfigScreen(
 		candidate.shulkerTracerLineEnabled = candidate.shulkerTracerLineMode > 0
 		candidate.shulkerTracerLineWidth = workingCopy.shulkerTracerLineWidth
 		candidate.hideonleafLostFightAlertEnabled = workingCopy.hideonleafLostFightAlertEnabled
+		candidate.hideonleafShareDataEnabled = workingCopy.hideonleafShareDataEnabled
 		candidate.hideonleafLostFightAlertSoundId = SoundCatalog.normalizeSoundId(workingCopy.hideonleafLostFightAlertSoundId)
 		candidate.hideonleafLostFightAlertSoundVolume = workingCopy.hideonleafLostFightAlertSoundVolume
 		candidate.hideonleafLostFightAlertSoundPitch = workingCopy.hideonleafLostFightAlertSoundPitch
@@ -414,6 +423,7 @@ class XclipsenConfigScreen(
 		context.fill(menu.left + 10, menu.top + 28, menu.right - 10, menu.top + 29, 0x1EFFFFFF)
 
 		when (section) {
+			ConfigSection.SETUP -> drawSetupSettings(context, menu, mouseX, mouseY)
 			ConfigSection.IRC_BRIDGE -> drawIrcBridgeSettings(context, menu, mouseX, mouseY)
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, menu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
@@ -426,16 +436,19 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawIrcBridgeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawSetupSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawTextInputSetting(context, menu, 0, "Backend URL", backendBaseUrlField, mouseX, mouseY)
 		drawTextInputSetting(context, menu, 1, "Backend Auth Token", backendAuthTokenField, mouseX, mouseY)
 		drawTextInputSetting(context, menu, 2, "Poll Interval (ms)", backendPollIntervalField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 3, "Discord Format", discordFormatField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 4, "IRC Format", ircFormatField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 5, "Event Ping Format", eventPingFormatField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 6, "Co-op Format", coopFormatField, mouseX, mouseY)
+		drawButtonSetting(context, setupTestConnectionBounds(menu), "Test Connection", mouseX, mouseY)
+	}
+
+	private fun drawIrcBridgeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawTextInputSetting(context, menu, 0, "Discord Format", discordFormatField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 1, "IRC Format", ircFormatField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 2, "Event Ping Format", eventPingFormatField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 3, "Co-op Format", coopFormatField, mouseX, mouseY)
 		drawToggleSetting(context, coopRelayToggleBounds(menu), "Co-op Relay", workingCopy.coopChatRelayEnabled, mouseX, mouseY)
-		drawButtonSetting(context, testConnectionBounds(menu), "Test Connection", mouseX, mouseY)
 	}
 
 	private fun drawHideonleafHelperSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -446,6 +459,7 @@ class XclipsenConfigScreen(
 		drawIntSliderSetting(context, tracerLineBounds(menu), "Shulker Line", workingCopy.shulkerTracerLineMode, 0, 3, mouseX, mouseY)
 		drawSliderSetting(context, tracerLineWidthBounds(menu), "Line Width", workingCopy.shulkerTracerLineWidth, 1.0f, 8.0f, mouseX, mouseY)
 		drawToggleSetting(context, lostFightAlertBounds(menu), "Lost Fight Alert", workingCopy.hideonleafLostFightAlertEnabled, mouseX, mouseY)
+		drawToggleSetting(context, shareDataBounds(menu), "Share Data", workingCopy.hideonleafShareDataEnabled, mouseX, mouseY)
 		drawSoundSetting(context, lostFightSoundBounds(menu), "Alert Sound", workingCopy.hideonleafLostFightAlertSoundId, mouseX, mouseY)
 		if (soundDropdownOpen) {
 			drawSoundDropdown(context, menu, mouseX, mouseY)
@@ -453,6 +467,13 @@ class XclipsenConfigScreen(
 		drawSliderSetting(context, lostFightVolumeBounds(menu), "Volume", workingCopy.hideonleafLostFightAlertSoundVolume, 0.0f, 1.0f, mouseX, mouseY)
 		drawSliderSetting(context, lostFightPitchBounds(menu), "Pitch", workingCopy.hideonleafLostFightAlertSoundPitch, 0.1f, 2.0f, mouseX, mouseY)
 		drawButtonSetting(context, playLostFightSoundBounds(menu), "Play Sound", mouseX, mouseY)
+		drawButtonSetting(
+			context,
+			resetHideonleafTrackerBounds(menu),
+			if (awaitingHideonleafResetConfirmation) "Confirm Reset Total" else "Reset Total",
+			mouseX,
+			mouseY,
+		)
 		if (colorPickerOpen) {
 			drawColorPicker(context, menu, mouseX, mouseY)
 		}
@@ -786,6 +807,7 @@ class XclipsenConfigScreen(
 	private fun settingsBounds(): Bounds {
 		val menuWidth = POPUP_WIDTH.coerceAtMost((width - 40).coerceAtLeast(POPUP_WIDTH))
 		val targetHeight = when (openedSection) {
+			ConfigSection.SETUP -> SETUP_POPUP_HEIGHT
 			ConfigSection.IRC_BRIDGE -> IRC_POPUP_HEIGHT
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
@@ -810,7 +832,16 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.SETUP && setupTestConnectionBounds(menu).contains(mouseX, mouseY)) {
+			testConnection()
+			return true
+		}
+
 		if (section == ConfigSection.HIDEONLEAF_HELPER) {
+			if (!resetHideonleafTrackerBounds(menu).contains(mouseX, mouseY)) {
+				awaitingHideonleafResetConfirmation = false
+			}
+
 			val clickedColorField = when {
 				shulkerGlowColorBounds(menu).contains(mouseX, mouseY) -> ConfigField.SHULKER_GLOW_COLOR
 				projectileGlowColorBounds(menu).contains(mouseX, mouseY) -> ConfigField.SHULKER_PROJECTILE_GLOW_COLOR
@@ -841,6 +872,12 @@ class XclipsenConfigScreen(
 			if (lostFightAlertBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				workingCopy.hideonleafLostFightAlertEnabled = !workingCopy.hideonleafLostFightAlertEnabled
+				return true
+			}
+
+			if (shareDataBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.hideonleafShareDataEnabled = !workingCopy.hideonleafShareDataEnabled
 				return true
 			}
 
@@ -881,7 +918,21 @@ class XclipsenConfigScreen(
 
 			if (playLostFightSoundBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
+				awaitingHideonleafResetConfirmation = false
 				mod.playHideonleafLostFightSound(workingCopy)
+				return true
+			}
+
+			if (resetHideonleafTrackerBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				if (!awaitingHideonleafResetConfirmation) {
+					awaitingHideonleafResetConfirmation = true
+					statusMessage = Text.literal("Click again to reset Hideonleaf total data.")
+				} else {
+					awaitingHideonleafResetConfirmation = false
+					HideonleafShardTracker.resetTotal()
+					statusMessage = Text.literal("Hideonleaf total data reset.")
+				}
 				return true
 			}
 
@@ -908,11 +959,6 @@ class XclipsenConfigScreen(
 			return true
 		}
 
-		if (section == ConfigSection.IRC_BRIDGE && testConnectionBounds(menu).contains(mouseX, mouseY)) {
-			testConnection()
-			return true
-		}
-
 		if (section == ConfigSection.TIME_CHANGER && timeChangerModeBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.timeChangerMode = (workingCopy.timeChangerMode + 1) % ClientTimeChanger.modeCount
@@ -930,10 +976,12 @@ class XclipsenConfigScreen(
 
 	private fun textFieldsFor(section: ConfigSection): List<ConfigField> {
 		return when (section) {
-			ConfigSection.IRC_BRIDGE -> listOf(
+			ConfigSection.SETUP -> listOf(
 				ConfigField.BACKEND_URL,
 				ConfigField.AUTH_TOKEN,
 				ConfigField.POLL_INTERVAL,
+			)
+			ConfigSection.IRC_BRIDGE -> listOf(
 				ConfigField.DISCORD_FORMAT,
 				ConfigField.IRC_FORMAT,
 				ConfigField.EVENT_FORMAT,
@@ -1093,6 +1141,11 @@ class XclipsenConfigScreen(
 	}
 
 	private fun lostFightSoundBounds(menu: Bounds): Bounds {
+		val top = shareDataBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun shareDataBounds(menu: Bounds): Bounds {
 		val top = lostFightAlertBounds(menu).bottom + SETTING_GAP
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
@@ -1122,6 +1175,11 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
 
+	private fun resetHideonleafTrackerBounds(menu: Bounds): Bounds {
+		val top = playLostFightSoundBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
 	private fun settingRowBounds(menu: Bounds, rowIndex: Int, rowHeight: Int): Bounds {
 		val rowTop = menu.top + 40 + (rowIndex * (rowHeight + SETTING_GAP))
 		val rowLeft = menu.left + 10
@@ -1129,12 +1187,12 @@ class XclipsenConfigScreen(
 	}
 
 	private fun coopRelayToggleBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + (7 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
+		val rowTop = menu.top + 40 + (4 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
 		return Bounds(menu.left + 10, rowTop, menu.left + 10 + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
 
-	private fun testConnectionBounds(menu: Bounds): Bounds {
-		val rowTop = coopRelayToggleBounds(menu).bottom + SETTING_GAP
+	private fun setupTestConnectionBounds(menu: Bounds): Bounds {
+		val rowTop = menu.top + 40 + (3 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
@@ -1203,16 +1261,17 @@ class XclipsenConfigScreen(
 		val description: String,
 		val toggleable: Boolean = false,
 	) {
-		IRC_BRIDGE("IRC Bridge", "Backend connection and IRC message formats.", toggleable = true),
+		SETUP("Setup", "Global backend and API settings used by all modules."),
+		IRC_BRIDGE("IRC Bridge", "IRC message formats and bridge-specific toggles.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
 		STATUS("Status", "Current config path and backend state."),
 	}
 
 	private enum class ConfigField(val section: ConfigSection) {
-		BACKEND_URL(ConfigSection.IRC_BRIDGE),
-		AUTH_TOKEN(ConfigSection.IRC_BRIDGE),
-		POLL_INTERVAL(ConfigSection.IRC_BRIDGE),
+		BACKEND_URL(ConfigSection.SETUP),
+		AUTH_TOKEN(ConfigSection.SETUP),
+		POLL_INTERVAL(ConfigSection.SETUP),
 		DISCORD_FORMAT(ConfigSection.IRC_BRIDGE),
 		IRC_FORMAT(ConfigSection.IRC_BRIDGE),
 		EVENT_FORMAT(ConfigSection.IRC_BRIDGE),
@@ -1245,8 +1304,9 @@ class XclipsenConfigScreen(
 		private const val PANEL_ROW_HEIGHT = 16
 		private const val POPUP_WIDTH = 200
 		private const val POPUP_HEIGHT = 250
-		private const val IRC_POPUP_HEIGHT = 420
-		private const val HIDEONLEAF_POPUP_HEIGHT = 450
+		private const val SETUP_POPUP_HEIGHT = 220
+		private const val IRC_POPUP_HEIGHT = 250
+		private const val HIDEONLEAF_POPUP_HEIGHT = 500
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20

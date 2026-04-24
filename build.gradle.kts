@@ -65,8 +65,9 @@ tasks.jar {
 
 val prismInstancesDir = "${System.getProperty("user.home")}/instances"
 val prismTargetDirs = listOf(
+	"$prismInstancesDir/1.21.10 Dungeons für clippy/minecraft/mods",
+	"$prismInstancesDir/1.21.10 skyhanni + sbo/minecraft/mods",
 	"$prismInstancesDir/1.21.10 test/minecraft/mods",
-	"$prismInstancesDir/1.21.10 test 2/minecraft/mods",
 )
 
 fun Project.findRemappedModJar(): File {

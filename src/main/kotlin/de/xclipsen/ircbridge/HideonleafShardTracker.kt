@@ -11,9 +11,11 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Locale
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToLong
 
 /**
  * Hideonleaf Shards Profit Tracker — inspired by SkyHanni profit trackers.
@@ -26,6 +28,9 @@ object HideonleafShardTracker {
 	private val LOGGER = LoggerFactory.getLogger("xclipsen_shard_tracker")
 	private val GSON: Gson = GsonBuilder().setPrettyPrinting().create()
 	private val DATA_PATH: Path = FabricLoader.getInstance().configDir.resolve("xclipsen-shard-tracker.json")
+	private val syncExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+		Thread(runnable, "xclipsen-hideonleaf-sync").apply { isDaemon = true }
+	}
 
 	// ── Chat detection patterns ──────────────────────────────────────────
 	// Adjust these to match the exact chat messages on your server.
@@ -101,6 +106,22 @@ object HideonleafShardTracker {
 	private var lastActivityAt: Long = 0L
 
 	private var sessionStartedAt: Long = 0L
+	@Volatile
+	private var shareDirty: Boolean = true
+	@Volatile
+	private var lastShareUploadAt: Long = 0L
+	@Volatile
+	private var legacyTotalDurationUnknown: Boolean = false
+	@Volatile
+	private var hideonleafSyncInFlight: Boolean = false
+	@Volatile
+	private var lastRemoteSyncAt: Long = 0L
+	@Volatile
+	private var lastAppliedRemoteUpdatedAt: Long = 0L
+	@Volatile
+	private var lastLocalMutationAt: Long = 0L
+	@Volatile
+	private var initialRemoteSyncCompleted: Boolean = false
 
 	// ── Data classes ─────────────────────────────────────────────────────
 
@@ -120,6 +141,8 @@ object HideonleafShardTracker {
 
 	fun init() {
 		totalData = loadData()
+		legacyTotalDurationUnknown = totalData.totalDurationMs <= 0L && hasMeaningfulTrackerData(totalData)
+		shareDirty = hasMeaningfulTrackerData(totalData)
 		resetSession()
 		startPriceRefresher()
 	}
@@ -156,6 +179,7 @@ object HideonleafShardTracker {
 		// Retroactively apply live prices to all already-tracked items
 		applyLivePricesToData(totalData, fresh)
 		applyLivePricesToData(sessionData, fresh)
+		markShareDirty(forceUpload = false)
 	}
 
 	private fun applyLivePricesToData(data: TrackerData, prices: Map<String, Double>) {
@@ -201,10 +225,13 @@ object HideonleafShardTracker {
 		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled) return
 		if (!LocationTracker.isOnGalatea) return
 
+		ensureSessionActive()
 		lastActivityAt = System.currentTimeMillis()
 		totalData.kills++
 		sessionData.kills++
 		saveData()
+		recordLocalMutation()
+		markShareDirty(forceUpload = true)
 	}
 
 	// ── Manual item add (for testing / commands) ─────────────────────────
@@ -218,6 +245,8 @@ object HideonleafShardTracker {
 		addToData(sessionData, canonicalName, amount)
 
 		saveData()
+		recordLocalMutation()
+		markShareDirty(forceUpload = true)
 
 		val client = MinecraftClient.getInstance()
 		client.execute {
@@ -240,8 +269,19 @@ object HideonleafShardTracker {
 
 	fun resetTotal() {
 		totalData = TrackerData()
+		legacyTotalDurationUnknown = false
 		resetSession()
 		saveData()
+		recordLocalMutation()
+		markShareDirty(forceUpload = true)
+	}
+
+	fun shutdown() {
+		if (timerRunning) {
+			pauseTimer()
+		} else {
+			saveData()
+		}
 	}
 
 	fun toggleView() {
@@ -256,7 +296,12 @@ object HideonleafShardTracker {
 	 * [AFK_THRESHOLD_MS]. Resumes automatically once both conditions clear.
 	 */
 	fun onTick() {
-		if (!sessionActive) return
+		refreshLegacyDurationReliability()
+		if (!sessionActive) {
+			maybeSyncRemoteStats()
+			maybeUploadSharedStats()
+			return
+		}
 
 		val onGalatea = LocationTracker.isOnGalatea
 		val now = System.currentTimeMillis()
@@ -270,6 +315,9 @@ object HideonleafShardTracker {
 			if (isAfk) pauseTimer(effectiveEndMs = lastActivityAt)
 			else pauseTimer()
 		}
+
+		maybeSyncRemoteStats()
+		maybeUploadSharedStats()
 	}
 
 	/**
@@ -283,8 +331,15 @@ object HideonleafShardTracker {
 		if (!timerRunning) return
 		val elapsed = (effectiveEndMs - sessionStartedAt).coerceAtLeast(0L)
 		sessionData.totalDurationMs += elapsed
+		totalData.totalDurationMs += elapsed
+		if (totalData.totalDurationMs > 0L) {
+			legacyTotalDurationUnknown = false
+		}
 		sessionStartedAt = 0L
 		timerRunning = false
+		saveData()
+		recordLocalMutation()
+		markShareDirty(forceUpload = false)
 	}
 
 	private fun resumeTimer() {
@@ -297,11 +352,25 @@ object HideonleafShardTracker {
 
 	fun displayData(): TrackerData = if (showingSession) sessionData else totalData
 
+	fun selectedDurationMs(): Long = if (showingSession) sessionDurationMs() else totalDurationMs()
+
+	fun selectedDurationAvailable(): Boolean = if (showingSession) true else isTotalDurationReliable()
+
 	fun sessionDurationMs(): Long {
 		if (!sessionActive) return sessionData.totalDurationMs
 		if (!timerRunning) return sessionData.totalDurationMs
 		return sessionData.totalDurationMs + (System.currentTimeMillis() - sessionStartedAt)
 	}
+
+	fun totalDurationMs(): Long {
+		refreshLegacyDurationReliability()
+		if (!isTotalDurationReliable()) return 0L
+		if (!sessionActive) return totalData.totalDurationMs
+		if (!timerRunning) return totalData.totalDurationMs
+		return totalData.totalDurationMs + (System.currentTimeMillis() - sessionStartedAt)
+	}
+
+	fun isTotalDurationReliable(): Boolean = !legacyTotalDurationUnknown
 
 	/** True when the session is active but the stopwatch is paused. */
 	val isTimerPaused: Boolean get() = sessionActive && !timerRunning
@@ -322,6 +391,24 @@ object HideonleafShardTracker {
 		return totalProfit(data) / hours
 	}
 
+	fun displayProfitPerHour(data: TrackerData, durationMs: Long): Double {
+		if (durationMs <= 0) return 0.0
+		if (data !== sessionData) {
+			return if (isTotalDurationReliable()) profitPerHour(data, durationMs) else 0.0
+		}
+
+		val currentRate = profitPerHour(data, durationMs)
+		val totalDuration = totalDurationMs()
+		val totalRate = profitPerHour(totalData, totalDuration)
+		val hasHistory = totalDuration >= HISTORY_BASELINE_MIN_DURATION_MS && totalRate > 0.0
+		val conservativeWarmupRate = profitPerHour(data, durationMs.coerceAtLeast(SESSION_RATE_FLOOR_DURATION_MS))
+		val baselineRate = if (hasHistory) totalRate else conservativeWarmupRate
+		val sessionWeight = (durationMs.toDouble() / SESSION_STABILIZATION_BLEND_MS.toDouble()).coerceIn(0.0, 1.0)
+		return (baselineRate * (1.0 - sessionWeight)) + (currentRate * sessionWeight)
+	}
+
+	fun totalShardCount(data: TrackerData): Long = data.items.values.sumOf { it.amount }
+
 	// ── Persistence ──────────────────────────────────────────────────────
 
 	private fun loadData(): TrackerData {
@@ -341,12 +428,38 @@ object HideonleafShardTracker {
 
 	private fun saveData() {
 		try {
+			refreshLegacyDurationReliability()
 			Files.createDirectories(DATA_PATH.parent)
 			Files.newBufferedWriter(DATA_PATH).use { writer ->
-				GSON.toJson(totalData, writer)
+				GSON.toJson(buildPersistedTotalData(), writer)
 			}
 		} catch (exception: IOException) {
 			LOGGER.warn("Failed to save shard tracker data to {}", DATA_PATH, exception)
+		}
+	}
+
+	private fun buildPersistedTotalData(): TrackerData =
+		TrackerData(
+			items = totalData.items.mapValues { (_, item) ->
+				TrackedItem(
+					amount = item.amount,
+					timesDropped = item.timesDropped,
+					pricePerUnit = item.pricePerUnit,
+				)
+			}.toMutableMap(),
+			kills = totalData.kills,
+			totalDurationMs = rawTotalDurationMs().coerceAtLeast(0L),
+		)
+
+	private fun rawTotalDurationMs(): Long {
+		if (!sessionActive) return totalData.totalDurationMs
+		if (!timerRunning) return totalData.totalDurationMs
+		return totalData.totalDurationMs + (System.currentTimeMillis() - sessionStartedAt)
+	}
+
+	private fun refreshLegacyDurationReliability() {
+		if (legacyTotalDurationUnknown && hasMeaningfulTrackerData(totalData) && rawTotalDurationMs() > 0L) {
+			legacyTotalDurationUnknown = false
 		}
 	}
 
@@ -357,6 +470,8 @@ object HideonleafShardTracker {
 			sessionActive = true
 			sessionStartedAt = System.currentTimeMillis()
 			timerRunning = true
+			recordLocalMutation()
+			markShareDirty(forceUpload = false)
 		}
 	}
 
@@ -368,6 +483,14 @@ object HideonleafShardTracker {
 		}
 		item.amount += amount
 		item.timesDropped++
+	}
+
+	private fun hasMeaningfulTrackerData(data: TrackerData): Boolean {
+		return data.kills > 0 || data.items.values.any { it.amount > 0 }
+	}
+
+	private fun recordLocalMutation() {
+		lastLocalMutationAt = System.currentTimeMillis()
 	}
 
 	private fun isTrackedItem(name: String): Boolean {
@@ -400,6 +523,217 @@ object HideonleafShardTracker {
 
 	private val AMPERSAND_PATTERN = Regex("(?i)&[0-9A-FK-OR]")
 
+	private fun markShareDirty(forceUpload: Boolean) {
+		shareDirty = true
+		if (forceUpload) {
+			maybeUploadSharedStats(force = true)
+		}
+	}
+
+	private fun maybeUploadSharedStats(force: Boolean = false) {
+		val mod = XclipsenIrcBridgeClient.instance ?: return
+		val config = mod.config()
+		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled || !config.hideonleafShareDataEnabled) {
+			return
+		}
+		if (!initialRemoteSyncCompleted && !force) {
+			return
+		}
+
+		val playerName = MinecraftClient.getInstance().session?.username.orEmpty()
+		if (playerName.isBlank()) {
+			return
+		}
+
+		val now = System.currentTimeMillis()
+		val periodicRefreshDue = sessionActive && (now - lastShareUploadAt) >= SHARE_UPLOAD_INTERVAL_MS
+		if (!force && !shareDirty && !periodicRefreshDue) {
+			return
+		}
+
+		if (!force && lastShareUploadAt > 0L && (now - lastShareUploadAt) < SHARE_UPLOAD_MIN_INTERVAL_MS) {
+			return
+		}
+
+		val snapshot = buildUploadSnapshot()
+		hideonleafSyncInFlight = true
+		syncExecutor.execute {
+			try {
+				if (mod.backendBridge().uploadHideonleafStats(playerName, snapshot)) {
+					shareDirty = false
+					lastShareUploadAt = now
+				}
+			} finally {
+				hideonleafSyncInFlight = false
+			}
+		}
+	}
+
+	private fun maybeSyncRemoteStats() {
+		val mod = XclipsenIrcBridgeClient.instance ?: return
+		val config = mod.config()
+		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled || !config.hideonleafShareDataEnabled) {
+			return
+		}
+
+		val playerName = MinecraftClient.getInstance().session?.username.orEmpty()
+		if (playerName.isBlank()) {
+			return
+		}
+
+		val now = System.currentTimeMillis()
+		if (hideonleafSyncInFlight || (now - lastRemoteSyncAt) < REMOTE_SYNC_INTERVAL_MS) {
+			return
+		}
+
+		hideonleafSyncInFlight = true
+		lastRemoteSyncAt = now
+		syncExecutor.execute {
+			try {
+				val remote = mod.backendBridge().fetchHideonleafStats(playerName)
+				MinecraftClient.getInstance().execute {
+					initialRemoteSyncCompleted = true
+					if (remote == null) {
+						return@execute
+					}
+					applyRemoteSnapshot(remote)
+					if (!hasMeaningfulTrackerData(remote.toTrackerData()) && hasMeaningfulTrackerData(totalData)) {
+						shareDirty = true
+					}
+				}
+			} finally {
+				hideonleafSyncInFlight = false
+			}
+		}
+	}
+
+	private fun buildUploadSnapshot(): BackendHideonleafStatsUpload {
+		val durationMs = rawTotalDurationMs().coerceAtLeast(0L)
+		return BackendHideonleafStatsUpload().apply {
+			kills = totalData.kills
+			totalShards = totalShardCount(totalData)
+			totalProfit = totalProfit(totalData)
+			totalDurationMs = durationMs
+			profitPerHour = if (durationMs > 0L && isTotalDurationReliable()) profitPerHour(totalData, durationMs) else 0.0
+			updatedAt = lastLocalMutationAt
+			items = totalData.items.mapValues { (_, item) ->
+				BackendHideonleafTrackedItem().also { mapped ->
+					mapped.amount = item.amount
+					mapped.timesDropped = item.timesDropped
+					mapped.pricePerUnit = item.pricePerUnit
+				}
+			}.toMutableMap()
+		}
+	}
+
+	private fun applyRemoteSnapshot(remote: BackendHideonleafStatsUpload) {
+		if (remote.updatedAt <= 0L || remote.updatedAt <= lastAppliedRemoteUpdatedAt || remote.updatedAt < lastLocalMutationAt) {
+			return
+		}
+
+		val remoteData = remote.toTrackerData()
+
+		if (!hasMeaningfulTrackerData(remoteData)) {
+			return
+		}
+
+		if (tryMigrateLegacyDuration(remoteData)) {
+			lastAppliedRemoteUpdatedAt = remote.updatedAt
+			saveData()
+			markShareDirty(forceUpload = false)
+			return
+		}
+
+		if (hasMeaningfulTrackerData(totalData) && !isRemoteSupersetOfLocal(remoteData, totalData)) {
+			return
+		}
+
+		totalData = remoteData
+		legacyTotalDurationUnknown = remoteData.totalDurationMs <= 0L
+		lastAppliedRemoteUpdatedAt = remote.updatedAt
+		applyLivePricesToData(totalData, livePrices)
+		saveData()
+	}
+
+	private fun tryMigrateLegacyDuration(remoteData: TrackerData): Boolean {
+		if (!legacyTotalDurationUnknown || totalData.totalDurationMs > 0L || !hasMeaningfulTrackerData(totalData)) {
+			return false
+		}
+
+		val estimatedDurationMs = estimateLegacyDurationFromRemote(totalData, remoteData)
+		if (estimatedDurationMs <= 0L) {
+			return false
+		}
+
+		totalData.totalDurationMs = estimatedDurationMs
+		legacyTotalDurationUnknown = false
+		applyLivePricesToData(totalData, livePrices)
+		LOGGER.info(
+			"Shard tracker: migrated legacy total duration using remote baseline ({} ms -> {} ms)",
+			remoteData.totalDurationMs,
+			estimatedDurationMs,
+		)
+		return true
+	}
+
+	private fun estimateLegacyDurationFromRemote(localData: TrackerData, remoteData: TrackerData): Long {
+		if (remoteData.totalDurationMs <= 0L || !hasMeaningfulTrackerData(remoteData)) {
+			return 0L
+		}
+
+		val progressionRatios = mutableListOf<Double>()
+		if (remoteData.kills > 0L && localData.kills >= remoteData.kills) {
+			progressionRatios += localData.kills.toDouble() / remoteData.kills.toDouble()
+		}
+
+		val localTotalShards = totalShardCount(localData)
+		val remoteTotalShards = totalShardCount(remoteData)
+		if (remoteTotalShards > 0L && localTotalShards >= remoteTotalShards) {
+			progressionRatios += localTotalShards.toDouble() / remoteTotalShards.toDouble()
+		}
+
+		for ((name, remoteItem) in remoteData.items) {
+			if (remoteItem.amount <= 0L) {
+				continue
+			}
+			val localAmount = localData.items[name]?.amount ?: 0L
+			if (localAmount >= remoteItem.amount) {
+				progressionRatios += localAmount.toDouble() / remoteItem.amount.toDouble()
+			}
+		}
+
+		val scale = progressionRatios.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
+		return (remoteData.totalDurationMs.toDouble() * scale).roundToLong().coerceAtLeast(remoteData.totalDurationMs)
+	}
+
+	private fun isRemoteSupersetOfLocal(remoteData: TrackerData, localData: TrackerData): Boolean {
+		if (remoteData.kills < localData.kills) {
+			return false
+		}
+
+		for ((name, localItem) in localData.items) {
+			val remoteAmount = remoteData.items[name]?.amount ?: 0L
+			if (remoteAmount < localItem.amount) {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	private fun BackendHideonleafStatsUpload.toTrackerData(): TrackerData =
+		TrackerData(
+			items = items.mapValues { (_, item) ->
+				TrackedItem(
+					amount = item.amount.coerceAtLeast(0L),
+					timesDropped = item.timesDropped.coerceAtLeast(0L),
+					pricePerUnit = item.pricePerUnit.coerceAtLeast(0.0),
+				)
+			}.toMutableMap(),
+			kills = kills.coerceAtLeast(0L),
+			totalDurationMs = totalDurationMs.coerceAtLeast(0L),
+		)
+
 	// ── Formatting helpers ───────────────────────────────────────────────
 
 	fun formatCoins(value: Double): String {
@@ -424,6 +758,13 @@ object HideonleafShardTracker {
 			String.format(Locale.ROOT, "%ds", seconds)
 		}
 	}
+
+	private const val SHARE_UPLOAD_INTERVAL_MS = 30_000L
+	private const val SHARE_UPLOAD_MIN_INTERVAL_MS = 5_000L
+	private const val REMOTE_SYNC_INTERVAL_MS = 5_000L
+	private const val SESSION_RATE_FLOOR_DURATION_MS = 12 * 60 * 1000L
+	private const val SESSION_STABILIZATION_BLEND_MS = 12 * 60 * 1000L
+	private const val HISTORY_BASELINE_MIN_DURATION_MS = 20 * 60 * 1000L
 }
 
 // ── HUD Element ──────────────────────────────────────────────────────────
@@ -500,7 +841,7 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 		val client   = MinecraftClient.getInstance()
 		val renderer = client.textRenderer
 		val data      = if (example) exampleData() else HideonleafShardTracker.displayData()
-		val durationMs = if (example) 3_723_000L    else HideonleafShardTracker.sessionDurationMs()
+		val durationMs = if (example) 3_723_000L    else HideonleafShardTracker.selectedDurationMs()
 		val isSession  = HideonleafShardTracker.showingSession
 
 		// ── Build lines ───────────────────────────────────────────────
@@ -531,11 +872,15 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 
 		// Stats
 		val totalProfit  = HideonleafShardTracker.totalProfit(data)
-		val profitPerHour = HideonleafShardTracker.profitPerHour(data, durationMs)
+		val profitPerHour = HideonleafShardTracker.displayProfitPerHour(data, durationMs)
 		val profitColor  = if (totalProfit >= 0) PROFIT_COLOR else LOSS_COLOR
+		val durationAvailable = example || HideonleafShardTracker.selectedDurationAvailable()
 
 		lines += TrackerLine("Profit: §a${HideonleafShardTracker.formatCoins(totalProfit)}", profitColor)
-		lines += TrackerLine("Per Hour: §a${HideonleafShardTracker.formatCoins(profitPerHour)}/h", MUTED_COLOR)
+		lines += TrackerLine(
+			if (durationAvailable) "Per Hour: §a${HideonleafShardTracker.formatCoins(profitPerHour)}/h" else "Per Hour: §7Legacy unknown",
+			MUTED_COLOR,
+		)
 		if (data.kills > 0)
 			lines += TrackerLine("Kills: §e${formatNumber(data.kills)}", MUTED_COLOR)
 		val timerSuffix = when {
@@ -543,7 +888,10 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 			!example && HideonleafShardTracker.isTimerPaused   -> " §c[Pausiert]"
 			else -> ""
 		}
-		lines += TrackerLine("Time: §f${HideonleafShardTracker.formatDuration(durationMs)}$timerSuffix", MUTED_COLOR)
+		lines += TrackerLine(
+			if (durationAvailable) "Time: §f${HideonleafShardTracker.formatDuration(durationMs)}$timerSuffix" else "Time: §7Legacy unknown",
+			MUTED_COLOR,
+		)
 
 		// ── Compute dimensions ────────────────────────────────────────
 		var maxTextWidth = 0

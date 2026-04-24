@@ -63,6 +63,7 @@ class BridgeConfig {
 	@JvmField var shulkerTracerLineColorHex: String = "#36C5F0"
 	@JvmField var shulkerTracerLineWidth: Float = 2.0f
 	@JvmField var hideonleafLostFightAlertEnabled: Boolean = true
+	@JvmField var hideonleafShareDataEnabled: Boolean = true
 	@JvmField var hideonleafLostFightAlertSoundId: String = "minecraft:block.note_block.pling"
 	@JvmField var hideonleafLostFightAlertSoundVolume: Float = 1.0f
 	@JvmField var hideonleafLostFightAlertSoundPitch: Float = 1.5f
@@ -91,6 +92,7 @@ class BridgeConfig {
 		it.shulkerTracerLineColorHex = shulkerTracerLineColorHex
 		it.shulkerTracerLineWidth = shulkerTracerLineWidth
 		it.hideonleafLostFightAlertEnabled = hideonleafLostFightAlertEnabled
+		it.hideonleafShareDataEnabled = hideonleafShareDataEnabled
 		it.hideonleafLostFightAlertSoundId = hideonleafLostFightAlertSoundId
 		it.hideonleafLostFightAlertSoundVolume = hideonleafLostFightAlertSoundVolume
 		it.hideonleafLostFightAlertSoundPitch = hideonleafLostFightAlertSoundPitch
@@ -117,6 +119,23 @@ class HudElementPlacement() {
 
 class HealthResponse {
 	@JvmField var status: String = ""
+}
+
+class BackendHideonleafTrackedItem {
+	@JvmField var amount: Long = 0L
+	@JvmField var timesDropped: Long = 0L
+	@JvmField var pricePerUnit: Double = 0.0
+}
+
+class BackendHideonleafStatsUpload {
+	@JvmField var playerName: String = ""
+	@JvmField var kills: Long = 0L
+	@JvmField var totalShards: Long = 0L
+	@JvmField var totalProfit: Double = 0.0
+	@JvmField var profitPerHour: Double = 0.0
+	@JvmField var totalDurationMs: Long = 0L
+	@JvmField var updatedAt: Long = 0L
+	@JvmField var items: MutableMap<String, BackendHideonleafTrackedItem> = mutableMapOf()
 }
 
 /** Response from GET /api/skyblock/prices */

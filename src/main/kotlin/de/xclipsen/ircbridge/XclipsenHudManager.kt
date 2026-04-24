@@ -2,10 +2,12 @@ package de.xclipsen.ircbridge
 
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.gui.screen.ChatScreen
 import net.minecraft.client.gui.screen.Screen
 
 object XclipsenHudManager {
 	val elements: List<XclipsenHudElement> = listOf(
+		IrcChatTabHudElement,
 		HideonleafLostFightHudElement,
 		HideonleafShardTrackerHudElement,
 	)
@@ -29,6 +31,7 @@ object XclipsenHudManager {
 		val client = MinecraftClient.getInstance()
 		// Don't intercept clicks inside our own editor or config screens
 		if (client.currentScreen is XclipsenHudEditorScreen) return false
+		if (client.currentScreen is ChatScreen && IrcChatTabHudElement.handleClick(mouseX, mouseY)) return true
 		return HideonleafShardTrackerHudElement.handleClick(mouseX, mouseY)
 	}
 

@@ -50,6 +50,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ScreenMouseClickHandler.register()
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register {
+			HideonleafShardTracker.shutdown()
 			backendBridge.stop()
 		}
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
@@ -257,7 +258,9 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun applyBackendBridgeConfig() {
+		backendBridge.configure(config)
 		if (!config.ircBridgeEnabled) {
+			IrcChatTabManager.setActiveTab(IrcChatTabManager.ChatTab.MAIN)
 			backendBridge.stop()
 			return
 		}
@@ -626,10 +629,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun showShardTrackerStatus(context: CommandContext<FabricClientCommandSource>): Int {
 		val data = HideonleafShardTracker.displayData()
-		val duration = HideonleafShardTracker.sessionDurationMs()
+		val duration = HideonleafShardTracker.selectedDurationMs()
 		val profit = HideonleafShardTracker.totalProfit(data)
-		val perHour = HideonleafShardTracker.profitPerHour(data, duration)
+		val perHour = HideonleafShardTracker.displayProfitPerHour(data, duration)
 		val view = if (HideonleafShardTracker.showingSession) "Session" else "Total"
+		val durationAvailable = HideonleafShardTracker.selectedDurationAvailable()
 
 		context.source.sendFeedback(Text.literal(buildString {
 			append("§b§lShard Tracker ($view)§r\n")
@@ -641,8 +645,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			}
 			if (data.items.isEmpty()) append("  §7No drops yet.\n")
 			append("§aProfit: ${HideonleafShardTracker.formatCoins(profit)} §7| ")
-			append("§aPer Hour: ${HideonleafShardTracker.formatCoins(perHour)}/h §7| ")
-			append("§fTime: ${HideonleafShardTracker.formatDuration(duration)}")
+			append(if (durationAvailable) "§aPer Hour: ${HideonleafShardTracker.formatCoins(perHour)}/h §7| " else "§7Per Hour: Legacy unknown §7| ")
+			append(if (durationAvailable) "§fTime: ${HideonleafShardTracker.formatDuration(duration)}" else "§7Time: Legacy unknown")
 			if (data.kills > 0) append(" §7| §eKills: ${data.kills}")
 		}))
 		return 1

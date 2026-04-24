@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.0
+
+- Added a dedicated IRC chat tab with a compact chat-only HUD toggle button.
+- Moved backend/API setup into a shared global Setup section for all modules.
+- Added Hideonleaf share-data sync, `/hideonleaf` bot leaderboard support, and instance-to-instance tracker sync.
+- Improved Hideonleaf tracker migration, total-time handling, reset confirmation, and startup/backend sync behavior.
+
+## v0.4.5
+
+- Added a separate IRC chat tab that can be toggled without removing IRC lines from the main chat.
+- Reworked the IRC switcher into a compact chat-only button and only show it while the chat screen is open.
+
 ## v0.4.4
 
 - Added Co-op Relay toggle in IRC Bridge settings to disable forwarding co-op chat to IRC.

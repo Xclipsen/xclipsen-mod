@@ -64,7 +64,12 @@ class ClientBackendBridgeService(
 	private var backlogInitialized = false
 
 	private val pendingLocalEchoes: Deque<PendingLocalEcho> = ArrayDeque()
-	private val pausedIncomingMessages: Deque<Text> = ArrayDeque()
+	private val pausedIncomingMessages: Deque<PausedIncomingMessage> = ArrayDeque()
+
+	@Synchronized
+	fun configure(config: BridgeConfig) {
+		this.config = config
+	}
 
 	@Synchronized
 	fun start(config: BridgeConfig) {
@@ -214,6 +219,79 @@ class ClientBackendBridgeService(
 		}
 	}
 
+	fun uploadHideonleafStats(playerName: String, snapshot: BackendHideonleafStatsUpload): Boolean {
+		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+			return false
+		}
+
+		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
+		if (safePlayerName.isBlank()) {
+			return false
+		}
+
+		val outgoing = BackendHideonleafStatsUpload().apply {
+			this.playerName = safePlayerName
+			kills = snapshot.kills.coerceAtLeast(0L)
+			totalShards = snapshot.totalShards.coerceAtLeast(0L)
+			totalProfit = snapshot.totalProfit.coerceAtLeast(0.0)
+			profitPerHour = snapshot.profitPerHour.coerceAtLeast(0.0)
+			totalDurationMs = snapshot.totalDurationMs.coerceAtLeast(0L)
+			updatedAt = snapshot.updatedAt.coerceAtLeast(0L)
+			items = snapshot.items.mapValues { (_, item) ->
+				BackendHideonleafTrackedItem().also { mapped ->
+					mapped.amount = item.amount.coerceAtLeast(0L)
+					mapped.timesDropped = item.timesDropped.coerceAtLeast(0L)
+					mapped.pricePerUnit = item.pricePerUnit.coerceAtLeast(0.0)
+				}
+			}.toMutableMap()
+		}
+
+		return try {
+			val request = requestBuilder(backendUrl("/api/hideonleaf"))
+				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
+				.build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = response.statusCode()
+			response.statusCode() in 200..299
+		} catch (exception: IOException) {
+			logger.debug("Hideonleaf stats upload failed", exception)
+			false
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			false
+		}
+	}
+
+	fun fetchHideonleafStats(playerName: String): BackendHideonleafStatsUpload? {
+		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+			return null
+		}
+
+		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
+		if (safePlayerName.isBlank()) {
+			return null
+		}
+
+		return try {
+			val request = requestBuilder(
+				backendUrl("/api/hideonleaf/status?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
+			).GET().build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = response.statusCode()
+			if (response.statusCode() != 200) {
+				null
+			} else {
+				GSON.fromJson(response.body(), BackendHideonleafStatsUpload::class.java)
+			}
+		} catch (exception: IOException) {
+			logger.debug("Hideonleaf stats fetch failed", exception)
+			null
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
 	fun completeLink(playerName: String, code: String): BackendLinkStatusResponse {
 		val outgoing = BackendLinkCompleteRequest().apply {
 			this.playerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
@@ -329,14 +407,18 @@ class ClientBackendBridgeService(
 
 				if (incomingMessagesEnabled) {
 					val styledMessage = styleBridgeMessage(formatted)
+					val isIrcMessage = message.source == "irc"
 					if (previewHoverPaused) {
 						synchronized(pausedIncomingMessages) {
-							pausedIncomingMessages.addLast(styledMessage)
+							pausedIncomingMessages.addLast(PausedIncomingMessage(styledMessage, isIrcMessage))
 							while (pausedIncomingMessages.size > MAX_PAUSED_INCOMING_MESSAGES) {
 								pausedIncomingMessages.removeFirst()
 							}
 						}
 					} else {
+						if (isIrcMessage) {
+							IrcChatTabManager.addIrcMessage(styledMessage)
+						}
 						showClientMessage(client, styledMessage)
 					}
 				}
@@ -471,7 +553,9 @@ class ClientBackendBridgeService(
 			"%player%", displayName,
 			"%message%", message,
 		)
-		showClientMessage(client, styleBridgeMessage(formatted))
+		val styledMessage = styleBridgeMessage(formatted)
+		IrcChatTabManager.addIrcMessage(styledMessage)
+		showClientMessage(client, styledMessage)
 	}
 
 	private fun shouldSuppressIncomingIrc(user: String, content: String): Boolean {
@@ -508,7 +592,7 @@ class ClientBackendBridgeService(
 
 	private fun flushPausedIncomingMessages() {
 		val client = MinecraftClient.getInstance() ?: return
-		val drained = mutableListOf<Text>()
+		val drained = mutableListOf<PausedIncomingMessage>()
 		synchronized(pausedIncomingMessages) {
 			while (pausedIncomingMessages.isNotEmpty()) {
 				drained.add(pausedIncomingMessages.removeFirst())
@@ -516,7 +600,10 @@ class ClientBackendBridgeService(
 		}
 
 		for (message in drained) {
-			showClientMessage(client, message)
+			if (message.isIrcMessage) {
+				IrcChatTabManager.addIrcMessage(message.content)
+			}
+			showClientMessage(client, message.content)
 		}
 	}
 
@@ -593,6 +680,11 @@ class ClientBackendBridgeService(
 		fun matches(otherUser: String, otherContent: String): Boolean =
 			user == otherUser && content == otherContent
 	}
+
+	private data class PausedIncomingMessage(
+		val content: Text,
+		val isIrcMessage: Boolean,
+	)
 
 	companion object {
 		private val GSON = Gson()
