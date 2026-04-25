@@ -86,8 +86,7 @@ class BridgeConfigManager(
 		value.hideonleafLostFightAlertSoundVolume = value.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.hideonleafLostFightAlertSoundPitch = value.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f)
 		value.timeChangerMode = value.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
-		value.hideonleafHighlightColorHex = normalizedHexColor(value.hideonleafHighlightColorHex, "#FF00FF")
-		value.invisibugHighlightColorHex = normalizedHexColor(value.invisibugHighlightColorHex, "#00FFFF")
+		value.dungeonDoorMode = value.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		return value
 	}
 

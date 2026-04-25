@@ -52,13 +52,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register {
 			HideonleafShardTracker.shutdown()
-			InvisibugHighlighter.onWorldChange()
 			MortDoorBarrierFeature.onWorldChange()
 			backendBridge.stop()
 		}
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
 		ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
-			InvisibugHighlighter.onWorldChange()
 			MortDoorBarrierFeature.onWorldChange()
 		}
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
@@ -69,7 +67,6 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			XclipsenHudManager.render(context)
 		}
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> InvisibugHighlighter.onRender(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> MortDoorBarrierFeature.onRender(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
@@ -195,7 +192,6 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private fun handleEndTick(client: MinecraftClient) {
 		LocationTracker.onTick(client)
 		HideonleafShardTracker.onTick()
-		InvisibugHighlighter.onTick()
 		MortDoorBarrierFeature.onTick(client)
 
 		if (client.currentScreen !is ChatScreen) {

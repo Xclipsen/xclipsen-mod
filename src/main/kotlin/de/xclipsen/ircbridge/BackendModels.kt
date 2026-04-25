@@ -73,12 +73,9 @@ class BridgeConfig {
 	@JvmField var dungeonDoorModuleEnabled: Boolean = false
 	@JvmField var dungeonDoorEnabled: Boolean = false
 	@JvmField var dungeonDoorDebugEnabled: Boolean = false
+	@JvmField var dungeonDoorMode: Int = 0
 	@JvmField var dungeonRedVignetteModuleEnabled: Boolean = false
 	@JvmField var dungeonRedVignetteEnabled: Boolean = false
-	@JvmField var hideonleafHighlightEnabled: Boolean = true
-	@JvmField var hideonleafHighlightColorHex: String = "#FF00FF"
-	@JvmField var invisibugHighlightEnabled: Boolean = true
-	@JvmField var invisibugHighlightColorHex: String = "#00FFFF"
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
@@ -111,12 +108,9 @@ class BridgeConfig {
 		it.dungeonDoorModuleEnabled = dungeonDoorModuleEnabled
 		it.dungeonDoorEnabled = dungeonDoorEnabled
 		it.dungeonDoorDebugEnabled = dungeonDoorDebugEnabled
+		it.dungeonDoorMode = dungeonDoorMode
 		it.dungeonRedVignetteModuleEnabled = dungeonRedVignetteModuleEnabled
 		it.dungeonRedVignetteEnabled = dungeonRedVignetteEnabled
-		it.hideonleafHighlightEnabled = hideonleafHighlightEnabled
-		it.hideonleafHighlightColorHex = hideonleafHighlightColorHex
-		it.invisibugHighlightEnabled = invisibugHighlightEnabled
-		it.invisibugHighlightColorHex = invisibugHighlightColorHex
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
 }

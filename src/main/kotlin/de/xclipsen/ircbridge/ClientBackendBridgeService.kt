@@ -407,7 +407,7 @@ class ClientBackendBridgeService(
 
 				if (incomingMessagesEnabled) {
 					val styledMessage = styleBridgeMessage(formatted)
-					val isIrcMessage = message.source == "irc"
+					val isIrcMessage = message.source == "irc" || message.source == "discord"
 					if (previewHoverPaused) {
 						synchronized(pausedIncomingMessages) {
 							pausedIncomingMessages.addLast(PausedIncomingMessage(styledMessage, isIrcMessage))

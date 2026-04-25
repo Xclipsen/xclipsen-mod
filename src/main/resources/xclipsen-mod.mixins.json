@@ -7,8 +7,7 @@
     "ChatScreenMixin",
     "ClientPlayerInteractionManagerMixin",
     "ClientWorldMixin",
-    "EntityGlowMixin",
-    "InvisibugParticleMixin"
+    "EntityGlowMixin"
   ],
   "injectors": {
     "defaultRequire": 1

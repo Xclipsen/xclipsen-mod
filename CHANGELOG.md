@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.2
+
+- Updated the Door module with a selectable middle `3x3` barrier mode.
+- IRC chat tab now also shows Discord-sourced bridge messages.
+- Moved `Hideonleaf Helper` into the `Galatea` category and removed the old separate Galatea helper modules.
+- Simplified the Dungeon module config popups and removed leftover unused config-screen code.
+
 ## v0.5.1
 
 - Added a Devonian-style red vignette click-fix as a separate Dungeon module.

@@ -22,10 +22,11 @@ object MortDoorBarrierFeature {
 	private const val DEBUG_LINE_WIDTH = 2.0
 	private const val DEBUG_ALPHA = 220
 	private const val SET_BLOCK_FLAGS = 19
+	const val modeCount: Int = 2
 	private val DOOR_BLOCK_STATE = Blocks.BARRIER.defaultState
 
 	private val appliedStates = linkedMapOf<BlockPos, BlockState>()
-	private var cachedDoorCube: Set<BlockPos> = emptySet()
+	private var cachedDoorCube: DoorCube? = null
 	private var tickCounter = 0
 	private var debugTickCounter = 0
 
@@ -44,17 +45,17 @@ object MortDoorBarrierFeature {
 
 		val mort = findNearestMort(client) ?: run {
 			clear(client)
-			cachedDoorCube = emptySet()
+			cachedDoorCube = null
 			debug(client, config.dungeonDoorDebugEnabled, "no mort found area='${LocationTracker.currentArea}'")
 			return
 		}
 
 		val cube = findDoorWindow(world, mort.blockPos)
 		if (cube != null && cube.closedCount == FULL_CUBE_TARGET_BLOCKS && cube.airCount == 0) {
-			cachedDoorCube = cube.positions
-		} else if (cachedDoorCube.isNotEmpty()) {
+			cachedDoorCube = cube
+		} else if (cachedDoorCube != null) {
 			clear(client)
-			cachedDoorCube = emptySet()
+			cachedDoorCube = null
 			debug(
 				client,
 				config.dungeonDoorDebugEnabled,
@@ -63,19 +64,20 @@ object MortDoorBarrierFeature {
 			return
 		}
 
-		if (cachedDoorCube.isEmpty()) {
+		val cachedCube = cachedDoorCube
+		if (cachedCube == null) {
 			clear(client)
 			val nearbyTargets = countNearbyTargetBlocks(world, mort.blockPos)
 			debug(client, config.dungeonDoorDebugEnabled, "mort ok, no 3x3x3 cube matched nearbyTargets=$nearbyTargets")
 			return
 		}
 
-		val cachedClosedPositions = cachedDoorCube.filterTo(linkedSetOf()) { isClosedDoorState(world.getBlockState(it)) }
+		val cachedClosedPositions = cachedCube.positions.filterTo(linkedSetOf()) { isClosedDoorState(world.getBlockState(it)) }
 		val cachedClosed = cachedClosedPositions.size
-		val cachedAirPositions = cachedDoorCube.filterTo(linkedSetOf()) { world.getBlockState(it).isAir }
+		val cachedAirPositions = cachedCube.positions.filterTo(linkedSetOf()) { world.getBlockState(it).isAir }
 		if (cachedClosed != FULL_CUBE_TARGET_BLOCKS || cachedAirPositions.isNotEmpty()) {
 			clear(client)
-			cachedDoorCube = emptySet()
+			cachedDoorCube = null
 			debug(
 				client,
 				config.dungeonDoorDebugEnabled,
@@ -84,18 +86,19 @@ object MortDoorBarrierFeature {
 			return
 		}
 
-		syncDesiredStates(client, cachedDoorCube)
+		val desiredTargets = desiredBarrierTargets(cachedCube, config.dungeonDoorMode)
+		syncDesiredStates(client, desiredTargets)
 		debug(
 			client,
 			config.dungeonDoorDebugEnabled,
-			"mort=${entityName(mort)} ${cube?.let { "axis=${it.axis} start=${it.startPos.toShortString()} closed=${it.closedCount}" } ?: "using cached cube"} air=${cachedAirPositions.size} barrierTargets=${cachedDoorCube.size} applied=${appliedStates.size}",
+			"mort=${entityName(mort)} ${cube?.let { "axis=${it.axis} start=${it.startPos.toShortString()} closed=${it.closedCount}" } ?: "using cached cube"} mode=${displayName(config.dungeonDoorMode)} air=${cachedAirPositions.size} barrierTargets=${desiredTargets.size} applied=${appliedStates.size}",
 		)
 	}
 
 	fun onWorldChange() {
 		val client = MinecraftClient.getInstance()
 		clear(client)
-		cachedDoorCube = emptySet()
+		cachedDoorCube = null
 	}
 
 	fun onRender(context: WorldRenderContext) {
@@ -210,6 +213,18 @@ object MortDoorBarrierFeature {
 		}
 	}
 
+	private fun desiredBarrierTargets(cube: DoorCube, mode: Int): Set<BlockPos> {
+		return when (mode.coerceIn(0, modeCount - 1)) {
+			DoorMode.MIDDLE_SLICE.id -> middleSlicePositions(cube)
+			else -> cube.positions
+		}
+	}
+
+	private fun middleSlicePositions(cube: DoorCube): Set<BlockPos> {
+		val middleY = cube.startPos.y + 1
+		return cube.positions.filterTo(linkedSetOf()) { pos -> pos.y == middleY }
+	}
+
 	private fun syncDesiredStates(client: MinecraftClient, desired: Set<BlockPos>) {
 		val world = client.world ?: return
 		val stale = appliedStates.keys.filter { it !in desired }
@@ -309,5 +324,14 @@ object MortDoorBarrierFeature {
 	private enum class Axis {
 		X,
 		Z,
+	}
+
+	private enum class DoorMode(val id: Int, val label: String) {
+		FULL_CUBE(0, "Full Cube"),
+		MIDDLE_SLICE(1, "Middle 3x3"),
+	}
+
+	fun displayName(mode: Int): String {
+		return DoorMode.entries.firstOrNull { it.id == mode }?.label ?: DoorMode.FULL_CUBE.label
 	}
 }
