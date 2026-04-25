@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.3
+
+- Added an automatic update checker that notifies in-game when a newer GitHub release is available.
+
 ## v0.5.2
 
 - Updated the Door module with a selectable middle `3x3` barrier mode.
