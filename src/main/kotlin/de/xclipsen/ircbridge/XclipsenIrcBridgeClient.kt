@@ -46,6 +46,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		config = configManager.load()
 		HideonleafShardTracker.init()
 		applyBackendBridgeConfig()
+		ModUpdateChecker.onStartup()
 
 		// Register HUD click handler via Fabric ScreenEvents
 		ScreenMouseClickHandler.register()
@@ -172,6 +173,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		configManager.save(config)
 		this.config = config
 		applyBackendBridgeConfig()
+		ModUpdateChecker.onConfigChanged()
 	}
 
 	@Throws(IOException::class)
@@ -193,6 +195,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		LocationTracker.onTick(client)
 		HideonleafShardTracker.onTick()
 		MortDoorBarrierFeature.onTick(client)
+		ModUpdateChecker.onTick(client)
 
 		if (client.currentScreen !is ChatScreen) {
 			ImagePreviewManager.setHoverPreviewActive(false)

@@ -244,6 +244,7 @@ class XclipsenConfigScreen(
 		candidate.discordToMinecraftFormat = discordFormatField.text
 		candidate.ircCommandFormat = ircFormatField.text
 		candidate.coopChatFormat = coopFormatField.text
+		candidate.checkForUpdatesEnabled = workingCopy.checkForUpdatesEnabled
 		candidate.ircBridgeEnabled = workingCopy.ircBridgeEnabled
 		candidate.hideonleafHelperEnabled = workingCopy.hideonleafHelperEnabled
 		candidate.shulkerTracerLineMode = workingCopy.shulkerTracerLineMode.coerceIn(0, 3)
@@ -459,9 +460,8 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawStatusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
-		val status = mod.backendStatus()
-		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Config", mod.configPath().toString(), mouseX, mouseY)
-		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Backend", XclipsenIrcBridgeClient.formatStatus(status), mouseX, mouseY)
+		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Check for Updates", workingCopy.checkForUpdatesEnabled, mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Updater", ModUpdateChecker.statusLine(), mouseX, mouseY)
 		drawButtonSetting(context, hudEditorBounds(menu), "Open HUD Editor", mouseX, mouseY)
 	}
 
@@ -979,6 +979,12 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.STATUS && settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.checkForUpdatesEnabled = !workingCopy.checkForUpdatesEnabled
+			return true
+		}
+
 		if (section == ConfigSection.STATUS && hudEditorBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			mod.openHudEditorScreen(this)
@@ -1212,7 +1218,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun hudEditorBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + (2 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
+		val rowTop = menu.top + 40 + SETTING_HEIGHT + SETTING_GAP + TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}

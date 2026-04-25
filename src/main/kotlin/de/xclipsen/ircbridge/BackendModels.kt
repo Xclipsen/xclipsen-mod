@@ -47,6 +47,7 @@ class BridgeConfig {
 	@JvmField var backendBaseUrl: String = "http://127.0.0.1:8765"
 	@JvmField var backendAuthToken: String = "change-me"
 	@JvmField var backendPollIntervalMs: Long = 2000L
+	@JvmField var checkForUpdatesEnabled: Boolean = true
 	@JvmField var linkedDiscordDisplayName: String = ""
 	@JvmField var discordToMinecraftFormat: String = "[Discord] <%user%> %message%"
 	@JvmField var ircCommandFormat: String = "[IRC] <%player%> %message%"
@@ -82,6 +83,7 @@ class BridgeConfig {
 		it.backendBaseUrl = backendBaseUrl
 		it.backendAuthToken = backendAuthToken
 		it.backendPollIntervalMs = backendPollIntervalMs
+		it.checkForUpdatesEnabled = checkForUpdatesEnabled
 		it.linkedDiscordDisplayName = linkedDiscordDisplayName
 		it.discordToMinecraftFormat = discordToMinecraftFormat
 		it.ircCommandFormat = ircCommandFormat
