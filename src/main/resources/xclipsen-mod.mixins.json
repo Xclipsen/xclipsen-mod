@@ -5,8 +5,10 @@
   "client": [
     "ChatHudMixin",
     "ChatScreenMixin",
+    "ClientPlayerInteractionManagerMixin",
     "ClientWorldMixin",
-    "EntityGlowMixin"
+    "EntityGlowMixin",
+    "InvisibugParticleMixin"
   ],
   "injectors": {
     "defaultRequire": 1

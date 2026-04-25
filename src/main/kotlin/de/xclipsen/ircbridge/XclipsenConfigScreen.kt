@@ -41,6 +41,8 @@ class XclipsenConfigScreen(
 	private lateinit var shulkerProjectileGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
 	private lateinit var lostFightSoundSearchField: TextFieldWidget
+	private lateinit var hideonleafHighlightColorHexField: TextFieldWidget
+	private lateinit var invisibugHighlightColorHexField: TextFieldWidget
 	private lateinit var shulkerGlowButton: ButtonWidget
 	private lateinit var testConnectionButton: ButtonWidget
 	private lateinit var saveButton: ButtonWidget
@@ -49,6 +51,8 @@ class XclipsenConfigScreen(
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.HIDEONLEAF_HELPER, ConfigSection.TIME_CHANGER)),
+		ConfigPanel("DUNGEON", listOf(ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
+		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HIGHLIGHT, ConfigSection.INVISIBUG_HIGHLIGHT)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
 	)
 
@@ -69,6 +73,8 @@ class XclipsenConfigScreen(
 		shulkerGlowColorHexField = registerField(ConfigField.SHULKER_GLOW_COLOR, workingCopy.shulkerGlowColorHex, "#36C5F0")
 		shulkerProjectileGlowColorHexField = registerField(ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, workingCopy.shulkerProjectileGlowColorHex, "#FF4D4D")
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
+		hideonleafHighlightColorHexField = registerField(ConfigField.HIDEONLEAF_HIGHLIGHT_COLOR, workingCopy.hideonleafHighlightColorHex, "#FF00FF")
+		invisibugHighlightColorHexField = registerField(ConfigField.INVISIBUG_HIGHLIGHT_COLOR, workingCopy.invisibugHighlightColorHex, "#00FFFF")
 		lostFightSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 
 		testConnectionButton = addDrawableChild(
@@ -185,6 +191,11 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if ((openedSection == ConfigSection.HIDEONLEAF_HIGHLIGHT || openedSection == ConfigSection.INVISIBUG_HIGHLIGHT) && dragTarget != null) {
+			updateColorFromPicker(click.x().toInt(), click.y().toInt(), dragTarget)
+			return true
+		}
+
 		return super.mouseDragged(click, offsetX, offsetY)
 	}
 
@@ -213,6 +224,10 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled = !workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled = !workingCopy.hideonleafHelperEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled = !workingCopy.timeChangerEnabled
+			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled = !workingCopy.dungeonDoorModuleEnabled
+			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled = !workingCopy.dungeonRedVignetteModuleEnabled
+			ConfigSection.HIDEONLEAF_HIGHLIGHT -> workingCopy.hideonleafHighlightEnabled = !workingCopy.hideonleafHighlightEnabled
+			ConfigSection.INVISIBUG_HIGHLIGHT -> workingCopy.invisibugHighlightEnabled = !workingCopy.invisibugHighlightEnabled
 			else -> return
 		}
 
@@ -279,7 +294,22 @@ class XclipsenConfigScreen(
 		candidate.hideonleafLostFightAlertSoundPitch = workingCopy.hideonleafLostFightAlertSoundPitch
 		candidate.timeChangerEnabled = workingCopy.timeChangerEnabled
 		candidate.timeChangerMode = workingCopy.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
+		candidate.dungeonDoorModuleEnabled = workingCopy.dungeonDoorModuleEnabled
+		candidate.dungeonDoorEnabled = workingCopy.dungeonDoorEnabled
+		candidate.dungeonDoorDebugEnabled = workingCopy.dungeonDoorDebugEnabled
+		candidate.dungeonRedVignetteModuleEnabled = workingCopy.dungeonRedVignetteModuleEnabled
+		candidate.dungeonRedVignetteEnabled = workingCopy.dungeonRedVignetteEnabled
+		candidate.hideonleafHighlightEnabled = workingCopy.hideonleafHighlightEnabled
+		candidate.invisibugHighlightEnabled = workingCopy.invisibugHighlightEnabled
 		candidate.hudElements = mod.config().hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
+		candidate.hideonleafHighlightColorHex = normalizedHexColor(hideonleafHighlightColorHexField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("HideOnLeaf color must be #RRGGBB.")
+			return null
+		}
+		candidate.invisibugHighlightColorHex = normalizedHexColor(invisibugHighlightColorHexField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("Invisibug color must be #RRGGBB.")
+			return null
+		}
 		candidate.shulkerGlowColorHex = normalizedHexColor(shulkerGlowColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Glow color must be #RRGGBB.")
 			return null
@@ -403,6 +433,10 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled
+			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled
+			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled
+			ConfigSection.HIDEONLEAF_HIGHLIGHT -> workingCopy.hideonleafHighlightEnabled
+			ConfigSection.INVISIBUG_HIGHLIGHT -> workingCopy.invisibugHighlightEnabled
 			else -> true
 		}
 	}
@@ -427,7 +461,11 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> drawIrcBridgeSettings(context, menu, mouseX, mouseY)
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, menu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
+			ConfigSection.DOOR -> drawDoorSettings(context, menu, mouseX, mouseY)
+			ConfigSection.RED_VIGNETTE -> drawRedVignetteSettings(context, menu, mouseX, mouseY)
 			ConfigSection.STATUS -> drawStatusSettings(context, menu, mouseX, mouseY)
+			ConfigSection.HIDEONLEAF_HIGHLIGHT -> drawHideonleafHighlightSettings(context, menu, mouseX, mouseY)
+			ConfigSection.INVISIBUG_HIGHLIGHT -> drawInvisibugHighlightSettings(context, menu, mouseX, mouseY)
 		}
 
 		if (statusMessage.string.isNotEmpty()) {
@@ -488,6 +526,47 @@ class XclipsenConfigScreen(
 
 	private fun drawTimeChangerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawOptionSetting(context, timeChangerModeBounds(menu), "Time", ClientTimeChanger.displayName(workingCopy.timeChangerMode), mouseX, mouseY)
+	}
+
+	private fun drawDoorSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Mort Door Barrier", workingCopy.dungeonDoorEnabled, mouseX, mouseY)
+		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Debug", workingCopy.dungeonDoorDebugEnabled, mouseX, mouseY)
+		drawInfoSetting(
+			context,
+			settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT),
+			"Mode",
+			"Relative to Mort in the Entrance room.",
+			mouseX,
+			mouseY,
+		)
+	}
+
+	private fun drawRedVignetteSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Fix Red Vignette", workingCopy.dungeonRedVignetteEnabled, mouseX, mouseY)
+		drawInfoSetting(
+			context,
+			settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT),
+			"Mode",
+			"Matches Devonian's click-fix behaviour.",
+			mouseX,
+			mouseY,
+		)
+	}
+
+	private fun drawHideonleafHighlightSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Highlight Hideonleaf", workingCopy.hideonleafHighlightEnabled, mouseX, mouseY)
+		drawColorSetting(context, hideonleafHighlightColorBounds(menu), "Highlight Color", ConfigField.HIDEONLEAF_HIGHLIGHT_COLOR, mouseX, mouseY)
+		if (colorPickerOpen) {
+			drawColorPicker(context, menu, mouseX, mouseY)
+		}
+	}
+
+	private fun drawInvisibugHighlightSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Highlight Invisibugs", workingCopy.invisibugHighlightEnabled, mouseX, mouseY)
+		drawColorSetting(context, invisibugHighlightColorBounds(menu), "Highlight Color", ConfigField.INVISIBUG_HIGHLIGHT_COLOR, mouseX, mouseY)
+		if (colorPickerOpen) {
+			drawColorPicker(context, menu, mouseX, mouseY)
+		}
 	}
 
 	private fun drawTextInputSetting(
@@ -660,6 +739,8 @@ class XclipsenConfigScreen(
 			ConfigField.SHULKER_GLOW_COLOR -> shulkerGlowColorHexField
 			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> shulkerProjectileGlowColorHexField
 			ConfigField.SHULKER_TRACER_LINE_COLOR -> shulkerTracerLineColorHexField
+			ConfigField.HIDEONLEAF_HIGHLIGHT_COLOR -> hideonleafHighlightColorHexField
+			ConfigField.INVISIBUG_HIGHLIGHT_COLOR -> invisibugHighlightColorHexField
 			else -> shulkerGlowColorHexField
 		}
 	}
@@ -811,6 +892,9 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> IRC_POPUP_HEIGHT
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
+			ConfigSection.DOOR -> 165
+			ConfigSection.RED_VIGNETTE -> 145
+			ConfigSection.HIDEONLEAF_HIGHLIGHT, ConfigSection.INVISIBUG_HIGHLIGHT -> GALATEA_POPUP_HEIGHT
 			else -> POPUP_HEIGHT
 		}
 		val menuHeight = targetHeight.coerceAtMost((height - 80).coerceAtLeast(targetHeight))
@@ -953,6 +1037,58 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (section == ConfigSection.HIDEONLEAF_HIGHLIGHT) {
+			if (settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.hideonleafHighlightEnabled = !workingCopy.hideonleafHighlightEnabled
+				return true
+			}
+			if (hideonleafHighlightColorBounds(menu).contains(mouseX, mouseY)) {
+				openColorField = if (openColorField == ConfigField.HIDEONLEAF_HIGHLIGHT_COLOR) null else ConfigField.HIDEONLEAF_HIGHLIGHT_COLOR
+				draggingColorPicker = null
+				return true
+			}
+			if (colorPickerOpen) {
+				val target = when {
+					colorSvBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.SATURATION_BRIGHTNESS
+					colorHueBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.HUE
+					else -> null
+				}
+				if (target != null) {
+					draggingColorPicker = target
+					updateColorFromPicker(mouseX, mouseY, target)
+					return true
+				}
+			}
+			return false
+		}
+
+		if (section == ConfigSection.INVISIBUG_HIGHLIGHT) {
+			if (settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.invisibugHighlightEnabled = !workingCopy.invisibugHighlightEnabled
+				return true
+			}
+			if (invisibugHighlightColorBounds(menu).contains(mouseX, mouseY)) {
+				openColorField = if (openColorField == ConfigField.INVISIBUG_HIGHLIGHT_COLOR) null else ConfigField.INVISIBUG_HIGHLIGHT_COLOR
+				draggingColorPicker = null
+				return true
+			}
+			if (colorPickerOpen) {
+				val target = when {
+					colorSvBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.SATURATION_BRIGHTNESS
+					colorHueBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.HUE
+					else -> null
+				}
+				if (target != null) {
+					draggingColorPicker = target
+					updateColorFromPicker(mouseX, mouseY, target)
+					return true
+				}
+			}
+			return false
+		}
+
 		if (section == ConfigSection.IRC_BRIDGE && coopRelayToggleBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.coopChatRelayEnabled = !workingCopy.coopChatRelayEnabled
@@ -962,6 +1098,24 @@ class XclipsenConfigScreen(
 		if (section == ConfigSection.TIME_CHANGER && timeChangerModeBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.timeChangerMode = (workingCopy.timeChangerMode + 1) % ClientTimeChanger.modeCount
+			return true
+		}
+
+		if (section == ConfigSection.DOOR && settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.dungeonDoorEnabled = !workingCopy.dungeonDoorEnabled
+			return true
+		}
+
+		if (section == ConfigSection.DOOR && settingRowBounds(menu, 1, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.dungeonDoorDebugEnabled = !workingCopy.dungeonDoorDebugEnabled
+			return true
+		}
+
+		if (section == ConfigSection.RED_VIGNETTE && settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.dungeonRedVignetteEnabled = !workingCopy.dungeonRedVignetteEnabled
 			return true
 		}
 
@@ -1122,6 +1276,8 @@ class XclipsenConfigScreen(
 			ConfigField.SHULKER_GLOW_COLOR -> shulkerGlowColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> projectileGlowColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_TRACER_LINE_COLOR -> tracerLineColorBounds(menu).bottom + SETTING_GAP
+			ConfigField.HIDEONLEAF_HIGHLIGHT_COLOR -> hideonleafHighlightColorBounds(menu).bottom + SETTING_GAP
+			ConfigField.INVISIBUG_HIGHLIGHT_COLOR -> invisibugHighlightColorBounds(menu).bottom + SETTING_GAP
 			else -> menu.top + 90
 		}
 	}
@@ -1207,6 +1363,16 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
 
+	private fun hideonleafHighlightColorBounds(menu: Bounds): Bounds {
+		val top = settingRowBounds(menu, 0, SETTING_HEIGHT).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun invisibugHighlightColorBounds(menu: Bounds): Bounds {
+		val top = settingRowBounds(menu, 0, SETTING_HEIGHT).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
 	private fun trimToWidth(value: String, maxWidth: Int): String {
 		if (textRenderer.getWidth(value) <= maxWidth) {
 			return value
@@ -1265,7 +1431,11 @@ class XclipsenConfigScreen(
 		IRC_BRIDGE("IRC Bridge", "IRC message formats and bridge-specific toggles.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
+		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
+		RED_VIGNETTE("Red Vignette", "Matches Devonian's client-side click fix for the red vignette.", toggleable = true),
 		STATUS("Status", "Current config path and backend state."),
+		HIDEONLEAF_HIGHLIGHT("HideOnLeaf Helper", "Highlights the Hideonleaf mob with a custom colour on Galatea.", toggleable = true),
+		INVISIBUG_HIGHLIGHT("Invisibug Helper", "Detects and shows invisible Invisibugs on Galatea via CRIT particles.", toggleable = true),
 	}
 
 	private enum class ConfigField(val section: ConfigSection) {
@@ -1279,6 +1449,8 @@ class XclipsenConfigScreen(
 		SHULKER_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_PROJECTILE_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_TRACER_LINE_COLOR(ConfigSection.HIDEONLEAF_HELPER),
+		HIDEONLEAF_HIGHLIGHT_COLOR(ConfigSection.HIDEONLEAF_HIGHLIGHT),
+		INVISIBUG_HIGHLIGHT_COLOR(ConfigSection.INVISIBUG_HIGHLIGHT),
 	}
 
 	companion object {
@@ -1308,6 +1480,7 @@ class XclipsenConfigScreen(
 		private const val IRC_POPUP_HEIGHT = 250
 		private const val HIDEONLEAF_POPUP_HEIGHT = 500
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
+		private const val GALATEA_POPUP_HEIGHT = 260
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20
 		private const val TEXT_INPUT_SETTING_HEIGHT = 38

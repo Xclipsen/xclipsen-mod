@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.1
+
+- Added a Devonian-style red vignette click-fix as a separate Dungeon module.
+- Added the Mort Door Barrier dungeon module to locally block the disappearing Mort entrance door.
+- Added Galatea Hideonleaf highlighting and Invisibug detection/highlighting with configurable colours.
+
 ## v0.5.0
 
 - Added a dedicated IRC chat tab with a compact chat-only HUD toggle button.

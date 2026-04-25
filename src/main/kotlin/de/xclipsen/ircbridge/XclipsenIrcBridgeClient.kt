@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
@@ -51,9 +52,15 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register {
 			HideonleafShardTracker.shutdown()
+			InvisibugHighlighter.onWorldChange()
+			MortDoorBarrierFeature.onWorldChange()
 			backendBridge.stop()
 		}
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
+		ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
+			InvisibugHighlighter.onWorldChange()
+			MortDoorBarrierFeature.onWorldChange()
+		}
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
 		ClientReceiveMessageEvents.GAME.register { message, _ -> handleIncomingMessage(message) }
@@ -62,6 +69,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			XclipsenHudManager.render(context)
 		}
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> InvisibugHighlighter.onRender(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> MortDoorBarrierFeature.onRender(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
@@ -186,6 +195,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private fun handleEndTick(client: MinecraftClient) {
 		LocationTracker.onTick(client)
 		HideonleafShardTracker.onTick()
+		InvisibugHighlighter.onTick()
+		MortDoorBarrierFeature.onTick(client)
 
 		if (client.currentScreen !is ChatScreen) {
 			ImagePreviewManager.setHoverPreviewActive(false)
