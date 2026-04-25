@@ -32,10 +32,7 @@ class XclipsenConfigScreen(
 	private lateinit var backendBaseUrlField: TextFieldWidget
 	private lateinit var backendAuthTokenField: TextFieldWidget
 	private lateinit var backendPollIntervalField: TextFieldWidget
-	private lateinit var discordFormatField: TextFieldWidget
 	private lateinit var ircFormatField: TextFieldWidget
-	private lateinit var eventPingFormatField: TextFieldWidget
-	private lateinit var coopFormatField: TextFieldWidget
 	private lateinit var shulkerGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerProjectileGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
@@ -59,10 +56,7 @@ class XclipsenConfigScreen(
 		backendBaseUrlField = registerField(ConfigField.BACKEND_URL, workingCopy.backendBaseUrl, "http://127.0.0.1:8765")
 		backendAuthTokenField = registerField(ConfigField.AUTH_TOKEN, workingCopy.backendAuthToken, "shared secret")
 		backendPollIntervalField = registerField(ConfigField.POLL_INTERVAL, workingCopy.backendPollIntervalMs.toString(), "minimum 500")
-		discordFormatField = registerField(ConfigField.DISCORD_FORMAT, workingCopy.discordToMinecraftFormat, "%user% and %message%")
-		ircFormatField = registerField(ConfigField.IRC_FORMAT, workingCopy.ircCommandFormat, "%player% and %message%")
-		eventPingFormatField = registerField(ConfigField.EVENT_FORMAT, workingCopy.eventPingFormat, "%event% and %message%")
-		coopFormatField = registerField(ConfigField.COOP_FORMAT, workingCopy.coopChatFormat, "%player% and %message%")
+		ircFormatField = registerField(ConfigField.IRC_FORMAT, workingCopy.ircCommandFormat, "[IRC] <%player%> %message%")
 		shulkerGlowColorHexField = registerField(ConfigField.SHULKER_GLOW_COLOR, workingCopy.shulkerGlowColorHex, "#36C5F0")
 		shulkerProjectileGlowColorHexField = registerField(ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, workingCopy.shulkerProjectileGlowColorHex, "#FF4D4D")
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
@@ -240,12 +234,11 @@ class XclipsenConfigScreen(
 		val candidate = copyOf(workingCopy)
 		candidate.backendBaseUrl = backendBaseUrlField.text.trim()
 		candidate.backendAuthToken = backendAuthTokenField.text.trim()
-		candidate.eventPingFormat = eventPingFormatField.text
-		candidate.discordToMinecraftFormat = discordFormatField.text
-		candidate.ircCommandFormat = ircFormatField.text
-		candidate.coopChatFormat = coopFormatField.text
 		candidate.checkForUpdatesEnabled = workingCopy.checkForUpdatesEnabled
+		candidate.autoUpdateEnabled = workingCopy.autoUpdateEnabled
 		candidate.ircBridgeEnabled = workingCopy.ircBridgeEnabled
+		candidate.ircCommandFormat = ircFormatField.text
+		candidate.coopChatRelayEnabled = workingCopy.coopChatRelayEnabled
 		candidate.hideonleafHelperEnabled = workingCopy.hideonleafHelperEnabled
 		candidate.shulkerTracerLineMode = workingCopy.shulkerTracerLineMode.coerceIn(0, 3)
 		candidate.shulkerTracerLineEnabled = candidate.shulkerTracerLineMode > 0
@@ -424,10 +417,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawIrcBridgeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
-		drawTextInputSetting(context, menu, 0, "Discord Format", discordFormatField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 1, "IRC Format", ircFormatField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 2, "Event Ping Format", eventPingFormatField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 3, "Co-op Format", coopFormatField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 0, "IRC Format", ircFormatField, mouseX, mouseY)
 		drawToggleSetting(context, coopRelayToggleBounds(menu), "Co-op Relay", workingCopy.coopChatRelayEnabled, mouseX, mouseY)
 	}
 
@@ -461,7 +451,8 @@ class XclipsenConfigScreen(
 
 	private fun drawStatusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Check for Updates", workingCopy.checkForUpdatesEnabled, mouseX, mouseY)
-		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Updater", ModUpdateChecker.statusLine(), mouseX, mouseY)
+		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Auto-Update", workingCopy.autoUpdateEnabled, mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Updater", ModUpdateChecker.statusLine(), mouseX, mouseY)
 		drawButtonSetting(context, hudEditorBounds(menu), "Open HUD Editor", mouseX, mouseY)
 	}
 
@@ -985,6 +976,12 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.STATUS && settingRowBounds(menu, 1, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.autoUpdateEnabled = !workingCopy.autoUpdateEnabled
+			return true
+		}
+
 		if (section == ConfigSection.STATUS && hudEditorBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			mod.openHudEditorScreen(this)
@@ -1002,10 +999,7 @@ class XclipsenConfigScreen(
 				ConfigField.POLL_INTERVAL,
 			)
 			ConfigSection.IRC_BRIDGE -> listOf(
-				ConfigField.DISCORD_FORMAT,
 				ConfigField.IRC_FORMAT,
-				ConfigField.EVENT_FORMAT,
-				ConfigField.COOP_FORMAT,
 			)
 			else -> emptyList()
 		}
@@ -1207,7 +1201,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun coopRelayToggleBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + (4 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
+		val rowTop = menu.top + 40 + (1 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
 		return Bounds(menu.left + 10, rowTop, menu.left + 10 + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
 
@@ -1218,7 +1212,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun hudEditorBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + SETTING_HEIGHT + SETTING_GAP + TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP
+		val rowTop = menu.top + 40 + SETTING_HEIGHT + SETTING_GAP + SETTING_HEIGHT + SETTING_GAP + TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
@@ -1286,10 +1280,7 @@ class XclipsenConfigScreen(
 		BACKEND_URL(ConfigSection.SETUP),
 		AUTH_TOKEN(ConfigSection.SETUP),
 		POLL_INTERVAL(ConfigSection.SETUP),
-		DISCORD_FORMAT(ConfigSection.IRC_BRIDGE),
 		IRC_FORMAT(ConfigSection.IRC_BRIDGE),
-		EVENT_FORMAT(ConfigSection.IRC_BRIDGE),
-		COOP_FORMAT(ConfigSection.IRC_BRIDGE),
 		SHULKER_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_PROJECTILE_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_TRACER_LINE_COLOR(ConfigSection.HIDEONLEAF_HELPER),
@@ -1319,7 +1310,7 @@ class XclipsenConfigScreen(
 		private const val POPUP_WIDTH = 200
 		private const val POPUP_HEIGHT = 250
 		private const val SETUP_POPUP_HEIGHT = 220
-		private const val IRC_POPUP_HEIGHT = 250
+		private const val IRC_POPUP_HEIGHT = 140
 		private const val HIDEONLEAF_POPUP_HEIGHT = 500
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val SETTING_WIDTH = 180

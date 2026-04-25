@@ -349,6 +349,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		}
 
 		ircLinkWarningShown = false
+		backendBridge.discardBacklogOnNextPoll()
 		cacheLinkedDisplayName(status)
 		context.source.sendFeedback(Text.literal("Linked successfully: ${status.minecraftUsernames.joinToString(", ")}"))
 		return 1

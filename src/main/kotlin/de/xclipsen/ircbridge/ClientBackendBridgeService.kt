@@ -322,6 +322,12 @@ class ClientBackendBridgeService(
 		}
 	}
 
+	@Synchronized
+	fun discardBacklogOnNextPoll() {
+		lastSeenMessageId = 0L
+		backlogInitialized = false
+	}
+
 	private fun pollMessages() {
 		val client = MinecraftClient.getInstance()
 		val playerName = currentPlayerName(client)
@@ -382,32 +388,22 @@ class ClientBackendBridgeService(
 				}
 
 				val formatted = when (message.source) {
-					"irc" -> TextFormatter.apply(
+					"status" -> safeContent
+					"event" -> TextFormatter.apply(
+						config.ircCommandFormat,
+						"%player%", safeTitle.ifBlank { safeUser },
+						"%message%", safeContent,
+					)
+					else -> TextFormatter.apply(
 						config.ircCommandFormat,
 						"%player%", safeUser,
-						"%message%", safeContent,
-					)
-					"coop" -> TextFormatter.apply(
-						config.coopChatFormat,
-						"%player%", safeUser,
-						"%message%", safeContent,
-					)
-					"event" -> TextFormatter.apply(
-						config.eventPingFormat,
-						"%event%", safeTitle,
-						"%message%", safeContent,
-					)
-					"status" -> safeContent
-					else -> TextFormatter.apply(
-						config.discordToMinecraftFormat,
-						"%user%", safeUser,
 						"%message%", safeContent,
 					)
 				}
 
 				if (incomingMessagesEnabled) {
 					val styledMessage = styleBridgeMessage(formatted)
-					val isIrcMessage = message.source == "irc" || message.source == "discord"
+					val isIrcMessage = message.source == "irc" || message.source == "discord" || message.source == "coop"
 					if (previewHoverPaused) {
 						synchronized(pausedIncomingMessages) {
 							pausedIncomingMessages.addLast(PausedIncomingMessage(styledMessage, isIrcMessage))

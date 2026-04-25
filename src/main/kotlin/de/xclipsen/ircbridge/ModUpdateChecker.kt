@@ -14,6 +14,8 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.time.Duration
 import java.util.Locale
 import java.util.concurrent.CompletableFuture
@@ -62,23 +64,51 @@ object ModUpdateChecker {
 	}
 
 	fun onTick(client: MinecraftClient) {
-		if (state != UpdateState.UPDATE_AVAILABLE || announcementShown) {
+		if (announcementShown) {
 			return
 		}
 		if (client.player == null && client.inGameHud == null) {
 			return
 		}
 
-		announcementShown = true
-		showClientMessage(
-			client,
-			Text.literal("[Update] ").formatted(Formatting.GREEN)
-				.append(Text.literal("Xclipsen Mod ${latestVersion ?: "?"} is available.").formatted(Formatting.WHITE)),
-		)
-		showClientMessage(
-			client,
-			clickableLink("Click here to open the latest GitHub release.", latestReleaseUrl ?: RELEASES_URL),
-		)
+		when (state) {
+			UpdateState.UPDATE_AVAILABLE -> {
+				announcementShown = true
+				showClientMessage(
+					client,
+					Text.literal("[Update] ").formatted(Formatting.GREEN)
+						.append(Text.literal("Xclipsen Mod ${latestVersion ?: "?"} is available.").formatted(Formatting.WHITE)),
+				)
+				showClientMessage(
+					client,
+					clickableLink("Click here to open the latest GitHub release.", latestReleaseUrl ?: RELEASES_URL),
+				)
+			}
+			UpdateState.INSTALLED -> {
+				announcementShown = true
+				showClientMessage(
+					client,
+					Text.literal("[Update] ").formatted(Formatting.GREEN)
+						.append(
+							Text.literal("Xclipsen Mod ${latestVersion ?: "?"} wurde heruntergeladen. Bitte Minecraft neu starten.")
+								.formatted(Formatting.WHITE),
+						),
+				)
+			}
+			UpdateState.DOWNLOAD_ERROR -> {
+				announcementShown = true
+				showClientMessage(
+					client,
+					Text.literal("[Update] ").formatted(Formatting.RED)
+						.append(Text.literal("Auto-Download fehlgeschlagen: $lastError").formatted(Formatting.WHITE)),
+				)
+				showClientMessage(
+					client,
+					clickableLink("Hier manuell herunterladen.", latestReleaseUrl ?: RELEASES_URL),
+				)
+			}
+			else -> return
+		}
 	}
 
 	fun statusLine(): String {
@@ -88,7 +118,10 @@ object ModUpdateChecker {
 			UpdateState.CHECKING -> "Checking GitHub releases..."
 			UpdateState.UP_TO_DATE -> "Up to date (${currentVersion()})"
 			UpdateState.UPDATE_AVAILABLE -> "Update available: ${latestVersion ?: "unknown"}"
+			UpdateState.DOWNLOADING -> "Downloading ${latestVersion ?: "update"}..."
+			UpdateState.INSTALLED -> "Installed ${latestVersion ?: "update"} — restart required"
 			UpdateState.ERROR -> if (lastError.isBlank()) "Update check failed" else "Update check failed: $lastError"
+			UpdateState.DOWNLOAD_ERROR -> if (lastError.isBlank()) "Download failed" else "Download failed: $lastError"
 		}
 	}
 
@@ -134,10 +167,24 @@ object ModUpdateChecker {
 			latestVersion = latest
 			latestReleaseUrl = release.htmlUrl.ifBlank { RELEASES_URL }
 
-			state = if (compareVersions(current, latest) < 0) {
-				UpdateState.UPDATE_AVAILABLE
+			if (compareVersions(current, latest) < 0) {
+				if (isAutoUpdateEnabled()) {
+					val jarAsset = release.assets.firstOrNull { asset ->
+						asset.name.endsWith(".jar") &&
+							!asset.name.endsWith("-sources.jar") &&
+							!asset.name.endsWith("-dev.jar")
+					}
+					if (jarAsset != null) {
+						downloadAndInstall(jarAsset)
+					} else {
+						// Kein JAR-Asset vorhanden – nur Benachrichtigung anzeigen
+						state = UpdateState.UPDATE_AVAILABLE
+					}
+				} else {
+					state = UpdateState.UPDATE_AVAILABLE
+				}
 			} else {
-				UpdateState.UP_TO_DATE
+				state = UpdateState.UP_TO_DATE
 			}
 		} catch (exception: IOException) {
 			lastError = exception::class.java.simpleName
@@ -149,6 +196,53 @@ object ModUpdateChecker {
 		} catch (exception: RuntimeException) {
 			lastError = exception::class.java.simpleName
 			state = UpdateState.ERROR
+		}
+	}
+
+	private fun downloadAndInstall(asset: GithubAsset) {
+		state = UpdateState.DOWNLOADING
+
+		val modsDir = FabricLoader.getInstance().gameDir.resolve("mods")
+		val newJarPath = modsDir.resolve(asset.name)
+		val tempPath = modsDir.resolve("${asset.name}.tmp")
+
+		try {
+			val downloadRequest = HttpRequest.newBuilder(URI.create(asset.browserDownloadUrl))
+				.timeout(Duration.ofSeconds(120))
+				.header("User-Agent", "xclipsen-mod-auto-updater")
+				.GET()
+				.build()
+
+			httpClient.send(downloadRequest, HttpResponse.BodyHandlers.ofFile(tempPath))
+
+			// Alte xclipsen-mod JARs löschen (außer der neuen)
+			Files.list(modsDir).use { stream ->
+				stream
+					.filter { path ->
+						val name = path.fileName.toString()
+						name.matches(Regex("xclipsen-mod-[0-9]+\\.[0-9]+\\.[0-9]+\\.jar"))
+					}
+					.filter { it != newJarPath }
+					.forEach { Files.deleteIfExists(it) }
+			}
+
+			// Temp-Datei zur finalen JAR umbenennen
+			Files.move(tempPath, newJarPath, StandardCopyOption.REPLACE_EXISTING)
+
+			state = UpdateState.INSTALLED
+		} catch (exception: IOException) {
+			Files.deleteIfExists(tempPath)
+			lastError = exception::class.java.simpleName + (exception.message?.let { ": $it" } ?: "")
+			state = UpdateState.DOWNLOAD_ERROR
+		} catch (exception: InterruptedException) {
+			Files.deleteIfExists(tempPath)
+			Thread.currentThread().interrupt()
+			lastError = exception::class.java.simpleName
+			state = UpdateState.DOWNLOAD_ERROR
+		} catch (exception: RuntimeException) {
+			Files.deleteIfExists(tempPath)
+			lastError = exception::class.java.simpleName + (exception.message?.let { ": $it" } ?: "")
+			state = UpdateState.DOWNLOAD_ERROR
 		}
 	}
 
@@ -191,6 +285,10 @@ object ModUpdateChecker {
 		return XclipsenIrcBridgeClient.instance?.config()?.checkForUpdatesEnabled == true
 	}
 
+	private fun isAutoUpdateEnabled(): Boolean {
+		return XclipsenIrcBridgeClient.instance?.config()?.autoUpdateEnabled == true
+	}
+
 	private fun clickableLink(label: String, url: String): MutableText {
 		return Text.literal(label).setStyle(
 			Style.EMPTY
@@ -215,7 +313,10 @@ object ModUpdateChecker {
 		CHECKING,
 		UP_TO_DATE,
 		UPDATE_AVAILABLE,
+		DOWNLOADING,
+		INSTALLED,
 		ERROR,
+		DOWNLOAD_ERROR,
 	}
 
 	private class GithubReleaseResponse {
@@ -226,5 +327,14 @@ object ModUpdateChecker {
 		var htmlUrl: String = ""
 
 		var name: String = ""
+
+		var assets: List<GithubAsset> = emptyList()
+	}
+
+	private class GithubAsset {
+		var name: String = ""
+
+		@SerializedName("browser_download_url")
+		var browserDownloadUrl: String = ""
 	}
 }

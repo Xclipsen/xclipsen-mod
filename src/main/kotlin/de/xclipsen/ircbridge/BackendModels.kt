@@ -48,11 +48,9 @@ class BridgeConfig {
 	@JvmField var backendAuthToken: String = "change-me"
 	@JvmField var backendPollIntervalMs: Long = 2000L
 	@JvmField var checkForUpdatesEnabled: Boolean = true
+	@JvmField var autoUpdateEnabled: Boolean = false
 	@JvmField var linkedDiscordDisplayName: String = ""
-	@JvmField var discordToMinecraftFormat: String = "[Discord] <%user%> %message%"
 	@JvmField var ircCommandFormat: String = "[IRC] <%player%> %message%"
-	@JvmField var eventPingFormat: String = "[Event] %event%: %message%"
-	@JvmField var coopChatFormat: String = "[Co-op] <%player%> %message%"
 	@JvmField var ircBridgeEnabled: Boolean = false
 	@JvmField var coopChatRelayEnabled: Boolean = false
 	@JvmField var hideonleafHelperEnabled: Boolean = false
@@ -84,11 +82,9 @@ class BridgeConfig {
 		it.backendAuthToken = backendAuthToken
 		it.backendPollIntervalMs = backendPollIntervalMs
 		it.checkForUpdatesEnabled = checkForUpdatesEnabled
+		it.autoUpdateEnabled = autoUpdateEnabled
 		it.linkedDiscordDisplayName = linkedDiscordDisplayName
-		it.discordToMinecraftFormat = discordToMinecraftFormat
 		it.ircCommandFormat = ircCommandFormat
-		it.eventPingFormat = eventPingFormat
-		it.coopChatFormat = coopChatFormat
 		it.ircBridgeEnabled = ircBridgeEnabled
 		it.coopChatRelayEnabled = coopChatRelayEnabled
 		it.hideonleafHelperEnabled = hideonleafHelperEnabled
