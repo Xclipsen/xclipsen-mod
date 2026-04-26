@@ -503,10 +503,6 @@ object ExperimentationTableFeature {
 				return
 			}
 
-			if (System.currentTimeMillis() < nextActionAtMs) {
-				return
-			}
-
 			val client = MinecraftClient.getInstance()
 			val player = client.player ?: return
 			if (player.currentScreenHandler.cursorStack.item != Items.AIR) return
@@ -520,6 +516,10 @@ object ExperimentationTableFeature {
 			val pending = pendingReveal
 			if (pending != null) {
 				handlePendingReveal(screen, boardSlots, pending)
+				return
+			}
+
+			if (System.currentTimeMillis() < nextActionAtMs) {
 				return
 			}
 
@@ -624,6 +624,10 @@ object ExperimentationTableFeature {
 							scheduleNextAction()
 							return
 						}
+
+					if (System.currentTimeMillis() < nextActionAtMs) {
+						return
+					}
 
 					clickSlot(screen, partnerSlot)
 					pendingReveal = PendingReveal(partnerSlot, pending.clickedSlot, PendingStage.SECOND_SELECTION, card.key)
