@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.5
+
+- Added an `Auto Experiments` module for Chronomatron, Ultrasequencer, and Superpairs.
+- Added automatic stakes selection for the highest playable experiment tier.
+- Added Superpairs memory/priority handling and safer waiting for board reset before continuing.
+- Tuned experiment auto-close timing and Chronomatron/Ultrasequencer stop behavior.
+
 ## v0.5.3
 
 - Added an automatic update checker that notifies in-game when a newer GitHub release is available.

@@ -83,6 +83,9 @@ class BridgeConfigManager(
 		value.hideonleafLostFightAlertSoundVolume = value.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.hideonleafLostFightAlertSoundPitch = value.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f)
 		value.timeChangerMode = value.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
+		value.autoExperimentsClickDelayMs = value.autoExperimentsClickDelayMs.coerceIn(50, 5_000)
+		value.autoExperimentsDelayVarietyMs = value.autoExperimentsDelayVarietyMs.coerceIn(0, 5_000)
+		value.autoExperimentsSerumCount = value.autoExperimentsSerumCount.coerceIn(0, 3)
 		value.dungeonDoorMode = value.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		return value
 	}

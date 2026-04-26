@@ -69,6 +69,13 @@ class BridgeConfig {
 	@JvmField var shardTrackerEnabled: Boolean = true
 	@JvmField var timeChangerEnabled: Boolean = false
 	@JvmField var timeChangerMode: Int = 0
+	@JvmField var autoCroesusModuleEnabled: Boolean = false
+	@JvmField var experimentationTableModuleEnabled: Boolean = false
+	@JvmField var autoExperimentsClickDelayMs: Int = 200
+	@JvmField var autoExperimentsDelayVarietyMs: Int = 50
+	@JvmField var autoExperimentsAutoClose: Boolean = true
+	@JvmField var autoExperimentsSerumCount: Int = 0
+	@JvmField var autoExperimentsGetMaxXp: Boolean = false
 	@JvmField var dungeonDoorModuleEnabled: Boolean = false
 	@JvmField var dungeonDoorEnabled: Boolean = false
 	@JvmField var dungeonDoorDebugEnabled: Boolean = false
@@ -103,6 +110,13 @@ class BridgeConfig {
 		it.shardTrackerEnabled = shardTrackerEnabled
 		it.timeChangerEnabled = timeChangerEnabled
 		it.timeChangerMode = timeChangerMode
+		it.autoCroesusModuleEnabled = autoCroesusModuleEnabled
+		it.experimentationTableModuleEnabled = experimentationTableModuleEnabled
+		it.autoExperimentsClickDelayMs = autoExperimentsClickDelayMs
+		it.autoExperimentsDelayVarietyMs = autoExperimentsDelayVarietyMs
+		it.autoExperimentsAutoClose = autoExperimentsAutoClose
+		it.autoExperimentsSerumCount = autoExperimentsSerumCount
+		it.autoExperimentsGetMaxXp = autoExperimentsGetMaxXp
 		it.dungeonDoorModuleEnabled = dungeonDoorModuleEnabled
 		it.dungeonDoorEnabled = dungeonDoorEnabled
 		it.dungeonDoorDebugEnabled = dungeonDoorDebugEnabled

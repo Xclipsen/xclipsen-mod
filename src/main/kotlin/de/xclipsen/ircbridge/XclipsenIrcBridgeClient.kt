@@ -1,5 +1,6 @@
 package de.xclipsen.ircbridge
 
+import com.autocroesus.AutoCroesus
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import net.fabricmc.api.ClientModInitializer
@@ -47,6 +48,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		HideonleafShardTracker.init()
 		applyBackendBridgeConfig()
 		ModUpdateChecker.onStartup()
+		AutoCroesus.initialize()
+		ExperimentationTableFeature.init()
 
 		// Register HUD click handler via Fabric ScreenEvents
 		ScreenMouseClickHandler.register()

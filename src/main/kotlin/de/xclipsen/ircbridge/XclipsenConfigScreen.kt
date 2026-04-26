@@ -1,5 +1,7 @@
 package de.xclipsen.ircbridge
 
+import com.autocroesus.config.AcConfig
+import com.autocroesus.config.AcDataStore
 import net.minecraft.client.gui.Click
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.Screen
@@ -16,6 +18,7 @@ class XclipsenConfigScreen(
 	private val mod: XclipsenIrcBridgeClient,
 ) : Screen(Text.literal("Xclipsen Settings")) {
 	private var workingCopy: BridgeConfig = copyOf(mod.config())
+	private var workingAutoCroesusConfig: AcConfig = copyOf(AcDataStore.config)
 	private var selectedSection = ConfigSection.SETUP
 	private var openedSection: ConfigSection? = null
 	private var openColorField: ConfigField? = null
@@ -33,6 +36,13 @@ class XclipsenConfigScreen(
 	private lateinit var backendAuthTokenField: TextFieldWidget
 	private lateinit var backendPollIntervalField: TextFieldWidget
 	private lateinit var ircFormatField: TextFieldWidget
+	private lateinit var autoExperimentsClickDelayField: TextFieldWidget
+	private lateinit var autoExperimentsDelayVarietyField: TextFieldWidget
+	private lateinit var autoExperimentsSerumCountField: TextFieldWidget
+	private lateinit var autoCroesusClickDelayField: TextFieldWidget
+	private lateinit var autoCroesusKismetProfitField: TextFieldWidget
+	private lateinit var autoCroesusKismetFloorsField: TextFieldWidget
+	private lateinit var autoCroesusChestKeyProfitField: TextFieldWidget
 	private lateinit var shulkerGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerProjectileGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
@@ -41,7 +51,7 @@ class XclipsenConfigScreen(
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER)),
-		ConfigPanel("DUNGEON", listOf(ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
+		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
 	)
@@ -57,6 +67,13 @@ class XclipsenConfigScreen(
 		backendAuthTokenField = registerField(ConfigField.AUTH_TOKEN, workingCopy.backendAuthToken, "shared secret")
 		backendPollIntervalField = registerField(ConfigField.POLL_INTERVAL, workingCopy.backendPollIntervalMs.toString(), "minimum 500")
 		ircFormatField = registerField(ConfigField.IRC_FORMAT, workingCopy.ircCommandFormat, "[IRC] <%player%> %message%")
+		autoExperimentsClickDelayField = registerField(ConfigField.AUTO_EXPERIMENTS_CLICK_DELAY, workingCopy.autoExperimentsClickDelayMs.toString(), "200")
+		autoExperimentsDelayVarietyField = registerField(ConfigField.AUTO_EXPERIMENTS_DELAY_VARIETY, workingCopy.autoExperimentsDelayVarietyMs.toString(), "50")
+		autoExperimentsSerumCountField = registerField(ConfigField.AUTO_EXPERIMENTS_SERUM_COUNT, workingCopy.autoExperimentsSerumCount.toString(), "0")
+		autoCroesusClickDelayField = registerField(ConfigField.AUTO_CROESUS_CLICK_DELAY, workingAutoCroesusConfig.minClickDelay.toString(), "500")
+		autoCroesusKismetProfitField = registerField(ConfigField.AUTO_CROESUS_KISMET_MIN_PROFIT, workingAutoCroesusConfig.kismetMinProfit.toString(), "2000000")
+		autoCroesusKismetFloorsField = registerField(ConfigField.AUTO_CROESUS_KISMET_FLOORS, workingAutoCroesusConfig.kismetFloors.joinToString(", "), "M7, F7")
+		autoCroesusChestKeyProfitField = registerField(ConfigField.AUTO_CROESUS_CHEST_KEY_MIN_PROFIT, workingAutoCroesusConfig.chestKeyMinProfit.toString(), "200000")
 		shulkerGlowColorHexField = registerField(ConfigField.SHULKER_GLOW_COLOR, workingCopy.shulkerGlowColorHex, "#36C5F0")
 		shulkerProjectileGlowColorHexField = registerField(ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, workingCopy.shulkerProjectileGlowColorHex, "#FF4D4D")
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
@@ -71,6 +88,7 @@ class XclipsenConfigScreen(
 			} catch (_: IOException) {
 			}
 		}
+		persistAutoCroesusConfig()
 		client?.setScreen(parent)
 	}
 
@@ -185,6 +203,8 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled = !workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled = !workingCopy.hideonleafHelperEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled = !workingCopy.timeChangerEnabled
+			ConfigSection.AUTO_CROESUS -> workingCopy.autoCroesusModuleEnabled = !workingCopy.autoCroesusModuleEnabled
+			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled = !workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled = !workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled = !workingCopy.dungeonRedVignetteModuleEnabled
 			else -> return
@@ -216,6 +236,7 @@ class XclipsenConfigScreen(
 
 		try {
 			mod.saveAndApplyConfig(workingCopy)
+			persistAutoCroesusConfig()
 			statusMessage = Text.literal("Saved.")
 			close()
 		} catch (_: IOException) {
@@ -250,6 +271,10 @@ class XclipsenConfigScreen(
 		candidate.hideonleafLostFightAlertSoundPitch = workingCopy.hideonleafLostFightAlertSoundPitch
 		candidate.timeChangerEnabled = workingCopy.timeChangerEnabled
 		candidate.timeChangerMode = workingCopy.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
+		candidate.autoCroesusModuleEnabled = workingCopy.autoCroesusModuleEnabled
+		candidate.experimentationTableModuleEnabled = workingCopy.experimentationTableModuleEnabled
+		candidate.autoExperimentsAutoClose = workingCopy.autoExperimentsAutoClose
+		candidate.autoExperimentsGetMaxXp = workingCopy.autoExperimentsGetMaxXp
 		candidate.dungeonDoorModuleEnabled = workingCopy.dungeonDoorModuleEnabled
 		candidate.dungeonDoorEnabled = workingCopy.dungeonDoorEnabled
 		candidate.dungeonDoorDebugEnabled = workingCopy.dungeonDoorDebugEnabled
@@ -282,7 +307,66 @@ class XclipsenConfigScreen(
 			return null
 		}
 
+		try {
+			candidate.autoExperimentsClickDelayMs = autoExperimentsClickDelayField.text.trim().toInt()
+		} catch (_: NumberFormatException) {
+			if (updateStatus) statusMessage = Text.literal("Auto Experiments click delay must be a number.")
+			return null
+		}
+		if (candidate.autoExperimentsClickDelayMs < 50) {
+			if (updateStatus) statusMessage = Text.literal("Auto Experiments click delay must be at least 50 ms.")
+			return null
+		}
+
+		try {
+			candidate.autoExperimentsDelayVarietyMs = autoExperimentsDelayVarietyField.text.trim().toInt()
+		} catch (_: NumberFormatException) {
+			if (updateStatus) statusMessage = Text.literal("Auto Experiments delay variety must be a number.")
+			return null
+		}
+		if (candidate.autoExperimentsDelayVarietyMs < 0) {
+			if (updateStatus) statusMessage = Text.literal("Auto Experiments delay variety must be at least 0 ms.")
+			return null
+		}
+
+		try {
+			candidate.autoExperimentsSerumCount = autoExperimentsSerumCountField.text.trim().toInt()
+		} catch (_: NumberFormatException) {
+			if (updateStatus) statusMessage = Text.literal("Auto Experiments serum count must be a number.")
+			return null
+		}
+		if (candidate.autoExperimentsSerumCount !in 0..3) {
+			if (updateStatus) statusMessage = Text.literal("Auto Experiments serum count must be between 0 and 3.")
+			return null
+		}
+
+		val autoCroesusCandidate = copyOf(workingAutoCroesusConfig)
+		try {
+			autoCroesusCandidate.minClickDelay = autoCroesusClickDelayField.text.trim().toInt()
+		} catch (_: NumberFormatException) {
+			if (updateStatus) statusMessage = Text.literal("AutoCroesus click delay must be a number.")
+			return null
+		}
+		if (autoCroesusCandidate.minClickDelay < 0) {
+			if (updateStatus) statusMessage = Text.literal("AutoCroesus click delay must be at least 0.")
+			return null
+		}
+
+		autoCroesusCandidate.kismetMinProfit = parseNonNegativeLong(autoCroesusKismetProfitField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("AutoCroesus kismet profit must be a number.")
+			return null
+		}
+		autoCroesusCandidate.chestKeyMinProfit = parseNonNegativeLong(autoCroesusChestKeyProfitField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("AutoCroesus chest key profit must be a number.")
+			return null
+		}
+		autoCroesusCandidate.kismetFloors = parseAutoCroesusFloors(autoCroesusKismetFloorsField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("Kismet floors must be comma-separated floors like M7, F7.")
+			return null
+		}
+
 		workingCopy = candidate
+		workingAutoCroesusConfig = autoCroesusCandidate
 		return candidate
 	}
 
@@ -307,9 +391,8 @@ class XclipsenConfigScreen(
 		val section = openedSection
 
 		fields.forEach { (field, widget) ->
-			val rowIndex = section?.let { textFieldRowIndex(it, field) } ?: -1
-			if (rowIndex >= 0) {
-				val row = settingRowBounds(menu, rowIndex, TEXT_INPUT_SETTING_HEIGHT)
+			val row = section?.let { textFieldBounds(it, field, menu) }
+			if (row != null) {
 				val inputWidth = if (field == ConfigField.SHULKER_GLOW_COLOR) COLOR_INPUT_WIDTH else TEXT_INPUT_WIDTH
 				widget.setDimensionsAndPosition(inputWidth, 20, row.left + 8, row.top + 15)
 				setVisible(widget, true)
@@ -372,6 +455,8 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled
+			ConfigSection.AUTO_CROESUS -> workingCopy.autoCroesusModuleEnabled
+			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled
 			else -> true
@@ -398,6 +483,8 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> drawIrcBridgeSettings(context, menu, mouseX, mouseY)
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, menu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
+			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
+			ConfigSection.AUTO_CROESUS -> drawAutoCroesusSettings(context, menu, mouseX, mouseY)
 			ConfigSection.DOOR -> drawDoorSettings(context, menu, mouseX, mouseY)
 			ConfigSection.RED_VIGNETTE -> drawRedVignetteSettings(context, menu, mouseX, mouseY)
 			ConfigSection.STATUS -> drawStatusSettings(context, menu, mouseX, mouseY)
@@ -460,6 +547,26 @@ class XclipsenConfigScreen(
 		drawOptionSetting(context, timeChangerModeBounds(menu), "Time", ClientTimeChanger.displayName(workingCopy.timeChangerMode), mouseX, mouseY)
 	}
 
+	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Use", "Open Stakes and the module starts automatically for all three experiments.", mouseX, mouseY)
+		drawTextInputSetting(context, autoExperimentsClickDelayBounds(menu), "Click Delay (ms)", autoExperimentsClickDelayField, mouseX, mouseY)
+		drawTextInputSetting(context, autoExperimentsDelayVarietyBounds(menu), "Delay Variety (ms)", autoExperimentsDelayVarietyField, mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsAutoCloseBounds(menu), "Auto Close", workingCopy.autoExperimentsAutoClose, mouseX, mouseY)
+		drawTextInputSetting(context, autoExperimentsSerumCountBounds(menu), "Serum Count", autoExperimentsSerumCountField, mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsGetMaxXpBounds(menu), "Get Max XP", workingCopy.autoExperimentsGetMaxXp, mouseX, mouseY)
+	}
+
+	private fun drawAutoCroesusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, autoCroesusEnabledBounds(menu), "AutoCroesus Enabled", workingCopy.autoCroesusModuleEnabled, mouseX, mouseY)
+		drawToggleSetting(context, autoCroesusNoClickBounds(menu), "No Click", workingAutoCroesusConfig.noClick, mouseX, mouseY)
+		drawToggleSetting(context, autoCroesusUseKismetsBounds(menu), "Use Kismets", workingAutoCroesusConfig.useKismets, mouseX, mouseY)
+		drawTextInputSetting(context, autoCroesusKismetFloorsBounds(menu), "Kismet Floors", autoCroesusKismetFloorsField, mouseX, mouseY)
+		drawTextInputSetting(context, autoCroesusKismetProfitBounds(menu), "Kismet Min Profit", autoCroesusKismetProfitField, mouseX, mouseY)
+		drawToggleSetting(context, autoCroesusUseChestKeysBounds(menu), "Use Chest Keys", workingAutoCroesusConfig.useChestKeys, mouseX, mouseY)
+		drawTextInputSetting(context, autoCroesusChestKeyProfitBounds(menu), "Chest Key Min Profit", autoCroesusChestKeyProfitField, mouseX, mouseY)
+		drawTextInputSetting(context, autoCroesusClickDelayBounds(menu), "Click Delay (ms)", autoCroesusClickDelayField, mouseX, mouseY)
+	}
+
 	private fun drawDoorSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Mort Door Barrier", workingCopy.dungeonDoorEnabled, mouseX, mouseY)
 		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Debug", workingCopy.dungeonDoorDebugEnabled, mouseX, mouseY)
@@ -472,14 +579,12 @@ class XclipsenConfigScreen(
 
 	private fun drawTextInputSetting(
 		context: DrawContext,
-		menu: Bounds,
-		rowIndex: Int,
+		row: Bounds,
 		label: String,
 		field: TextFieldWidget,
 		mouseX: Int,
 		mouseY: Int,
 	) {
-		val row = settingRowBounds(menu, rowIndex, TEXT_INPUT_SETTING_HEIGHT)
 		val hovered = row.contains(mouseX, mouseY) || field.isFocused
 		drawSettingBackground(context, row, hovered)
 		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
@@ -491,6 +596,18 @@ class XclipsenConfigScreen(
 			row.top + 35,
 			if (field.isFocused) ACCENT else 0x1EFFFFFF,
 		)
+	}
+
+	private fun drawTextInputSetting(
+		context: DrawContext,
+		menu: Bounds,
+		rowIndex: Int,
+		label: String,
+		field: TextFieldWidget,
+		mouseX: Int,
+		mouseY: Int,
+	) {
+		drawTextInputSetting(context, settingRowBounds(menu, rowIndex, TEXT_INPUT_SETTING_HEIGHT), label, field, mouseX, mouseY)
 	}
 
 	private fun drawToggleSetting(context: DrawContext, row: Bounds, label: String, enabled: Boolean, mouseX: Int, mouseY: Int) {
@@ -791,6 +908,8 @@ class XclipsenConfigScreen(
 			ConfigSection.IRC_BRIDGE -> IRC_POPUP_HEIGHT
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
+			ConfigSection.EXPERIMENTS -> 280
+			ConfigSection.AUTO_CROESUS -> 335
 			ConfigSection.DOOR -> 135
 			ConfigSection.RED_VIGNETTE -> 100
 			else -> POPUP_HEIGHT
@@ -946,6 +1065,42 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.EXPERIMENTS && autoExperimentsAutoCloseBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.autoExperimentsAutoClose = !workingCopy.autoExperimentsAutoClose
+			return true
+		}
+
+		if (section == ConfigSection.EXPERIMENTS && autoExperimentsGetMaxXpBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.autoExperimentsGetMaxXp = !workingCopy.autoExperimentsGetMaxXp
+			return true
+		}
+
+		if (section == ConfigSection.AUTO_CROESUS && autoCroesusEnabledBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.autoCroesusModuleEnabled = !workingCopy.autoCroesusModuleEnabled
+			return true
+		}
+
+		if (section == ConfigSection.AUTO_CROESUS && autoCroesusNoClickBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingAutoCroesusConfig.noClick = !workingAutoCroesusConfig.noClick
+			return true
+		}
+
+		if (section == ConfigSection.AUTO_CROESUS && autoCroesusUseKismetsBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingAutoCroesusConfig.useKismets = !workingAutoCroesusConfig.useKismets
+			return true
+		}
+
+		if (section == ConfigSection.AUTO_CROESUS && autoCroesusUseChestKeysBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingAutoCroesusConfig.useChestKeys = !workingAutoCroesusConfig.useChestKeys
+			return true
+		}
+
 		if (section == ConfigSection.DOOR && settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.dungeonDoorEnabled = !workingCopy.dungeonDoorEnabled
@@ -991,22 +1146,66 @@ class XclipsenConfigScreen(
 		return false
 	}
 
-	private fun textFieldsFor(section: ConfigSection): List<ConfigField> {
+	private fun textFieldBounds(section: ConfigSection, field: ConfigField, menu: Bounds): Bounds? {
 		return when (section) {
-			ConfigSection.SETUP -> listOf(
-				ConfigField.BACKEND_URL,
-				ConfigField.AUTH_TOKEN,
-				ConfigField.POLL_INTERVAL,
-			)
-			ConfigSection.IRC_BRIDGE -> listOf(
-				ConfigField.IRC_FORMAT,
-			)
-			else -> emptyList()
+			ConfigSection.SETUP -> when (field) {
+				ConfigField.BACKEND_URL -> settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
+				ConfigField.AUTH_TOKEN -> settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT)
+				ConfigField.POLL_INTERVAL -> settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT)
+				else -> null
+			}
+
+			ConfigSection.IRC_BRIDGE -> when (field) {
+				ConfigField.IRC_FORMAT -> settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
+				else -> null
+			}
+
+			ConfigSection.EXPERIMENTS -> when (field) {
+				ConfigField.AUTO_EXPERIMENTS_CLICK_DELAY -> autoExperimentsClickDelayBounds(menu)
+				ConfigField.AUTO_EXPERIMENTS_DELAY_VARIETY -> autoExperimentsDelayVarietyBounds(menu)
+				ConfigField.AUTO_EXPERIMENTS_SERUM_COUNT -> autoExperimentsSerumCountBounds(menu)
+				else -> null
+			}
+
+			ConfigSection.AUTO_CROESUS -> when (field) {
+				ConfigField.AUTO_CROESUS_KISMET_FLOORS -> autoCroesusKismetFloorsBounds(menu)
+				ConfigField.AUTO_CROESUS_KISMET_MIN_PROFIT -> autoCroesusKismetProfitBounds(menu)
+				ConfigField.AUTO_CROESUS_CHEST_KEY_MIN_PROFIT -> autoCroesusChestKeyProfitBounds(menu)
+				ConfigField.AUTO_CROESUS_CLICK_DELAY -> autoCroesusClickDelayBounds(menu)
+				else -> null
+			}
+
+			else -> null
 		}
 	}
 
-	private fun textFieldRowIndex(section: ConfigSection, field: ConfigField): Int {
-		return textFieldsFor(section).indexOf(field)
+	private fun parseNonNegativeLong(raw: String): Long? {
+		val normalized = raw.trim().replace(",", "").replace("_", "")
+		if (normalized.isBlank()) {
+			return null
+		}
+		return normalized.toLongOrNull()?.takeIf { it >= 0L }
+	}
+
+	private fun parseAutoCroesusFloors(raw: String): ArrayList<String>? {
+		val floors = linkedSetOf<String>()
+		val trimmed = raw.trim()
+		if (trimmed.isBlank()) {
+			return arrayListOf()
+		}
+		trimmed.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { token ->
+			val normalized = token.uppercase(Locale.ROOT)
+			if (!AUTO_CROESUS_FLOOR_PATTERN.matches(normalized)) {
+				return null
+			}
+			floors += normalized
+		}
+		return ArrayList(floors)
+	}
+
+	private fun persistAutoCroesusConfig() {
+		AcDataStore.config = copyOf(workingAutoCroesusConfig)
+		AcDataStore.saveConfig()
 	}
 
 	private fun normalizedHexColor(value: String): String? {
@@ -1221,6 +1420,65 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
 
+	private fun autoExperimentsClickDelayBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsDelayVarietyBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsAutoCloseBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 3, SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsSerumCountBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 4, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsGetMaxXpBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 5, SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusEnabledBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusNoClickBounds(menu: Bounds): Bounds {
+		val top = autoCroesusEnabledBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusUseKismetsBounds(menu: Bounds): Bounds {
+		val top = autoCroesusNoClickBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusKismetFloorsBounds(menu: Bounds): Bounds {
+		val top = autoCroesusUseKismetsBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusKismetProfitBounds(menu: Bounds): Bounds {
+		val top = autoCroesusKismetFloorsBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusUseChestKeysBounds(menu: Bounds): Bounds {
+		val top = autoCroesusKismetProfitBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusChestKeyProfitBounds(menu: Bounds): Bounds {
+		val top = autoCroesusUseChestKeysBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun autoCroesusClickDelayBounds(menu: Bounds): Bounds {
+		val top = autoCroesusChestKeyProfitBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
 	private fun trimToWidth(value: String, maxWidth: Int): String {
 		if (textRenderer.getWidth(value) <= maxWidth) {
 			return value
@@ -1271,6 +1529,8 @@ class XclipsenConfigScreen(
 		IRC_BRIDGE("IRC Bridge", "IRC message formats and bridge-specific toggles.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
+		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
+		EXPERIMENTS("Auto Experiments", "Automates Chronomatron, Ultrasequencer and Superpairs from the Experimentation Table.", toggleable = true),
 		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
 		RED_VIGNETTE("Red Vignette", "Matches Devonian's client-side click fix for the red vignette.", toggleable = true),
 		STATUS("Status", "Current config path and backend state."),
@@ -1281,12 +1541,20 @@ class XclipsenConfigScreen(
 		AUTH_TOKEN(ConfigSection.SETUP),
 		POLL_INTERVAL(ConfigSection.SETUP),
 		IRC_FORMAT(ConfigSection.IRC_BRIDGE),
+		AUTO_EXPERIMENTS_CLICK_DELAY(ConfigSection.EXPERIMENTS),
+		AUTO_EXPERIMENTS_DELAY_VARIETY(ConfigSection.EXPERIMENTS),
+		AUTO_EXPERIMENTS_SERUM_COUNT(ConfigSection.EXPERIMENTS),
+		AUTO_CROESUS_CLICK_DELAY(ConfigSection.AUTO_CROESUS),
+		AUTO_CROESUS_KISMET_MIN_PROFIT(ConfigSection.AUTO_CROESUS),
+		AUTO_CROESUS_KISMET_FLOORS(ConfigSection.AUTO_CROESUS),
+		AUTO_CROESUS_CHEST_KEY_MIN_PROFIT(ConfigSection.AUTO_CROESUS),
 		SHULKER_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_PROJECTILE_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_TRACER_LINE_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 	}
 
 	companion object {
+		private val AUTO_CROESUS_FLOOR_PATTERN = Regex("^[FM][1-7]$")
 		private const val ACCENT = 0xFF36C5F0.toInt()
 		private const val ACCENT_TRANS = 0x7836C5F0
 		private const val PANEL_HEADER = 0xE6141414.toInt()
@@ -1329,5 +1597,16 @@ class XclipsenConfigScreen(
 		private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 
 		private fun copyOf(source: BridgeConfig): BridgeConfig = source.copy()
+
+		private fun copyOf(source: AcConfig): AcConfig = AcConfig().also {
+			it.lastApiUpdate = source.lastApiUpdate
+			it.minClickDelay = source.minClickDelay
+			it.noClick = source.noClick
+			it.useKismets = source.useKismets
+			it.kismetMinProfit = source.kismetMinProfit
+			it.kismetFloors = ArrayList(source.kismetFloors)
+			it.useChestKeys = source.useChestKeys
+			it.chestKeyMinProfit = source.chestKeyMinProfit
+		}
 	}
 }
