@@ -39,6 +39,10 @@ object IrcChatTabManager {
 		}
 	}
 
+	fun activeChatHud(client: MinecraftClient): ChatHud {
+		return if (isIrcTabActive()) ircChatHud(client) else client.inGameHud.chatHud
+	}
+
 	fun addIrcMessage(message: Text) {
 		val client = MinecraftClient.getInstance()
 		client.execute {

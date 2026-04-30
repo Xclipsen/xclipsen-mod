@@ -3,8 +3,8 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_DIRS=(
-	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test/minecraft/mods"
-	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test 2/minecraft/mods"
+	"/home/la/.local/share/PrismLauncher/instances/1.21.11/minecraft/mods"
+	"/home/la/.local/share/PrismLauncher/instances/1.21.11 skyhanni + sbo/minecraft/mods"
 )
 JDK21_HOME="/home/la/.local/jdks/jdk-21.0.10+7"
 

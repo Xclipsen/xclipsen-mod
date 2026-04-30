@@ -5,7 +5,6 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.Map;
-import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.gl.UniformType;
 import net.minecraft.util.Identifier;
@@ -31,11 +30,10 @@ public final class XclipsenRenderLayers {
 	public static RenderLayer getXrayLine(double width) {
 		return XRAY_LINES.computeIfAbsent(width, lineWidth -> RenderLayer.of(
 			"xclipsen_shulker_xray_line_" + lineWidth,
-			RenderLayer.DEFAULT_BUFFER_SIZE,
-			XRAY_LINE_PIPELINE,
-			RenderLayer.MultiPhaseParameters.builder()
-				.lineWidth(new RenderPhase.LineWidth(OptionalDouble.of(lineWidth)))
-				.build(false)
+			RenderSetup.builder(XRAY_LINE_PIPELINE)
+				.layeringTransform(LayeringTransform.VIEW_OFFSET_Z_LAYERING)
+				.outputTarget(OutputTarget.ITEM_ENTITY_TARGET)
+				.build()
 		));
 	}
 }

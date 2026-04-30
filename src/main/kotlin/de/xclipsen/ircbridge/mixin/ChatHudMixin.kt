@@ -3,11 +3,10 @@ package de.xclipsen.ircbridge.mixin
 import de.xclipsen.ircbridge.ImagePreviewManager
 import de.xclipsen.ircbridge.IrcChatTabManager
 import net.minecraft.client.MinecraftClient
+import net.minecraft.client.font.TextRenderer
 import net.minecraft.client.gui.hud.ChatHud
 import net.minecraft.client.gui.hud.ChatHudLine
 import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.hud.MessageIndicator
-import net.minecraft.text.Style
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.Shadow
 import org.spongepowered.asm.mixin.gen.Accessor
@@ -31,16 +30,25 @@ abstract class ChatHudMixin {
 	protected var scrolledLines: Int = 0
 
 	@Accessor("visibleMessages")
-	protected abstract fun getVisibleMessages(): MutableList<ChatHudLine>
+	protected abstract fun getVisibleMessages(): MutableList<ChatHudLine.Visible>
 
 	private var frozenBaseVisibleMessageCount = -1
 	private var frozenBaseScrolledLines = 0
 
 	@Inject(method = ["render"], at = [At("HEAD")], cancellable = true)
-	private fun handleRenderProxy(context: DrawContext, currentTick: Int, mouseX: Int, mouseY: Int, focused: Boolean, ci: CallbackInfo) {
+	private fun handleRenderProxy(
+		context: DrawContext,
+		textRenderer: TextRenderer,
+		currentTick: Int,
+		mouseX: Int,
+		mouseY: Int,
+		interactable: Boolean,
+		focused: Boolean,
+		ci: CallbackInfo,
+	) {
 		val self = this as ChatHud
 		if (IrcChatTabManager.shouldProxy(self, client)) {
-			IrcChatTabManager.ircChatHud(client).render(context, currentTick, mouseX, mouseY, focused)
+			IrcChatTabManager.ircChatHud(client).render(context, textRenderer, currentTick, mouseX, mouseY, interactable, focused)
 			ci.cancel()
 			return
 		}
@@ -52,30 +60,6 @@ abstract class ChatHudMixin {
 			}
 		} else {
 			frozenBaseVisibleMessageCount = -1
-		}
-	}
-
-	@Inject(method = ["mouseClicked"], at = [At("HEAD")], cancellable = true)
-	private fun proxyMouseClicked(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<Boolean>) {
-		val self = this as ChatHud
-		if (IrcChatTabManager.shouldProxy(self, client)) {
-			cir.returnValue = IrcChatTabManager.ircChatHud(client).mouseClicked(mouseX, mouseY)
-		}
-	}
-
-	@Inject(method = ["getTextStyleAt"], at = [At("HEAD")], cancellable = true)
-	private fun proxyGetTextStyleAt(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<Style?>) {
-		val self = this as ChatHud
-		if (IrcChatTabManager.shouldProxy(self, client)) {
-			cir.returnValue = IrcChatTabManager.ircChatHud(client).getTextStyleAt(mouseX, mouseY)
-		}
-	}
-
-	@Inject(method = ["getIndicatorAt"], at = [At("HEAD")], cancellable = true)
-	private fun proxyGetIndicatorAt(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<MessageIndicator?>) {
-		val self = this as ChatHud
-		if (IrcChatTabManager.shouldProxy(self, client)) {
-			cir.returnValue = IrcChatTabManager.ircChatHud(client).getIndicatorAt(mouseX, mouseY)
 		}
 	}
 

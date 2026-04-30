@@ -28,7 +28,7 @@ object ShulkerTracerRenderer {
 			return
 		}
 
-		val cameraPos = context.gameRenderer().camera.pos
+		val cameraPos = context.gameRenderer().camera.cameraPos
 		val availableShulkers = currentAvailableShulkers(world)
 			.filterNot { completedShulkerIds.contains(it.id) }
 		val shulkerPath = buildNearestShulkerPath(cameraPos, availableShulkers, lineMode)
@@ -50,7 +50,7 @@ object ShulkerTracerRenderer {
 	fun markCurrentTargetCompleted() {
 		val client = MinecraftClient.getInstance()
 		val world = client.world ?: return
-		val cameraPos = client.gameRenderer.camera.pos
+		val cameraPos = client.gameRenderer.camera.cameraPos
 		val nextTarget = buildNearestShulkerPath(
 			cameraPos,
 			currentAvailableShulkers(world).filterNot { completedShulkerIds.contains(it.id) },
@@ -91,7 +91,7 @@ object ShulkerTracerRenderer {
 	}
 
 	private fun crosshairStart(context: WorldRenderContext, cameraPos: Vec3d): Vec3d {
-		val look = context.gameRenderer().camera.horizontalPlane.normalized()
+		val look = Vector3f(context.gameRenderer().camera.horizontalPlane).normalized()
 		return cameraPos.add(
 			look.x.toDouble() * CROSSHAIR_OFFSET,
 			look.y.toDouble() * CROSSHAIR_OFFSET,

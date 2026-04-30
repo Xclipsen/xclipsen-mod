@@ -107,7 +107,7 @@ object MortDoorBarrierFeature {
 		if (!config.dungeonDoorModuleEnabled || !config.dungeonDoorDebugEnabled) return
 		if (client.player == null || appliedStates.isEmpty()) return
 
-		val cameraPos = context.gameRenderer().camera.pos
+		val cameraPos = context.gameRenderer().camera.cameraPos
 		for (pos in appliedStates.keys) {
 			drawDebugBox(context, pos, cameraPos)
 		}

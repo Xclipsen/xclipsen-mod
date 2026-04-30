@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.7
+
+- Added Minecraft `1.21.11` compatibility.
+- Updated the build, mappings, and Fabric API targets to `1.21.11`.
+- Adjusted chat, camera, and render integration for the `1.21.11` client changes.
+
 ## v0.5.5
 
 - Added an `Auto Experiments` module for Chronomatron, Ultrasequencer, and Superpairs.
