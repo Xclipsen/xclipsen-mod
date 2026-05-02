@@ -9,7 +9,9 @@
     "ClientPlayerInteractionManagerMixin",
     "ClientWorldMixin",
     "EntityGlowMixin",
-    "HandledScreenAccessor"
+    "HandledScreenAccessor",
+    "HandledScreenSlotRenderMixin",
+    "ScreenHandlerSlotUpdateMixin"
   ],
   "injectors": {
     "defaultRequire": 1

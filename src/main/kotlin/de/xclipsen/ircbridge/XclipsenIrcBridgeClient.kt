@@ -203,6 +203,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		MortDoorBarrierFeature.onTick(client)
 		PurpleTerracottaHighlightFeature.onTick(client)
 		ModUpdateChecker.onTick(client)
+		ExperimentationTableFeature.onTick(client)
 
 		if (client.currentScreen !is ChatScreen) {
 			ImagePreviewManager.setHoverPreviewActive(false)

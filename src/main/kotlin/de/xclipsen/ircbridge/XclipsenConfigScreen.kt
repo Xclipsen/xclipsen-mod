@@ -588,9 +588,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
-		drawToggleSetting(context, autoExperimentsShowSolverBounds(menu), "Show Solver", workingCopy.autoExperimentsShowSolver, mouseX, mouseY)
-		drawToggleSetting(context, autoExperimentsEnabledBounds(menu), "Auto Play", workingCopy.autoExperimentsEnabled, mouseX, mouseY)
-		drawToggleSetting(context, autoExperimentsAutoPairsBounds(menu), "AutoPairs", workingCopy.autoExperimentsAutoPairs, mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsAutoPairsBounds(menu), "Keep Items Visible", workingCopy.autoExperimentsAutoPairs, mouseX, mouseY)
 		drawToggleSetting(context, autoExperimentsAutoCloseBounds(menu), "Auto Close", workingCopy.autoExperimentsAutoClose, mouseX, mouseY)
 		drawToggleSetting(context, autoExperimentsGetMaxXpBounds(menu), "Get Max XP", workingCopy.autoExperimentsGetMaxXp, mouseX, mouseY)
 		drawTextInputSetting(context, autoExperimentsClickDelayBounds(menu), "Click Delay (ms)", autoExperimentsClickDelayField, mouseX, mouseY)
@@ -1147,18 +1145,6 @@ class XclipsenConfigScreen(
 			return true
 		}
 
-		if (section == ConfigSection.EXPERIMENTS && autoExperimentsShowSolverBounds(menu).contains(mouseX, mouseY)) {
-			readWorkingCopyFromFields(updateStatus = false)
-			workingCopy.autoExperimentsShowSolver = !workingCopy.autoExperimentsShowSolver
-			return true
-		}
-
-		if (section == ConfigSection.EXPERIMENTS && autoExperimentsEnabledBounds(menu).contains(mouseX, mouseY)) {
-			readWorkingCopyFromFields(updateStatus = false)
-			workingCopy.autoExperimentsEnabled = !workingCopy.autoExperimentsEnabled
-			return true
-		}
-
 		if (section == ConfigSection.EXPERIMENTS && autoExperimentsAutoPairsBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.autoExperimentsAutoPairs = !workingCopy.autoExperimentsAutoPairs
@@ -1551,35 +1537,27 @@ class XclipsenConfigScreen(
 	}
 
 	private fun autoExperimentsClickDelayBounds(menu: Bounds): Bounds {
-		return experimentationRowBounds(menu, 5, TEXT_INPUT_SETTING_HEIGHT)
+		return experimentationRowBounds(menu, 3, TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun autoExperimentsDelayVarietyBounds(menu: Bounds): Bounds {
-		return experimentationRowBounds(menu, 6, TEXT_INPUT_SETTING_HEIGHT)
+		return experimentationRowBounds(menu, 4, TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun autoExperimentsAutoCloseBounds(menu: Bounds): Bounds {
-		return experimentationRowBounds(menu, 3, SETTING_HEIGHT)
-	}
-
-	private fun autoExperimentsSerumCountBounds(menu: Bounds): Bounds {
-		return experimentationRowBounds(menu, 7, TEXT_INPUT_SETTING_HEIGHT)
-	}
-
-	private fun autoExperimentsGetMaxXpBounds(menu: Bounds): Bounds {
-		return experimentationRowBounds(menu, 4, SETTING_HEIGHT)
-	}
-
-	private fun autoExperimentsShowSolverBounds(menu: Bounds): Bounds {
-		return experimentationRowBounds(menu, 0, SETTING_HEIGHT)
-	}
-
-	private fun autoExperimentsEnabledBounds(menu: Bounds): Bounds {
 		return experimentationRowBounds(menu, 1, SETTING_HEIGHT)
 	}
 
-	private fun autoExperimentsAutoPairsBounds(menu: Bounds): Bounds {
+	private fun autoExperimentsSerumCountBounds(menu: Bounds): Bounds {
+		return experimentationRowBounds(menu, 5, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsGetMaxXpBounds(menu: Bounds): Bounds {
 		return experimentationRowBounds(menu, 2, SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsAutoPairsBounds(menu: Bounds): Bounds {
+		return experimentationRowBounds(menu, 0, SETTING_HEIGHT)
 	}
 
 	private fun autoCroesusEnabledBounds(menu: Bounds): Bounds {
@@ -1674,7 +1652,7 @@ class XclipsenConfigScreen(
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
 		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
-		EXPERIMENTS("Experimentation", "Solver and automation for Chronomatron, Ultrasequencer and Superpairs.", toggleable = true),
+		EXPERIMENTS("Experimentation", "Shizo-style auto experiments plus SkyHanni keep-items-visible for Superpairs.", toggleable = true),
 		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
 		RED_VIGNETTE("Red Vignette", "Matches Devonian's client-side click fix for the red vignette.", toggleable = true),
 		STATUS("Status", "Current config path and backend state."),

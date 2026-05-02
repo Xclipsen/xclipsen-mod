@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 
 @Mixin(ChatScreen::class)
 abstract class ChatScreenMixin12110 {
-	@Invoker(value = "method_44052", remap = false)
+	@Invoker("getTextStyleAt")
 	protected abstract fun callGetTextStyleAt(mouseX: Double, mouseY: Double): Style?
 
 	@Redirect(

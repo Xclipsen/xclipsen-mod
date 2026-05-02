@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.9
+
+- Reworked the Experimentation module into a shizo-style auto-play flow for Chronomatron and Ultrasequencer.
+- Added SkyHanni-style keep-items-visible support for Superpairs via slot update/render mixins.
+- Simplified the Experimentation config section around the new Keep Items Visible option.
+- Switched the 1.21.10 chat mixin invokers to named methods for the current mappings.
+
 ## v0.5.8
 
 - Restricted the mod back to Minecraft `1.21.10` only to avoid client/render incompatibilities on `1.21.11`.

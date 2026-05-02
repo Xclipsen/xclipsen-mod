@@ -9,15 +9,15 @@ import org.spongepowered.asm.mixin.gen.Invoker
 
 @Mixin(ChatHud::class)
 interface ChatHudInvoker12110 {
-	@Invoker(value = "method_1805", remap = false)
+	@Invoker("render")
 	fun `xclipsen$renderLegacy`(context: DrawContext, currentTick: Int, mouseX: Int, mouseY: Int, focused: Boolean)
 
-	@Invoker(value = "method_27146", remap = false)
+	@Invoker("mouseClicked")
 	fun `xclipsen$mouseClickedLegacy`(mouseX: Double, mouseY: Double): Boolean
 
-	@Invoker(value = "method_1816", remap = false)
+	@Invoker("getTextStyleAt")
 	fun `xclipsen$getTextStyleAtLegacy`(mouseX: Double, mouseY: Double): Style?
 
-	@Invoker(value = "method_44723", remap = false)
+	@Invoker("getIndicatorAt")
 	fun `xclipsen$getIndicatorAtLegacy`(mouseX: Double, mouseY: Double): MessageIndicator?
 }

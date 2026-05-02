@@ -36,7 +36,7 @@ abstract class ChatHudMixin12110 {
 	private var frozenBaseVisibleMessageCount = -1
 	private var frozenBaseScrolledLines = 0
 
-	@Inject(method = ["method_1805"], at = [At("HEAD")], cancellable = true, remap = false)
+	@Inject(method = ["render"], at = [At("HEAD")], cancellable = true)
 	private fun handleRenderProxy(
 		context: DrawContext,
 		currentTick: Int,
@@ -62,7 +62,7 @@ abstract class ChatHudMixin12110 {
 		}
 	}
 
-	@Inject(method = ["method_27146"], at = [At("HEAD")], cancellable = true, remap = false)
+	@Inject(method = ["mouseClicked"], at = [At("HEAD")], cancellable = true)
 	private fun proxyMouseClicked(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<Boolean>) {
 		val self = this as ChatHud
 		if (IrcChatTabManager.shouldProxy(self, client)) {
@@ -70,7 +70,7 @@ abstract class ChatHudMixin12110 {
 		}
 	}
 
-	@Inject(method = ["method_1816"], at = [At("HEAD")], cancellable = true, remap = false)
+	@Inject(method = ["getTextStyleAt"], at = [At("HEAD")], cancellable = true)
 	private fun proxyGetTextStyleAt(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<Style?>) {
 		val self = this as ChatHud
 		if (IrcChatTabManager.shouldProxy(self, client)) {
@@ -78,7 +78,7 @@ abstract class ChatHudMixin12110 {
 		}
 	}
 
-	@Inject(method = ["method_44723"], at = [At("HEAD")], cancellable = true, remap = false)
+	@Inject(method = ["getIndicatorAt"], at = [At("HEAD")], cancellable = true)
 	private fun proxyGetIndicatorAt(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<MessageIndicator?>) {
 		val self = this as ChatHud
 		if (IrcChatTabManager.shouldProxy(self, client)) {
