@@ -7,9 +7,9 @@ import net.minecraft.client.render.VertexConsumerProvider
 import net.minecraft.client.render.XclipsenRenderLayers
 import net.minecraft.entity.mob.ShulkerEntity
 import net.minecraft.util.math.Vec3d
-import org.joml.Vector3f
 import java.util.UUID
-import kotlin.math.sqrt
+import kotlin.math.cos
+import kotlin.math.sin
 
 object ShulkerTracerRenderer {
 	private val completedShulkerIds = LinkedHashSet<UUID>()
@@ -38,7 +38,7 @@ object ShulkerTracerRenderer {
 		val shulkerCenters = shulkerPath.map { it.center }
 
 		val color = parseColor(config.shulkerTracerLineColorHex) ?: DEFAULT_LINE_COLOR
-		val start = crosshairStart(context, cameraPos)
+		val start = crosshairStart(cameraPos)
 		val lineWidth = config.shulkerTracerLineWidth.coerceIn(1.0f, 8.0f)
 		var previous = start
 		for (center in shulkerCenters) {
@@ -90,21 +90,35 @@ object ShulkerTracerRenderer {
 		return path
 	}
 
-	private fun crosshairStart(context: WorldRenderContext, cameraPos: Vec3d): Vec3d {
-		val look = Vector3f(context.gameRenderer().camera.horizontalPlane).normalized()
+	private fun crosshairStart(cameraPos: Vec3d): Vec3d {
+		val client = MinecraftClient.getInstance()
+		val viewEntity = client.cameraEntity ?: client.player ?: return cameraPos
+		val yawRadians = Math.toRadians(viewEntity.yaw.toDouble())
+		val pitchRadians = Math.toRadians(viewEntity.pitch.toDouble())
+		val horizontalScale = cos(pitchRadians)
+		val look = Vec3d(
+			-sin(yawRadians) * horizontalScale,
+			-sin(pitchRadians),
+			cos(yawRadians) * horizontalScale,
+		)
 		return cameraPos.add(
-			look.x.toDouble() * CROSSHAIR_OFFSET,
-			look.y.toDouble() * CROSSHAIR_OFFSET,
-			look.z.toDouble() * CROSSHAIR_OFFSET,
+			look.x * CROSSHAIR_OFFSET,
+			look.y * CROSSHAIR_OFFSET,
+			look.z * CROSSHAIR_OFFSET,
 		)
 	}
 
 	private fun drawLine(context: WorldRenderContext, cameraPos: Vec3d, start: Vec3d, end: Vec3d, color: Int, width: Float) {
 		val matrices = context.matrices()
 		val delta = end.subtract(start)
-		if (!delta.x.isFinite() || !delta.y.isFinite() || !delta.z.isFinite() || delta.lengthSquared() < 0.0001) {
+		val lengthSquared = delta.lengthSquared()
+		if (!delta.x.isFinite() || !delta.y.isFinite() || !delta.z.isFinite() || lengthSquared < 0.0001) {
 			return
 		}
+		val length = kotlin.math.sqrt(lengthSquared)
+		val normalX = (delta.x / length).toFloat()
+		val normalY = (delta.y / length).toFloat()
+		val normalZ = (delta.z / length).toFloat()
 
 		val red = color shr 16 and 0xFF
 		val green = color shr 8 and 0xFF
@@ -118,8 +132,10 @@ object ShulkerTracerRenderer {
 		val consumer = context.consumers().getBuffer(renderLayer)
 		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
 			.color(red, green, blue, alpha)
+			.normal(entry, normalX, normalY, normalZ)
 		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
 			.color(red, green, blue, alpha)
+			.normal(entry, normalX, normalY, normalZ)
 		(context.consumers() as? VertexConsumerProvider.Immediate)?.draw(renderLayer)
 		matrices.pop()
 	}
@@ -133,11 +149,6 @@ object ShulkerTracerRenderer {
 	}
 
 	private fun Double.isFinite(): Boolean = !isNaN() && kotlin.math.abs(this) != Double.POSITIVE_INFINITY
-
-	private fun Vector3f.normalized(): Vector3f {
-		val length = sqrt((x * x) + (y * y) + (z * z))
-		return if (length > 0.0001f) Vector3f(x / length, y / length, z / length) else Vector3f(0f, 0f, 1f)
-	}
 
 	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 	private const val CROSSHAIR_OFFSET = 2.0

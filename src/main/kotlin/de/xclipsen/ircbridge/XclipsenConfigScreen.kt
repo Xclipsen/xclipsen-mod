@@ -46,13 +46,14 @@ class XclipsenConfigScreen(
 	private lateinit var shulkerGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerProjectileGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
+	private lateinit var purpleTerracottaHighlightColorHexField: TextFieldWidget
 	private lateinit var lostFightSoundSearchField: TextFieldWidget
 
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
-		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER)),
+		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
-		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER)),
+		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
 	)
 
@@ -77,6 +78,7 @@ class XclipsenConfigScreen(
 		shulkerGlowColorHexField = registerField(ConfigField.SHULKER_GLOW_COLOR, workingCopy.shulkerGlowColorHex, "#36C5F0")
 		shulkerProjectileGlowColorHexField = registerField(ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, workingCopy.shulkerProjectileGlowColorHex, "#FF4D4D")
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
+		purpleTerracottaHighlightColorHexField = registerField(ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR, workingCopy.purpleTerracottaHighlightColorHex, "#B06CFF")
 		lostFightSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		layoutWidgets()
 	}
@@ -110,6 +112,9 @@ class XclipsenConfigScreen(
 		val mouseX = click.x().toInt()
 		val mouseY = click.y().toInt()
 		val button = click.button()
+		if (button < 0) {
+			return false
+		}
 
 		openedSection?.let { section ->
 			val menu = settingsBounds()
@@ -163,6 +168,10 @@ class XclipsenConfigScreen(
 	}
 
 	override fun mouseDragged(click: Click, offsetX: Double, offsetY: Double): Boolean {
+		if (click.button() < 0) {
+			return false
+		}
+
 		val dragTarget = draggingColorPicker
 		val sliderTarget = draggingSlider
 		if (openedSection == ConfigSection.HIDEONLEAF_HELPER && sliderTarget != null) {
@@ -181,6 +190,9 @@ class XclipsenConfigScreen(
 	override fun mouseReleased(click: Click): Boolean {
 		draggingColorPicker = null
 		draggingSlider = null
+		if (click.button() < 0) {
+			return false
+		}
 		return super.mouseReleased(click)
 	}
 
@@ -202,7 +214,9 @@ class XclipsenConfigScreen(
 		when (section) {
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled = !workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled = !workingCopy.hideonleafHelperEnabled
+			ConfigSection.PURPLE_TERRACOTTA -> workingCopy.purpleTerracottaHighlightModuleEnabled = !workingCopy.purpleTerracottaHighlightModuleEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled = !workingCopy.timeChangerEnabled
+			ConfigSection.AUCTION_HOUSE -> workingCopy.auctionHouseModuleEnabled = !workingCopy.auctionHouseModuleEnabled
 			ConfigSection.AUTO_CROESUS -> workingCopy.autoCroesusModuleEnabled = !workingCopy.autoCroesusModuleEnabled
 			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled = !workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled = !workingCopy.dungeonDoorModuleEnabled
@@ -270,11 +284,17 @@ class XclipsenConfigScreen(
 		candidate.hideonleafLostFightAlertSoundVolume = workingCopy.hideonleafLostFightAlertSoundVolume
 		candidate.hideonleafLostFightAlertSoundPitch = workingCopy.hideonleafLostFightAlertSoundPitch
 		candidate.timeChangerEnabled = workingCopy.timeChangerEnabled
+		candidate.purpleTerracottaHighlightModuleEnabled = workingCopy.purpleTerracottaHighlightModuleEnabled
 		candidate.timeChangerMode = workingCopy.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
+		candidate.auctionHouseModuleEnabled = workingCopy.auctionHouseModuleEnabled
+		candidate.auctionHouseAutoCopyUnderbidEnabled = workingCopy.auctionHouseAutoCopyUnderbidEnabled
 		candidate.autoCroesusModuleEnabled = workingCopy.autoCroesusModuleEnabled
 		candidate.experimentationTableModuleEnabled = workingCopy.experimentationTableModuleEnabled
+		candidate.autoExperimentsEnabled = workingCopy.autoExperimentsEnabled
 		candidate.autoExperimentsAutoClose = workingCopy.autoExperimentsAutoClose
+		candidate.autoExperimentsAutoPairs = workingCopy.autoExperimentsAutoPairs
 		candidate.autoExperimentsGetMaxXp = workingCopy.autoExperimentsGetMaxXp
+		candidate.autoExperimentsShowSolver = workingCopy.autoExperimentsShowSolver
 		candidate.dungeonDoorModuleEnabled = workingCopy.dungeonDoorModuleEnabled
 		candidate.dungeonDoorEnabled = workingCopy.dungeonDoorEnabled
 		candidate.dungeonDoorDebugEnabled = workingCopy.dungeonDoorDebugEnabled
@@ -292,6 +312,10 @@ class XclipsenConfigScreen(
 		}
 		candidate.shulkerTracerLineColorHex = normalizedHexColor(shulkerTracerLineColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Line color must be #RRGGBB.")
+			return null
+		}
+		candidate.purpleTerracottaHighlightColorHex = normalizedHexColor(purpleTerracottaHighlightColorHexField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("Purple terracotta color must be #RRGGBB.")
 			return null
 		}
 
@@ -454,7 +478,9 @@ class XclipsenConfigScreen(
 		return when (section) {
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled
+			ConfigSection.PURPLE_TERRACOTTA -> workingCopy.purpleTerracottaHighlightModuleEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled
+			ConfigSection.AUCTION_HOUSE -> workingCopy.auctionHouseModuleEnabled
 			ConfigSection.AUTO_CROESUS -> workingCopy.autoCroesusModuleEnabled
 			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled
@@ -482,7 +508,9 @@ class XclipsenConfigScreen(
 			ConfigSection.SETUP -> drawSetupSettings(context, menu, mouseX, mouseY)
 			ConfigSection.IRC_BRIDGE -> drawIrcBridgeSettings(context, menu, mouseX, mouseY)
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, menu, mouseX, mouseY)
+			ConfigSection.PURPLE_TERRACOTTA -> drawPurpleTerracottaSettings(context, menu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
+			ConfigSection.AUCTION_HOUSE -> drawAuctionHouseSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUTO_CROESUS -> drawAutoCroesusSettings(context, menu, mouseX, mouseY)
 			ConfigSection.DOOR -> drawDoorSettings(context, menu, mouseX, mouseY)
@@ -536,6 +564,14 @@ class XclipsenConfigScreen(
 		}
 	}
 
+	private fun drawPurpleTerracottaSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawColorSetting(context, purpleTerracottaColorBounds(menu), "Outline Color", ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR, mouseX, mouseY)
+		drawInfoSetting(context, purpleTerracottaBlockIdBounds(menu), "Block ID", "minecraft:purple_terracotta", mouseX, mouseY)
+		if (colorPickerOpen) {
+			drawColorPicker(context, menu, mouseX, mouseY)
+		}
+	}
+
 	private fun drawStatusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Check for Updates", workingCopy.checkForUpdatesEnabled, mouseX, mouseY)
 		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Auto-Update", workingCopy.autoUpdateEnabled, mouseX, mouseY)
@@ -547,13 +583,19 @@ class XclipsenConfigScreen(
 		drawOptionSetting(context, timeChangerModeBounds(menu), "Time", ClientTimeChanger.displayName(workingCopy.timeChangerMode), mouseX, mouseY)
 	}
 
+	private fun drawAuctionHouseSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, auctionHouseAutoCopyBounds(menu), "Auto Copy Underbid", workingCopy.auctionHouseAutoCopyUnderbidEnabled, mouseX, mouseY)
+	}
+
 	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
-		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Use", "Open Stakes and the module starts automatically for all three experiments.", mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsShowSolverBounds(menu), "Show Solver", workingCopy.autoExperimentsShowSolver, mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsEnabledBounds(menu), "Auto Play", workingCopy.autoExperimentsEnabled, mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsAutoPairsBounds(menu), "AutoPairs", workingCopy.autoExperimentsAutoPairs, mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsAutoCloseBounds(menu), "Auto Close", workingCopy.autoExperimentsAutoClose, mouseX, mouseY)
+		drawToggleSetting(context, autoExperimentsGetMaxXpBounds(menu), "Get Max XP", workingCopy.autoExperimentsGetMaxXp, mouseX, mouseY)
 		drawTextInputSetting(context, autoExperimentsClickDelayBounds(menu), "Click Delay (ms)", autoExperimentsClickDelayField, mouseX, mouseY)
 		drawTextInputSetting(context, autoExperimentsDelayVarietyBounds(menu), "Delay Variety (ms)", autoExperimentsDelayVarietyField, mouseX, mouseY)
-		drawToggleSetting(context, autoExperimentsAutoCloseBounds(menu), "Auto Close", workingCopy.autoExperimentsAutoClose, mouseX, mouseY)
 		drawTextInputSetting(context, autoExperimentsSerumCountBounds(menu), "Serum Count", autoExperimentsSerumCountField, mouseX, mouseY)
-		drawToggleSetting(context, autoExperimentsGetMaxXpBounds(menu), "Get Max XP", workingCopy.autoExperimentsGetMaxXp, mouseX, mouseY)
 	}
 
 	private fun drawAutoCroesusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -757,6 +799,7 @@ class XclipsenConfigScreen(
 			ConfigField.SHULKER_GLOW_COLOR -> shulkerGlowColorHexField
 			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> shulkerProjectileGlowColorHexField
 			ConfigField.SHULKER_TRACER_LINE_COLOR -> shulkerTracerLineColorHexField
+			ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR -> purpleTerracottaHighlightColorHexField
 			else -> shulkerGlowColorHexField
 		}
 	}
@@ -907,8 +950,10 @@ class XclipsenConfigScreen(
 			ConfigSection.SETUP -> SETUP_POPUP_HEIGHT
 			ConfigSection.IRC_BRIDGE -> IRC_POPUP_HEIGHT
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
+			ConfigSection.PURPLE_TERRACOTTA -> PURPLE_TERRACOTTA_POPUP_HEIGHT
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
-			ConfigSection.EXPERIMENTS -> 280
+			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
+			ConfigSection.EXPERIMENTS -> 340
 			ConfigSection.AUTO_CROESUS -> 335
 			ConfigSection.DOOR -> 135
 			ConfigSection.RED_VIGNETTE -> 100
@@ -1053,6 +1098,31 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (section == ConfigSection.PURPLE_TERRACOTTA) {
+			if (purpleTerracottaColorBounds(menu).contains(mouseX, mouseY)) {
+				openColorField = if (openColorField == ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR) null else ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR
+				soundDropdownOpen = false
+				draggingColorPicker = null
+				return true
+			}
+
+			if (!colorPickerOpen) {
+				return false
+			}
+
+			val target = when {
+				colorSvBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.SATURATION_BRIGHTNESS
+				colorHueBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.HUE
+				else -> null
+			}
+
+			if (target != null) {
+				draggingColorPicker = target
+				updateColorFromPicker(mouseX, mouseY, target)
+				return true
+			}
+		}
+
 		if (section == ConfigSection.IRC_BRIDGE && coopRelayToggleBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.coopChatRelayEnabled = !workingCopy.coopChatRelayEnabled
@@ -1065,9 +1135,33 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.AUCTION_HOUSE && auctionHouseAutoCopyBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.auctionHouseAutoCopyUnderbidEnabled = !workingCopy.auctionHouseAutoCopyUnderbidEnabled
+			return true
+		}
+
 		if (section == ConfigSection.EXPERIMENTS && autoExperimentsAutoCloseBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.autoExperimentsAutoClose = !workingCopy.autoExperimentsAutoClose
+			return true
+		}
+
+		if (section == ConfigSection.EXPERIMENTS && autoExperimentsShowSolverBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.autoExperimentsShowSolver = !workingCopy.autoExperimentsShowSolver
+			return true
+		}
+
+		if (section == ConfigSection.EXPERIMENTS && autoExperimentsEnabledBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.autoExperimentsEnabled = !workingCopy.autoExperimentsEnabled
+			return true
+		}
+
+		if (section == ConfigSection.EXPERIMENTS && autoExperimentsAutoPairsBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.autoExperimentsAutoPairs = !workingCopy.autoExperimentsAutoPairs
 			return true
 		}
 
@@ -1314,6 +1408,15 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 65, menu.right - 10, menu.top + 85)
 	}
 
+	private fun purpleTerracottaColorBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 60)
+	}
+
+	private fun purpleTerracottaBlockIdBounds(menu: Bounds): Bounds {
+		val top = purpleTerracottaColorBounds(menu).bottom + SETTING_GAP + colorPickerSpaceAfter(ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR)
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
 	private fun projectileGlowColorBounds(menu: Bounds): Bounds {
 		val top = shulkerGlowColorBounds(menu).bottom + SETTING_GAP + colorPickerSpaceAfter(ConfigField.SHULKER_GLOW_COLOR)
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
@@ -1332,6 +1435,7 @@ class XclipsenConfigScreen(
 	private fun colorPickerTop(menu: Bounds): Int {
 		val field = openColorField ?: return menu.top + 90
 		return when (field) {
+			ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR -> purpleTerracottaColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_GLOW_COLOR -> shulkerGlowColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> projectileGlowColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_TRACER_LINE_COLOR -> tracerLineColorBounds(menu).bottom + SETTING_GAP
@@ -1399,6 +1503,28 @@ class XclipsenConfigScreen(
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + rowHeight)
 	}
 
+	private fun experimentationRowBounds(menu: Bounds, rowIndex: Int, rowHeight: Int): Bounds {
+		val layout = intArrayOf(
+			SETTING_HEIGHT,
+			SETTING_HEIGHT,
+			SETTING_HEIGHT,
+			SETTING_HEIGHT,
+			SETTING_HEIGHT,
+			TEXT_INPUT_SETTING_HEIGHT,
+			TEXT_INPUT_SETTING_HEIGHT,
+			TEXT_INPUT_SETTING_HEIGHT,
+		)
+		var rowTop = menu.top + 40
+		for (index in 0 until rowIndex.coerceAtMost(layout.size)) {
+			rowTop += layout[index] + SETTING_GAP
+			if (index == 4) {
+				rowTop += EXPERIMENTS_SECTION_GAP
+			}
+		}
+		val rowLeft = menu.left + 10
+		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + rowHeight)
+	}
+
 	private fun coopRelayToggleBounds(menu: Bounds): Bounds {
 		val rowTop = menu.top + 40 + (1 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
 		return Bounds(menu.left + 10, rowTop, menu.left + 10 + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
@@ -1420,24 +1546,40 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
 
+	private fun auctionHouseAutoCopyBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
 	private fun autoExperimentsClickDelayBounds(menu: Bounds): Bounds {
-		return settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT)
+		return experimentationRowBounds(menu, 5, TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun autoExperimentsDelayVarietyBounds(menu: Bounds): Bounds {
-		return settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT)
+		return experimentationRowBounds(menu, 6, TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun autoExperimentsAutoCloseBounds(menu: Bounds): Bounds {
-		return settingRowBounds(menu, 3, SETTING_HEIGHT)
+		return experimentationRowBounds(menu, 3, SETTING_HEIGHT)
 	}
 
 	private fun autoExperimentsSerumCountBounds(menu: Bounds): Bounds {
-		return settingRowBounds(menu, 4, TEXT_INPUT_SETTING_HEIGHT)
+		return experimentationRowBounds(menu, 7, TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun autoExperimentsGetMaxXpBounds(menu: Bounds): Bounds {
-		return settingRowBounds(menu, 5, SETTING_HEIGHT)
+		return experimentationRowBounds(menu, 4, SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsShowSolverBounds(menu: Bounds): Bounds {
+		return experimentationRowBounds(menu, 0, SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsEnabledBounds(menu: Bounds): Bounds {
+		return experimentationRowBounds(menu, 1, SETTING_HEIGHT)
+	}
+
+	private fun autoExperimentsAutoPairsBounds(menu: Bounds): Bounds {
+		return experimentationRowBounds(menu, 2, SETTING_HEIGHT)
 	}
 
 	private fun autoCroesusEnabledBounds(menu: Bounds): Bounds {
@@ -1528,9 +1670,11 @@ class XclipsenConfigScreen(
 		SETUP("Setup", "Global backend and API settings used by all modules."),
 		IRC_BRIDGE("IRC Bridge", "IRC message formats and bridge-specific toggles.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
+		PURPLE_TERRACOTTA("Purple Terracotta", "Highlights purple terracotta blocks through walls.", toggleable = true),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
+		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
-		EXPERIMENTS("Auto Experiments", "Automates Chronomatron, Ultrasequencer and Superpairs from the Experimentation Table.", toggleable = true),
+		EXPERIMENTS("Experimentation", "Solver and automation for Chronomatron, Ultrasequencer and Superpairs.", toggleable = true),
 		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
 		RED_VIGNETTE("Red Vignette", "Matches Devonian's client-side click fix for the red vignette.", toggleable = true),
 		STATUS("Status", "Current config path and backend state."),
@@ -1551,6 +1695,7 @@ class XclipsenConfigScreen(
 		SHULKER_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_PROJECTILE_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_TRACER_LINE_COLOR(ConfigSection.HIDEONLEAF_HELPER),
+		PURPLE_TERRACOTTA_HIGHLIGHT_COLOR(ConfigSection.PURPLE_TERRACOTTA),
 	}
 
 	companion object {
@@ -1580,13 +1725,16 @@ class XclipsenConfigScreen(
 		private const val SETUP_POPUP_HEIGHT = 220
 		private const val IRC_POPUP_HEIGHT = 140
 		private const val HIDEONLEAF_POPUP_HEIGHT = 500
+		private const val PURPLE_TERRACOTTA_POPUP_HEIGHT = 230
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
+		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20
 		private const val TEXT_INPUT_SETTING_HEIGHT = 38
 		private const val TEXT_INPUT_WIDTH = 164
 		private const val COLOR_INPUT_WIDTH = 134
 		private const val SETTING_GAP = 5
+		private const val EXPERIMENTS_SECTION_GAP = 12
 		private const val SEARCH_WIDTH = 150
 		private const val SOUND_VISIBLE_ROWS = 6
 		private const val SOUND_ROW_HEIGHT = 15

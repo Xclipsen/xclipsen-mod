@@ -63,9 +63,8 @@ tasks.jar {
 	archiveClassifier.set("dev")
 }
 
-val prismTargetDirs = listOf(
-	"/home/la/.local/share/PrismLauncher/instances/1.21.11/minecraft/mods",
-	"/home/la/.local/share/PrismLauncher/instances/1.21.11 skyhanni + sbo/minecraft/mods",
+val prismTargetDirs: List<String> = listOf(
+	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test/minecraft/mods"
 )
 
 fun Project.findRemappedModJar(): File {
@@ -102,24 +101,12 @@ tasks.register("copyPrismMods") {
 	dependsOn("remapJar")
 
 	doLast {
-		project.copyRemappedModToPrismTargets()
+		copyRemappedModToPrismTargets()
 	}
 }
 
 tasks.named("build") {
 	finalizedBy("copyPrismMods")
-}
-
-tasks.register("deployPrismMods") {
-	group = "distribution"
-	description = "Builds the mod and copies the remapped jar to the configured PrismLauncher test instances."
-	dependsOn("build")
-}
-
-tasks.register("xmodTest") {
-	group = "distribution"
-	description = "Alias for deployPrismMods."
-	dependsOn("deployPrismMods")
 }
 
 publishing {

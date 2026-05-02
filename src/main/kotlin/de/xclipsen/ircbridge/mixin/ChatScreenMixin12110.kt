@@ -3,7 +3,6 @@ package de.xclipsen.ircbridge.mixin
 import de.xclipsen.ircbridge.ImagePreviewManager
 import de.xclipsen.ircbridge.IrcChatTabManager
 import net.minecraft.client.MinecraftClient
-import net.minecraft.client.font.DrawnTextConsumer
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.hud.ChatHud
 import net.minecraft.client.gui.hud.InGameHud
@@ -12,17 +11,14 @@ import net.minecraft.text.Style
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.gen.Invoker
 import org.spongepowered.asm.mixin.injection.At
-import org.spongepowered.asm.mixin.injection.Redirect
 import org.spongepowered.asm.mixin.injection.Inject
+import org.spongepowered.asm.mixin.injection.Redirect
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 
 @Mixin(ChatScreen::class)
-abstract class ChatScreenMixin {
-	@Invoker("shouldInsert")
-	protected abstract fun callShouldInsert(): Boolean
-
-	@Invoker("handleClickEvent")
-	protected abstract fun callHandleClickEvent(style: Style, shouldInsert: Boolean): Boolean
+abstract class ChatScreenMixin12110 {
+	@Invoker(value = "method_44052", remap = false)
+	protected abstract fun callGetTextStyleAt(mouseX: Double, mouseY: Double): Style?
 
 	@Redirect(
 		method = ["removed", "keyPressed", "mouseScrolled", "mouseClicked", "setChatFromHistory", "render"],
@@ -34,9 +30,6 @@ abstract class ChatScreenMixin {
 
 	@Inject(method = ["render"], at = [At("TAIL")])
 	private fun renderImagePreview(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float, ci: CallbackInfo) {
-		val client = MinecraftClient.getInstance()
-		val clickHandler = DrawnTextConsumer.ClickHandler(client.textRenderer, mouseX, mouseY).insert(callShouldInsert())
-		IrcChatTabManager.activeChatHud(client).render(clickHandler, client.window.scaledHeight, client.inGameHud.ticks, true)
-		ImagePreviewManager.renderHoverPreview(context, clickHandler.style, mouseX, mouseY)
+		ImagePreviewManager.renderHoverPreview(context, callGetTextStyleAt(mouseX.toDouble(), mouseY.toDouble()), mouseX, mouseY)
 	}
 }

@@ -1,8 +1,8 @@
 # Xclipsen Mod
 
-Fabric-Clientmod fuer Minecraft `1.21.11`.
+Fabric-Clientmod fuer Minecraft `1.21.10`.
 
-Aktuelle Version: `0.5.7`
+Aktuelle Version: `0.5.8`
 
 ## Kurzuebersicht
 

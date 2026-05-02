@@ -46,6 +46,10 @@ class XclipsenHudEditorScreen(
 	}
 
 	override fun mouseClicked(click: Click, doubled: Boolean): Boolean {
+		if (click.button() < 0) {
+			return false
+		}
+
 		if (super.mouseClicked(click, doubled)) {
 			return true
 		}
@@ -64,6 +68,9 @@ class XclipsenHudEditorScreen(
 
 	override fun mouseReleased(click: Click): Boolean {
 		XclipsenHudManager.elements.forEach { element -> element.stopDragging() }
+		if (click.button() < 0) {
+			return false
+		}
 		return super.mouseReleased(click)
 	}
 

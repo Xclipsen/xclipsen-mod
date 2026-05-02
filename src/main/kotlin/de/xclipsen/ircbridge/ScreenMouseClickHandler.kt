@@ -11,6 +11,9 @@ object ScreenMouseClickHandler {
 		ScreenEvents.AFTER_INIT.register { _, screen, _, _ ->
 			ScreenMouseEvents.allowMouseClick(screen).register { _, click ->
 				val button = click.button()
+				if (button < 0) {
+					return@register true
+				}
 				button != 0 || !XclipsenHudManager.handleScreenClick(click.x().toInt(), click.y().toInt(), button)
 			}
 		}

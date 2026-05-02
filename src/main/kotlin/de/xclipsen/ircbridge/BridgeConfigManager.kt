@@ -82,6 +82,7 @@ class BridgeConfigManager(
 		value.hideonleafLostFightAlertSoundId = SoundCatalog.normalizeSoundId(value.hideonleafLostFightAlertSoundId)
 		value.hideonleafLostFightAlertSoundVolume = value.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.hideonleafLostFightAlertSoundPitch = value.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f)
+		value.purpleTerracottaHighlightColorHex = normalizedHexColor(value.purpleTerracottaHighlightColorHex, "#B06CFF")
 		value.timeChangerMode = value.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
 		value.autoExperimentsClickDelayMs = value.autoExperimentsClickDelayMs.coerceIn(50, 5_000)
 		value.autoExperimentsDelayVarietyMs = value.autoExperimentsDelayVarietyMs.coerceIn(0, 5_000)

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.8
+
+- Restricted the mod back to Minecraft `1.21.10` only to avoid client/render incompatibilities on `1.21.11`.
+- Reworked the chat mixin setup for the `1.21.10` client path and removed the old multi-version split.
+- Added Purple Terracotta highlighting and Auction House underbid auto-copy support.
+- Hardened Lowest BIN refresh handling so temporary non-JSON/HTTP failures keep cached BIN data instead of hard-failing the refresh.
+
 ## v0.5.7
 
 - Added Minecraft `1.21.11` compatibility.

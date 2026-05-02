@@ -3,11 +3,13 @@
   "package": "de.xclipsen.ircbridge.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ChatHudMixin",
-    "ChatScreenMixin",
+    "ChatHudInvoker12110",
+    "ChatHudMixin12110",
+    "ChatScreenMixin12110",
     "ClientPlayerInteractionManagerMixin",
     "ClientWorldMixin",
-    "EntityGlowMixin"
+    "EntityGlowMixin",
+    "HandledScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

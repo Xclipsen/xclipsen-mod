@@ -19,9 +19,27 @@ object LocationTracker {
 	var currentArea: String = ""
 		private set
 
+	/** Raw scoreboard title, e.g. "SKYBLOCK". Empty when unknown. */
+	@Volatile
+	var scoreboardTitle: String = ""
+		private set
+
+	/** True while connected to a Hypixel server entry. */
+	@Volatile
+	var isOnHypixel: Boolean = false
+		private set
+
+	/** True while the client appears to be on Hypixel SkyBlock. */
+	val isOnHypixelSkyBlock: Boolean
+		get() = isOnHypixel && scoreboardTitle.contains("skyblock", ignoreCase = true)
+
 	/** True while the player is anywhere on Galatea Island. */
 	val isOnGalatea: Boolean
-		get() = currentArea.contains("galatea", ignoreCase = true)
+		get() = isOnHypixelSkyBlock && currentArea.contains("galatea", ignoreCase = true)
+
+	/** True while the player is on The End island or one of its sub-areas. */
+	val isOnEndIsland: Boolean
+		get() = isOnHypixelSkyBlock && normalizedEndArea(currentArea) != null
 
 	// ── Tick ────────────────────────────────────────────────────────────
 
@@ -34,9 +52,13 @@ object LocationTracker {
 
 		if (client.world == null || client.player == null) {
 			currentArea = ""
+			scoreboardTitle = ""
+			isOnHypixel = false
 			return
 		}
 
+		isOnHypixel = isHypixelServer(client)
+		scoreboardTitle = readScoreboardTitle(client) ?: ""
 		currentArea = readAreaFromTabList(client) ?: ""
 	}
 
@@ -62,5 +84,32 @@ object LocationTracker {
 		return null
 	}
 
+	private fun readScoreboardTitle(client: MinecraftClient): String? {
+		val scoreboard = client.world?.scoreboard ?: return null
+		val objective = scoreboard.getObjectiveForSlot(net.minecraft.scoreboard.ScoreboardDisplaySlot.SIDEBAR) ?: return null
+		return objective.displayName?.string?.trim()?.takeUnless { it.isEmpty() }
+	}
+
+	private fun isHypixelServer(client: MinecraftClient): Boolean {
+		val address = client.currentServerEntry?.address?.trim()?.lowercase() ?: return false
+		return address == "hypixel.net" || address.endsWith(".hypixel.net")
+	}
+
+	private fun normalizedEndArea(raw: String): String? {
+		val normalized = raw.trim().lowercase()
+		return END_ISLAND_AREAS.firstOrNull { area ->
+			normalized == area || normalized.contains(area)
+		}
+	}
+
 	private val AREA_PREFIXES = listOf("Area: ", "Dungeon: ")
+	private val END_ISLAND_AREAS = setOf(
+		"the end",
+		"dragon's nest",
+		"zealot bruiser hideout",
+		"void slate",
+		"void sepulture",
+		"forgotten skull",
+		"dragontail",
+	)
 }

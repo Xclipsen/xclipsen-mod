@@ -3,10 +3,11 @@ package de.xclipsen.ircbridge.mixin
 import de.xclipsen.ircbridge.ImagePreviewManager
 import de.xclipsen.ircbridge.IrcChatTabManager
 import net.minecraft.client.MinecraftClient
-import net.minecraft.client.font.TextRenderer
+import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.hud.ChatHud
 import net.minecraft.client.gui.hud.ChatHudLine
-import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.gui.hud.MessageIndicator
+import net.minecraft.text.Style
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.Shadow
 import org.spongepowered.asm.mixin.gen.Accessor
@@ -16,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable
 
 @Mixin(ChatHud::class)
-abstract class ChatHudMixin {
+abstract class ChatHudMixin12110 {
 	@Shadow
 	protected lateinit var client: MinecraftClient
 
@@ -35,20 +36,18 @@ abstract class ChatHudMixin {
 	private var frozenBaseVisibleMessageCount = -1
 	private var frozenBaseScrolledLines = 0
 
-	@Inject(method = ["render"], at = [At("HEAD")], cancellable = true)
+	@Inject(method = ["method_1805"], at = [At("HEAD")], cancellable = true, remap = false)
 	private fun handleRenderProxy(
 		context: DrawContext,
-		textRenderer: TextRenderer,
 		currentTick: Int,
 		mouseX: Int,
 		mouseY: Int,
-		interactable: Boolean,
 		focused: Boolean,
 		ci: CallbackInfo,
 	) {
 		val self = this as ChatHud
 		if (IrcChatTabManager.shouldProxy(self, client)) {
-			IrcChatTabManager.ircChatHud(client).render(context, textRenderer, currentTick, mouseX, mouseY, interactable, focused)
+			(IrcChatTabManager.ircChatHud(client) as ChatHudInvoker12110).`xclipsen$renderLegacy`(context, currentTick, mouseX, mouseY, focused)
 			ci.cancel()
 			return
 		}
@@ -60,6 +59,30 @@ abstract class ChatHudMixin {
 			}
 		} else {
 			frozenBaseVisibleMessageCount = -1
+		}
+	}
+
+	@Inject(method = ["method_27146"], at = [At("HEAD")], cancellable = true, remap = false)
+	private fun proxyMouseClicked(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<Boolean>) {
+		val self = this as ChatHud
+		if (IrcChatTabManager.shouldProxy(self, client)) {
+			cir.returnValue = (IrcChatTabManager.ircChatHud(client) as ChatHudInvoker12110).`xclipsen$mouseClickedLegacy`(mouseX, mouseY)
+		}
+	}
+
+	@Inject(method = ["method_1816"], at = [At("HEAD")], cancellable = true, remap = false)
+	private fun proxyGetTextStyleAt(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<Style?>) {
+		val self = this as ChatHud
+		if (IrcChatTabManager.shouldProxy(self, client)) {
+			cir.returnValue = (IrcChatTabManager.ircChatHud(client) as ChatHudInvoker12110).`xclipsen$getTextStyleAtLegacy`(mouseX, mouseY)
+		}
+	}
+
+	@Inject(method = ["method_44723"], at = [At("HEAD")], cancellable = true, remap = false)
+	private fun proxyGetIndicatorAt(mouseX: Double, mouseY: Double, cir: CallbackInfoReturnable<MessageIndicator?>) {
+		val self = this as ChatHud
+		if (IrcChatTabManager.shouldProxy(self, client)) {
+			cir.returnValue = (IrcChatTabManager.ircChatHud(client) as ChatHudInvoker12110).`xclipsen$getIndicatorAtLegacy`(mouseX, mouseY)
 		}
 	}
 

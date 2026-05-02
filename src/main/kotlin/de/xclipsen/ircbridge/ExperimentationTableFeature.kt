@@ -1,7 +1,10 @@
 package de.xclipsen.ircbridge
 
+import de.xclipsen.ircbridge.mixin.HandledScreenAccessor
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents
 import net.minecraft.client.MinecraftClient
+import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen
 import net.minecraft.component.DataComponentTypes
 import net.minecraft.component.type.LoreComponent
@@ -21,6 +24,10 @@ object ExperimentationTableFeature {
 	private const val STAKE_SELECTION_BUFFER_MS = 1_000L
 	private const val AUTO_CLOSE_DELAY_MS = 500L
 	private const val CHRONOMATRON_STOP_AT_ROUND = 10
+	private const val SOLVER_PRIMARY_FILL = 0x6036FF7A
+	private const val SOLVER_SECONDARY_FILL = 0x60FFC233
+	private const val SOLVER_PRIMARY_BORDER = 0xFF36FF7A.toInt()
+	private const val SOLVER_SECONDARY_BORDER = 0xFFFFC233.toInt()
 
 	private val remainingClicksPattern = Regex("""Remaining Clicks:\s*(\d+)""")
 	private val lockedStakeMessages = listOf(
@@ -64,6 +71,8 @@ object ExperimentationTableFeature {
 			when {
 				isChronomatronRound(screen.title.string) -> {
 					chronomatronSolver.reset()
+					registerSolverOverlay(screen)
+					registerSolverClickTracking(screen)
 					ScreenEvents.afterTick(screen).register { currentScreen ->
 						if (currentScreen !is GenericContainerScreen) return@register
 						if (!isEnabled()) {
@@ -76,6 +85,8 @@ object ExperimentationTableFeature {
 
 				isUltrasequencerRound(screen.title.string) -> {
 					ultrasequencerSolver.reset()
+					registerSolverOverlay(screen)
+					registerSolverClickTracking(screen)
 					ScreenEvents.afterTick(screen).register { currentScreen ->
 						if (currentScreen !is GenericContainerScreen) return@register
 						if (!isEnabled()) {
@@ -88,6 +99,8 @@ object ExperimentationTableFeature {
 
 				isSuperpairsRound(screen.title.string) -> {
 					superpairsSolver.reset()
+					registerSolverOverlay(screen)
+					registerSolverClickTracking(screen)
 					ScreenEvents.afterTick(screen).register { currentScreen ->
 						if (currentScreen !is GenericContainerScreen) return@register
 						if (!isEnabled()) {
@@ -102,7 +115,7 @@ object ExperimentationTableFeature {
 					val openedAtMs = System.currentTimeMillis()
 					ScreenEvents.afterTick(screen).register { currentScreen ->
 						if (currentScreen !is GenericContainerScreen) return@register
-						if (autoCloseEnabled() && System.currentTimeMillis() - openedAtMs >= AUTO_CLOSE_DELAY_MS) {
+						if (autoEnabled() && autoCloseEnabled() && System.currentTimeMillis() - openedAtMs >= AUTO_CLOSE_DELAY_MS) {
 							closeCurrentScreen()
 						}
 					}
@@ -114,7 +127,7 @@ object ExperimentationTableFeature {
 					val openedAtMs = System.currentTimeMillis()
 					ScreenEvents.afterTick(screen).register { currentScreen ->
 						if (currentScreen !is GenericContainerScreen) return@register
-						if (!isEnabled() || started) return@register
+						if (!isEnabled() || !autoEnabled() || started) return@register
 						if (System.currentTimeMillis() - openedAtMs < STAKE_SELECTION_BUFFER_MS) return@register
 						attempts++
 						started = startSelectedExperiment(showFeedback = attempts >= 10)
@@ -136,6 +149,12 @@ object ExperimentationTableFeature {
 		if (!isEnabled()) {
 			if (showFeedback) {
 				sendFeedback("Experimentation Table module is disabled in /xclipsen.")
+			}
+			return false
+		}
+		if (!autoEnabled()) {
+			if (showFeedback) {
+				sendFeedback("Auto Play is disabled in /xclipsen.")
 			}
 			return false
 		}
@@ -207,6 +226,18 @@ object ExperimentationTableFeature {
 		return XclipsenIrcBridgeClient.instance?.config()?.autoExperimentsDelayVarietyMs ?: DEFAULT_DELAY_VARIETY_MS
 	}
 
+	private fun showSolverEnabled(): Boolean {
+		return XclipsenIrcBridgeClient.instance?.config()?.autoExperimentsShowSolver == true
+	}
+
+	private fun autoEnabled(): Boolean {
+		return XclipsenIrcBridgeClient.instance?.config()?.autoExperimentsEnabled == true
+	}
+
+	private fun autoPairsEnabled(): Boolean {
+		return XclipsenIrcBridgeClient.instance?.config()?.autoExperimentsAutoPairs == true
+	}
+
 	private fun autoCloseEnabled(): Boolean {
 		return XclipsenIrcBridgeClient.instance?.config()?.autoExperimentsAutoClose == true
 	}
@@ -248,6 +279,88 @@ object ExperimentationTableFeature {
 		chronomatronSolver.reset()
 		ultrasequencerSolver.reset()
 		superpairsSolver.reset()
+	}
+
+	private fun registerSolverOverlay(screen: GenericContainerScreen) {
+		ScreenEvents.afterRender(screen).register { currentScreen, context, _, _, _ ->
+			if (currentScreen !is GenericContainerScreen) return@register
+			renderSolverOverlay(currentScreen, context)
+		}
+	}
+
+	private fun registerSolverClickTracking(screen: GenericContainerScreen) {
+		ScreenMouseEvents.afterMouseClick(screen).register { currentScreen, click, consumed ->
+			val button = click.button()
+			if (currentScreen !is GenericContainerScreen || button < 0 || button != 0 || !isEnabled()) {
+				return@register consumed
+			}
+
+			val slotIndex = findSlotAt(currentScreen, click.x().toInt(), click.y().toInt()) ?: return@register consumed
+			when {
+				isChronomatronRound(currentScreen.title.string) -> chronomatronSolver.onManualSlotClick(currentScreen, slotIndex)
+				isUltrasequencerRound(currentScreen.title.string) -> ultrasequencerSolver.onManualSlotClick(currentScreen, slotIndex)
+				isSuperpairsRound(currentScreen.title.string) -> superpairsSolver.onManualSlotClick(currentScreen, slotIndex)
+			}
+			consumed
+		}
+	}
+
+	private fun renderSolverOverlay(screen: GenericContainerScreen, context: DrawContext) {
+		if (!isEnabled() || !showSolverEnabled()) {
+			return
+		}
+
+		val highlights = when {
+			isChronomatronRound(screen.title.string) -> chronomatronSolver.currentHighlights(screen)
+			isUltrasequencerRound(screen.title.string) -> ultrasequencerSolver.currentHighlights(screen)
+			isSuperpairsRound(screen.title.string) -> superpairsSolver.currentHighlights(screen)
+			else -> emptyList()
+		}.distinctBy { it.slotIndex }
+		if (highlights.isEmpty()) {
+			return
+		}
+
+		val handledScreen = screen as? HandledScreenAccessor ?: return
+		val originX = handledScreen.`xclipsen$getX`()
+		val originY = handledScreen.`xclipsen$getY`()
+
+		for (highlight in highlights) {
+			val slot = screen.screenHandler.slots.getOrNull(highlight.slotIndex) ?: continue
+			val left = originX + slot.x
+			val top = originY + slot.y
+			drawSolverHighlight(context, left, top, highlight.fillColor, highlight.borderColor)
+		}
+	}
+
+	private fun drawSolverHighlight(context: DrawContext, left: Int, top: Int, fillColor: Int, borderColor: Int) {
+		val right = left + 16
+		val bottom = top + 16
+		context.fill(left, top, right, bottom, fillColor)
+		context.fill(left, top, right, top + 1, borderColor)
+		context.fill(left, bottom - 1, right, bottom, borderColor)
+		context.fill(left, top, left + 1, bottom, borderColor)
+		context.fill(right - 1, top, right, bottom, borderColor)
+	}
+
+	private fun primaryHighlight(slotIndex: Int): SolverHighlight {
+		return SolverHighlight(slotIndex, SOLVER_PRIMARY_FILL, SOLVER_PRIMARY_BORDER)
+	}
+
+	private fun secondaryHighlight(slotIndex: Int): SolverHighlight {
+		return SolverHighlight(slotIndex, SOLVER_SECONDARY_FILL, SOLVER_SECONDARY_BORDER)
+	}
+
+	private fun findSlotAt(screen: GenericContainerScreen, mouseX: Int, mouseY: Int): Int? {
+		val handledScreen = screen as? HandledScreenAccessor ?: return null
+		val originX = handledScreen.`xclipsen$getX`()
+		val originY = handledScreen.`xclipsen$getY`()
+
+		val slotIndex = screen.screenHandler.slots.indexOfFirst { slot ->
+			val left = originX + slot.x
+			val top = originY + slot.y
+			mouseX in left until (left + 16) && mouseY in top until (top + 16)
+		}
+		return slotIndex.takeIf { it >= 0 }
 	}
 
 	private fun clickSlot(screen: GenericContainerScreen, slotIndex: Int) {
@@ -302,13 +415,18 @@ object ExperimentationTableFeature {
 		private var currentDelay = 0
 		private var closeAfterSequence = false
 		private var pendingCloseAtMs = 0L
+		private var inputPhaseActive = false
 
 		fun tick(screen: GenericContainerScreen) {
-			if (pendingCloseAtMs > 0L && System.currentTimeMillis() >= pendingCloseAtMs) {
+			if (pendingCloseAtMs > 0L && autoEnabled() && System.currentTimeMillis() >= pendingCloseAtMs) {
 				closeCurrentScreen()
 				pendingCloseAtMs = 0L
 				closeAfterSequence = false
+				inputPhaseActive = false
 				return
+			}
+			if (!autoEnabled()) {
+				pendingCloseAtMs = 0L
 			}
 
 			if (currentDelay > 0) {
@@ -317,22 +435,27 @@ object ExperimentationTableFeature {
 
 			val currentCycle = slotStack(screen, CHRONOMATRON_CYCLE_SLOT).count
 			val currentModeItem = slotStack(screen, MODE_SLOT).item
-			if (autoCloseEnabled() && currentCycle >= CHRONOMATRON_STOP_AT_ROUND) {
+			if (autoEnabled() && autoCloseEnabled() && currentCycle >= CHRONOMATRON_STOP_AT_ROUND) {
 				if (pendingCloseAtMs == 0L) {
 					pendingCloseAtMs = autoCloseReadyAtMs()
 				}
+				inputPhaseActive = false
 				return
 			}
 
 			if ((currentCycle > 0 && currentModeItem == Items.GLOWSTONE) || (currentCycle == lastCycle && currentModeItem != lastModeItem)) {
 				startSeconds = -1
+				inputPhaseActive = false
 				captureSequence(screen)
 			} else {
 				if (startSeconds == -1) {
 					startSeconds = slotStack(screen, MODE_SLOT).count
 				}
 				if (slotStack(screen, MODE_SLOT).count < startSeconds) {
+					inputPhaseActive = true
 					inputSequence(screen)
+				} else {
+					inputPhaseActive = false
 				}
 			}
 
@@ -350,6 +473,33 @@ object ExperimentationTableFeature {
 			currentDelay = 0
 			closeAfterSequence = false
 			pendingCloseAtMs = 0L
+			inputPhaseActive = false
+		}
+
+		fun currentHighlights(screen: GenericContainerScreen): List<SolverHighlight> {
+			val modeItem = slotStack(screen, MODE_SLOT).item
+			if (modeItem == Items.GLOWSTONE || clickStack.isEmpty()) {
+				return emptyList()
+			}
+
+			return clickStack.toList().take(2).mapIndexedNotNull { index, item ->
+				val slotIndex = (10..42).firstOrNull { slotStack(screen, it).item == item } ?: return@mapIndexedNotNull null
+				if (index == 0) primaryHighlight(slotIndex) else secondaryHighlight(slotIndex)
+			}
+		}
+
+		fun onManualSlotClick(screen: GenericContainerScreen, slotIndex: Int) {
+			if (slotIndex !in 10..42) {
+				return
+			}
+
+			val expectedItem = clickStack.firstOrNull() ?: return
+			if (slotStack(screen, slotIndex).item == expectedItem) {
+				clickStack.removeFirst()
+				if (clickStack.isEmpty()) {
+					inputPhaseActive = false
+				}
+			}
 		}
 
 		private fun captureSequence(screen: GenericContainerScreen) {
@@ -375,7 +525,7 @@ object ExperimentationTableFeature {
 		}
 
 		private fun inputSequence(screen: GenericContainerScreen) {
-			if (currentDelay > 0) {
+			if (!autoEnabled() || currentDelay > 0) {
 				return
 			}
 
@@ -390,7 +540,7 @@ object ExperimentationTableFeature {
 				clickSlot(screen, slotIndex)
 				clickStack.removeFirst()
 				currentDelay = actionDelayTicks()
-				if (closeAfterSequence && clickStack.isEmpty() && autoCloseEnabled()) {
+				if (closeAfterSequence && clickStack.isEmpty() && autoEnabled() && autoCloseEnabled()) {
 					pendingCloseAtMs = autoCloseReadyAtMs()
 				}
 				return
@@ -406,11 +556,14 @@ object ExperimentationTableFeature {
 		private var pendingCloseAtMs = 0L
 
 		fun tick(screen: GenericContainerScreen) {
-			if (pendingCloseAtMs > 0L && System.currentTimeMillis() >= pendingCloseAtMs) {
+			if (pendingCloseAtMs > 0L && autoEnabled() && System.currentTimeMillis() >= pendingCloseAtMs) {
 				closeCurrentScreen()
 				pendingCloseAtMs = 0L
 				closeAfterSequence = false
 				return
+			}
+			if (!autoEnabled()) {
+				pendingCloseAtMs = 0L
 			}
 
 			if (currentDelay > 0) {
@@ -441,6 +594,26 @@ object ExperimentationTableFeature {
 			pendingCloseAtMs = 0L
 		}
 
+		fun currentHighlights(screen: GenericContainerScreen): List<SolverHighlight> {
+			if (slotStack(screen, MODE_SLOT).item != Items.CLOCK || clickStack.isEmpty()) {
+				return emptyList()
+			}
+
+			return clickStack.toList().take(2).mapIndexed { index, slotIndex ->
+				if (index == 0) primaryHighlight(slotIndex) else secondaryHighlight(slotIndex)
+			}
+		}
+
+		fun onManualSlotClick(screen: GenericContainerScreen, slotIndex: Int) {
+			if (slotStack(screen, MODE_SLOT).item != Items.CLOCK) {
+				return
+			}
+
+			if (clickStack.firstOrNull() == slotIndex) {
+				clickStack.removeFirst()
+			}
+		}
+
 		private fun rememberSequence(screen: GenericContainerScreen) {
 			for (slotIndex in 0..44) {
 				val stack = slotStack(screen, slotIndex)
@@ -455,7 +628,7 @@ object ExperimentationTableFeature {
 		}
 
 		private fun inputSequence(screen: GenericContainerScreen) {
-			if (currentDelay > 0) {
+			if (!autoEnabled() || currentDelay > 0) {
 				return
 			}
 
@@ -467,7 +640,7 @@ object ExperimentationTableFeature {
 			clickSlot(screen, nextSlot)
 			clickStack.removeFirst()
 			currentDelay = actionDelayTicks()
-			if (closeAfterSequence && clickStack.isEmpty() && autoCloseEnabled()) {
+			if (closeAfterSequence && clickStack.isEmpty() && autoEnabled() && autoCloseEnabled()) {
 				pendingCloseAtMs = autoCloseReadyAtMs()
 			}
 		}
@@ -485,13 +658,17 @@ object ExperimentationTableFeature {
 		fun tick(screen: GenericContainerScreen) {
 			val tier = SuperpairsTier.fromTitle(screen.title.string) ?: return
 			val boardSlots = tier.slotRange
+			val canAutoPairs = autoEnabled() && autoPairsEnabled()
 
 			updateBoardMemory(screen, boardSlots)
 
-			if (pendingCloseAtMs > 0L && System.currentTimeMillis() >= pendingCloseAtMs) {
+			if (pendingCloseAtMs > 0L && canAutoPairs && System.currentTimeMillis() >= pendingCloseAtMs) {
 				closeCurrentScreen()
 				pendingCloseAtMs = 0L
 				return
+			}
+			if (!canAutoPairs) {
+				pendingCloseAtMs = 0L
 			}
 
 			val boardReset = awaitingBoardReset
@@ -507,9 +684,12 @@ object ExperimentationTableFeature {
 			val player = client.player ?: return
 			if (player.currentScreenHandler.cursorStack.item != Items.AIR) return
 			if (remainingClicks(screen) == 0) {
-				if (autoCloseEnabled()) {
+				if (canAutoPairs && autoCloseEnabled()) {
 					pendingCloseAtMs = autoCloseReadyAtMs()
 				}
+				return
+			}
+			if (!canAutoPairs) {
 				return
 			}
 
@@ -553,6 +733,48 @@ object ExperimentationTableFeature {
 			instantFindPending = false
 			nextActionAtMs = 0L
 			pendingCloseAtMs = 0L
+		}
+
+		fun currentHighlights(screen: GenericContainerScreen): List<SolverHighlight> {
+			val tier = SuperpairsTier.fromTitle(screen.title.string) ?: return emptyList()
+			val boardSlots = tier.slotRange
+			updateBoardMemory(screen, boardSlots)
+
+			if (remainingClicks(screen) == 0 || awaitingBoardReset != null) {
+				return emptyList()
+			}
+
+			pendingReveal?.let { pending ->
+				return listOfNotNull(
+					primaryHighlight(pending.clickedSlot),
+					pending.partnerSlot?.let(::secondaryHighlight),
+				)
+			}
+
+			if (instantFindPending) {
+				val instantSlot = chooseUnknownHiddenSlot(screen, boardSlots) ?: chooseHiddenSlot(screen, boardSlots)
+				return instantSlot?.let { listOf(primaryHighlight(it)) } ?: emptyList()
+			}
+
+			findKnownPair(screen, boardSlots)?.let { pair ->
+				return listOf(primaryHighlight(pair.first), secondaryHighlight(pair.second))
+			}
+
+			val nextSlot = chooseUnknownHiddenSlot(screen, boardSlots) ?: chooseHiddenSlot(screen, boardSlots)
+			return nextSlot?.let { listOf(primaryHighlight(it)) } ?: emptyList()
+		}
+
+		fun onManualSlotClick(screen: GenericContainerScreen, slotIndex: Int) {
+			val tier = SuperpairsTier.fromTitle(screen.title.string) ?: return
+			if (slotIndex !in tier.slotRange) {
+				return
+			}
+
+			pendingReveal = null
+			awaitingBoardReset = null
+			if (remainingClicks(screen) <= 0) {
+				pendingCloseAtMs = 0L
+			}
 		}
 
 		private fun handlePendingReveal(screen: GenericContainerScreen, boardSlots: List<Int>, pending: PendingReveal) {
@@ -656,7 +878,7 @@ object ExperimentationTableFeature {
 		private fun hasBoardReset(screen: GenericContainerScreen, slots: List<Int>): Boolean {
 			return slots.all { slotIndex ->
 				val info = analyzeSlot(screen, slotIndex)
-				info.hidden || info.removed
+				info.hidden || info.removed || info.card?.powerUp == SuperpairsPowerUp.PERMANENT
 			}
 		}
 
@@ -738,6 +960,19 @@ object ExperimentationTableFeature {
 				return SuperpairsSlotInfo(removed = true)
 			}
 
+			// Feathers are permanently revealed bonus items — they don't need a pair,
+			// don't count as a click and never flip back to hidden.
+			if (stack.item == Items.FEATHER) {
+				return SuperpairsSlotInfo(
+					card = SuperpairsCard(
+						key = "FEATHER",
+						displayName = stack.name.string,
+						powerUp = SuperpairsPowerUp.PERMANENT,
+						priority = 0L,
+					),
+				)
+			}
+
 			val tooltip = normalizedTooltip(stack)
 			if (tooltip.isEmpty()) {
 				return SuperpairsSlotInfo(removed = true)
@@ -795,6 +1030,7 @@ object ExperimentationTableFeature {
 				SuperpairsPowerUp.EXTRA_CLICKS -> 2_000_000L
 				SuperpairsPowerUp.INSTANT_FIND -> 1_900_000L
 				SuperpairsPowerUp.EXTRA_XP -> 1_800_000L
+				SuperpairsPowerUp.PERMANENT -> 0L
 				null -> {
 					when {
 						text.contains("Enchanting Exp", ignoreCase = true) -> 1_000_000L + parseCompactAmount(text)
@@ -841,6 +1077,12 @@ object ExperimentationTableFeature {
 		val priority: Long,
 	)
 
+	private data class SolverHighlight(
+		val slotIndex: Int,
+		val fillColor: Int,
+		val borderColor: Int,
+	)
+
 	private data class SuperpairsSlotInfo(
 		val hidden: Boolean = false,
 		val removed: Boolean = false,
@@ -868,6 +1110,7 @@ object ExperimentationTableFeature {
 		INSTANT_FIND,
 		EXTRA_CLICKS,
 		EXTRA_XP,
+		PERMANENT,
 	}
 
 	private enum class SuperpairsTier(val displayName: String, private val overInclusiveSlotRange: IntRange, private val sideSpace: Int = 1) {
