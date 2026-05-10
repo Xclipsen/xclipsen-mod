@@ -74,6 +74,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> MortDoorBarrierFeature.onRender(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PurpleTerracottaHighlightFeature.render(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> PestEspFeature.render(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(

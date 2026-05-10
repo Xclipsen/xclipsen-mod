@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.10
+
+- Added a new `Pest ESP` misc module for Garden pests with configurable box and tracer rendering.
+- Switched Pest ESP away from glow outlines to world-space boxes and tracer lines.
+- Simplified the Pest ESP config popup by removing the extra static info rows.
+
 ## v0.5.9
 
 - Reworked the Experimentation module into a shizo-style auto-play flow for Chronomatron and Ultrasequencer.

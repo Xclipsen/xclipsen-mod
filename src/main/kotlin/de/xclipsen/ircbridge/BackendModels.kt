@@ -89,6 +89,9 @@ class BridgeConfig {
 	@JvmField var dungeonDoorMode: Int = 0
 	@JvmField var dungeonRedVignetteModuleEnabled: Boolean = false
 	@JvmField var dungeonRedVignetteEnabled: Boolean = false
+	@JvmField var pestEspModuleEnabled: Boolean = false
+	@JvmField var pestEspColorHex: String = "#7CFF6B"
+	@JvmField var pestEspTracerEnabled: Boolean = true
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
@@ -137,6 +140,9 @@ class BridgeConfig {
 		it.dungeonDoorMode = dungeonDoorMode
 		it.dungeonRedVignetteModuleEnabled = dungeonRedVignetteModuleEnabled
 		it.dungeonRedVignetteEnabled = dungeonRedVignetteEnabled
+		it.pestEspModuleEnabled = pestEspModuleEnabled
+		it.pestEspColorHex = pestEspColorHex
+		it.pestEspTracerEnabled = pestEspTracerEnabled
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
 }

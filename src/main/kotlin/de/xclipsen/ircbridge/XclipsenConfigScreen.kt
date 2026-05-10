@@ -47,11 +47,13 @@ class XclipsenConfigScreen(
 	private lateinit var shulkerProjectileGlowColorHexField: TextFieldWidget
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
 	private lateinit var purpleTerracottaHighlightColorHexField: TextFieldWidget
+	private lateinit var pestEspColorHexField: TextFieldWidget
 	private lateinit var lostFightSoundSearchField: TextFieldWidget
 
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
+		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -79,6 +81,7 @@ class XclipsenConfigScreen(
 		shulkerProjectileGlowColorHexField = registerField(ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, workingCopy.shulkerProjectileGlowColorHex, "#FF4D4D")
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
 		purpleTerracottaHighlightColorHexField = registerField(ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR, workingCopy.purpleTerracottaHighlightColorHex, "#B06CFF")
+		pestEspColorHexField = registerField(ConfigField.PEST_ESP_COLOR, workingCopy.pestEspColorHex, "#7CFF6B")
 		lostFightSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		layoutWidgets()
 	}
@@ -221,6 +224,7 @@ class XclipsenConfigScreen(
 			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled = !workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled = !workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled = !workingCopy.dungeonRedVignetteModuleEnabled
+			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled = !workingCopy.pestEspModuleEnabled
 			else -> return
 		}
 
@@ -301,6 +305,8 @@ class XclipsenConfigScreen(
 		candidate.dungeonDoorMode = workingCopy.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		candidate.dungeonRedVignetteModuleEnabled = workingCopy.dungeonRedVignetteModuleEnabled
 		candidate.dungeonRedVignetteEnabled = workingCopy.dungeonRedVignetteEnabled
+		candidate.pestEspModuleEnabled = workingCopy.pestEspModuleEnabled
+		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
 		candidate.hudElements = mod.config().hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		candidate.shulkerGlowColorHex = normalizedHexColor(shulkerGlowColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Glow color must be #RRGGBB.")
@@ -316,6 +322,10 @@ class XclipsenConfigScreen(
 		}
 		candidate.purpleTerracottaHighlightColorHex = normalizedHexColor(purpleTerracottaHighlightColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Purple terracotta color must be #RRGGBB.")
+			return null
+		}
+		candidate.pestEspColorHex = normalizedHexColor(pestEspColorHexField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("Pest ESP color must be #RRGGBB.")
 			return null
 		}
 
@@ -485,6 +495,7 @@ class XclipsenConfigScreen(
 			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled
+			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled
 			else -> true
 		}
 	}
@@ -511,6 +522,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PURPLE_TERRACOTTA -> drawPurpleTerracottaSettings(context, menu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUCTION_HOUSE -> drawAuctionHouseSettings(context, menu, mouseX, mouseY)
+			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUTO_CROESUS -> drawAutoCroesusSettings(context, menu, mouseX, mouseY)
 			ConfigSection.DOOR -> drawDoorSettings(context, menu, mouseX, mouseY)
@@ -585,6 +597,14 @@ class XclipsenConfigScreen(
 
 	private fun drawAuctionHouseSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, auctionHouseAutoCopyBounds(menu), "Auto Copy Underbid", workingCopy.auctionHouseAutoCopyUnderbidEnabled, mouseX, mouseY)
+	}
+
+	private fun drawPestEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, pestEspTracerBounds(menu), "Tracer Line", workingCopy.pestEspTracerEnabled, mouseX, mouseY)
+		drawColorSetting(context, pestEspColorBounds(menu), "Highlight Color", ConfigField.PEST_ESP_COLOR, mouseX, mouseY)
+		if (colorPickerOpen) {
+			drawColorPicker(context, menu, mouseX, mouseY)
+		}
 	}
 
 	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -798,6 +818,7 @@ class XclipsenConfigScreen(
 			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> shulkerProjectileGlowColorHexField
 			ConfigField.SHULKER_TRACER_LINE_COLOR -> shulkerTracerLineColorHexField
 			ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR -> purpleTerracottaHighlightColorHexField
+			ConfigField.PEST_ESP_COLOR -> pestEspColorHexField
 			else -> shulkerGlowColorHexField
 		}
 	}
@@ -951,6 +972,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PURPLE_TERRACOTTA -> PURPLE_TERRACOTTA_POPUP_HEIGHT
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
 			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
+			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
 			ConfigSection.EXPERIMENTS -> 340
 			ConfigSection.AUTO_CROESUS -> 335
 			ConfigSection.DOOR -> 135
@@ -1137,6 +1159,37 @@ class XclipsenConfigScreen(
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.auctionHouseAutoCopyUnderbidEnabled = !workingCopy.auctionHouseAutoCopyUnderbidEnabled
 			return true
+		}
+
+		if (section == ConfigSection.PEST_ESP) {
+			if (pestEspTracerBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.pestEspTracerEnabled = !workingCopy.pestEspTracerEnabled
+				return true
+			}
+
+			if (pestEspColorBounds(menu).contains(mouseX, mouseY)) {
+				openColorField = if (openColorField == ConfigField.PEST_ESP_COLOR) null else ConfigField.PEST_ESP_COLOR
+				soundDropdownOpen = false
+				draggingColorPicker = null
+				return true
+			}
+
+			if (!colorPickerOpen) {
+				return false
+			}
+
+			val target = when {
+				colorSvBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.SATURATION_BRIGHTNESS
+				colorHueBounds(menu).contains(mouseX, mouseY) -> ColorPickerDragTarget.HUE
+				else -> null
+			}
+
+			if (target != null) {
+				draggingColorPicker = target
+				updateColorFromPicker(mouseX, mouseY, target)
+				return true
+			}
 		}
 
 		if (section == ConfigSection.EXPERIMENTS && autoExperimentsAutoCloseBounds(menu).contains(mouseX, mouseY)) {
@@ -1403,6 +1456,15 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
+	private fun pestEspColorBounds(menu: Bounds): Bounds {
+		val top = pestEspTracerBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pestEspTracerBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
 	private fun projectileGlowColorBounds(menu: Bounds): Bounds {
 		val top = shulkerGlowColorBounds(menu).bottom + SETTING_GAP + colorPickerSpaceAfter(ConfigField.SHULKER_GLOW_COLOR)
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
@@ -1422,6 +1484,7 @@ class XclipsenConfigScreen(
 		val field = openColorField ?: return menu.top + 90
 		return when (field) {
 			ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR -> purpleTerracottaColorBounds(menu).bottom + SETTING_GAP
+			ConfigField.PEST_ESP_COLOR -> pestEspColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_GLOW_COLOR -> shulkerGlowColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> projectileGlowColorBounds(menu).bottom + SETTING_GAP
 			ConfigField.SHULKER_TRACER_LINE_COLOR -> tracerLineColorBounds(menu).bottom + SETTING_GAP
@@ -1651,6 +1714,7 @@ class XclipsenConfigScreen(
 		PURPLE_TERRACOTTA("Purple Terracotta", "Highlights purple terracotta blocks through walls.", toggleable = true),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
 		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
+		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
 		EXPERIMENTS("Experimentation", "Shizo-style auto experiments plus SkyHanni keep-items-visible for Superpairs.", toggleable = true),
 		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
@@ -1674,6 +1738,7 @@ class XclipsenConfigScreen(
 		SHULKER_PROJECTILE_GLOW_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		SHULKER_TRACER_LINE_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		PURPLE_TERRACOTTA_HIGHLIGHT_COLOR(ConfigSection.PURPLE_TERRACOTTA),
+		PEST_ESP_COLOR(ConfigSection.PEST_ESP),
 	}
 
 	companion object {
@@ -1706,6 +1771,7 @@ class XclipsenConfigScreen(
 		private const val PURPLE_TERRACOTTA_POPUP_HEIGHT = 230
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
+		private const val PEST_ESP_POPUP_HEIGHT = 230
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20
 		private const val TEXT_INPUT_SETTING_HEIGHT = 38

@@ -11,21 +11,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable
 abstract class EntityGlowMixin {
 	@Inject(method = ["isGlowing"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlow(cir: CallbackInfoReturnable<Boolean>) {
-		if (ShulkerGlowFeature.shouldGlow(this as Entity)) {
+		val entity = this as Entity
+		if (ShulkerGlowFeature.shouldGlow(entity)) {
 			cir.returnValue = true
 		}
 	}
 
 	@Inject(method = ["getTeamColorValue"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlowColor(cir: CallbackInfoReturnable<Int>) {
-		ShulkerGlowFeature.colorValue(this as Entity)?.let {
+		val entity = this as Entity
+		ShulkerGlowFeature.colorValue(entity)?.let {
 			cir.returnValue = it
 		}
 	}
 
 	@Inject(method = ["shouldRender(D)Z"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlowRenderDistance(distance: Double, cir: CallbackInfoReturnable<Boolean>) {
-		if (ShulkerGlowFeature.shouldGlow(this as Entity)) {
+		val entity = this as Entity
+		if (ShulkerGlowFeature.shouldGlow(entity)) {
 			cir.returnValue = true
 		}
 	}

@@ -88,6 +88,7 @@ class BridgeConfigManager(
 		value.autoExperimentsDelayVarietyMs = value.autoExperimentsDelayVarietyMs.coerceIn(0, 5_000)
 		value.autoExperimentsSerumCount = value.autoExperimentsSerumCount.coerceIn(0, 3)
 		value.dungeonDoorMode = value.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
+		value.pestEspColorHex = normalizedHexColor(value.pestEspColorHex, "#7CFF6B")
 		return value
 	}
 

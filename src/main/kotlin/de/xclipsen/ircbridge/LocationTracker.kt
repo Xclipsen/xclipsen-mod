@@ -41,6 +41,10 @@ object LocationTracker {
 	val isOnEndIsland: Boolean
 		get() = isOnHypixelSkyBlock && normalizedEndArea(currentArea) != null
 
+	/** True while the player is on The Garden or one of its plots. */
+	val isOnGarden: Boolean
+		get() = isOnHypixelSkyBlock && normalizedGardenArea(currentArea) != null
+
 	// ── Tick ────────────────────────────────────────────────────────────
 
 	private var tickCounter = 0
@@ -100,6 +104,17 @@ object LocationTracker {
 		return END_ISLAND_AREAS.firstOrNull { area ->
 			normalized == area || normalized.contains(area)
 		}
+	}
+
+	private fun normalizedGardenArea(raw: String): String? {
+		val normalized = raw.trim().lowercase()
+		if (normalized.isBlank()) {
+			return null
+		}
+		if (normalized == "the garden" || normalized.startsWith("plot ")) {
+			return normalized
+		}
+		return if (normalized.contains("garden")) normalized else null
 	}
 
 	private val AREA_PREFIXES = listOf("Area: ", "Dungeon: ")
