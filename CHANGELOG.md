@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.13
+
+- Expanded `Pickaxe Cooldown` with configurable ready alerts, sound settings, and a separate movable alert HUD element.
+- Added a new `Mineshaft AutoWarp` module that detects Glacite corpses directly from ArmorStand helmet IDs and can auto-request lead with `!ptme` before warping the party.
+- Mineshaft AutoWarp rules now support OR clauses such as `lapis 2; vanguard 1` and use total shaft corpse counts instead of only remaining unlooted corpses.
+- Prevented Mineshaft AutoWarp from re-warping parties into mineshafts that were entered from someone else's summon.
+
 ## v0.5.12
 
 - Tightened `Pest ESP` matching so unrelated nearby mobs no longer inherit a pest nametag from loose ArmorStand matching.

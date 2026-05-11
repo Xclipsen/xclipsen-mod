@@ -89,6 +89,13 @@ class BridgeConfigManager(
 		value.autoExperimentsSerumCount = value.autoExperimentsSerumCount.coerceIn(0, 3)
 		value.dungeonDoorMode = value.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		value.pestEspColorHex = normalizedHexColor(value.pestEspColorHex, "#7CFF6B")
+		value.pickaxeAbilityCooldownAlertSoundId = SoundCatalog.normalizeSoundId(value.pickaxeAbilityCooldownAlertSoundId)
+		value.pickaxeAbilityCooldownAlertSoundVolume = value.pickaxeAbilityCooldownAlertSoundVolume.coerceIn(0.0f, 2.0f)
+		value.pickaxeAbilityCooldownAlertSoundPitch = value.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f)
+		value.pickaxeAbilityCooldownAlertText = normalizedTemplate(value.pickaxeAbilityCooldownAlertText, PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT)
+		value.mineshaftAutoWarpCorpseRule = normalizedTemplate(value.mineshaftAutoWarpCorpseRule, "")
+		value.mineshaftAutoWarpDelayMs = value.mineshaftAutoWarpDelayMs.coerceIn(500L, 30_000L)
+		value.mineshaftAutoWarpWindowMs = value.mineshaftAutoWarpWindowMs.coerceIn(5_000L, 60_000L)
 		return value
 	}
 

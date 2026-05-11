@@ -11,6 +11,7 @@ object XclipsenHudManager {
 		HideonleafLostFightHudElement,
 		HideonleafShardTrackerHudElement,
 		PickaxeAbilityCooldownHudElement,
+		PickaxeAbilityReadyAlertHudElement,
 	)
 
 	fun render(context: DrawContext) {

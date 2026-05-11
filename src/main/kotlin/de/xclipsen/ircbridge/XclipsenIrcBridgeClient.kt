@@ -64,6 +64,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			MortDoorBarrierFeature.onWorldChange()
 			PurpleTerracottaHighlightFeature.onWorldChange()
 			PickaxeAbilityCooldownFeature.onWorldChange()
+			MineshaftAutoWarpFeature.onDisconnect()
 		}
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
@@ -205,6 +206,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		MortDoorBarrierFeature.onTick(client)
 		PurpleTerracottaHighlightFeature.onTick(client)
 		PickaxeAbilityCooldownFeature.onTick(client)
+		MineshaftAutoWarpFeature.onTick(client)
 		ModUpdateChecker.onTick(client)
 		ExperimentationTableFeature.onTick(client)
 
@@ -425,6 +427,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun handleIncomingMessage(message: Text?) {
+		MineshaftAutoWarpFeature.onIncomingMessage(message)
 		handleHideonleafLostFightAlert(message)
 		HideonleafShardTracker.processChat(message)
 		handleIncomingCoopChat(message)

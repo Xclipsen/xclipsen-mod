@@ -94,6 +94,15 @@ class BridgeConfig {
 	@JvmField var pestEspTracerEnabled: Boolean = true
 	@JvmField var pickaxeAbilityCooldownModuleEnabled: Boolean = false
 	@JvmField var pickaxeAbilityCooldownShowReady: Boolean = true
+	@JvmField var pickaxeAbilityCooldownAlertEnabled: Boolean = false
+	@JvmField var pickaxeAbilityCooldownAlertSoundId: String = SoundCatalog.defaultSoundId
+	@JvmField var pickaxeAbilityCooldownAlertSoundVolume: Float = 1.0f
+	@JvmField var pickaxeAbilityCooldownAlertSoundPitch: Float = 1.0f
+	@JvmField var pickaxeAbilityCooldownAlertText: String = PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT
+	@JvmField var mineshaftAutoWarpModuleEnabled: Boolean = false
+	@JvmField var mineshaftAutoWarpCorpseRule: String = ""
+	@JvmField var mineshaftAutoWarpDelayMs: Long = 3500L
+	@JvmField var mineshaftAutoWarpWindowMs: Long = 55000L
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
@@ -147,6 +156,15 @@ class BridgeConfig {
 		it.pestEspTracerEnabled = pestEspTracerEnabled
 		it.pickaxeAbilityCooldownModuleEnabled = pickaxeAbilityCooldownModuleEnabled
 		it.pickaxeAbilityCooldownShowReady = pickaxeAbilityCooldownShowReady
+		it.pickaxeAbilityCooldownAlertEnabled = pickaxeAbilityCooldownAlertEnabled
+		it.pickaxeAbilityCooldownAlertSoundId = pickaxeAbilityCooldownAlertSoundId
+		it.pickaxeAbilityCooldownAlertSoundVolume = pickaxeAbilityCooldownAlertSoundVolume
+		it.pickaxeAbilityCooldownAlertSoundPitch = pickaxeAbilityCooldownAlertSoundPitch
+		it.pickaxeAbilityCooldownAlertText = pickaxeAbilityCooldownAlertText
+		it.mineshaftAutoWarpModuleEnabled = mineshaftAutoWarpModuleEnabled
+		it.mineshaftAutoWarpCorpseRule = mineshaftAutoWarpCorpseRule
+		it.mineshaftAutoWarpDelayMs = mineshaftAutoWarpDelayMs
+		it.mineshaftAutoWarpWindowMs = mineshaftAutoWarpWindowMs
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
 }

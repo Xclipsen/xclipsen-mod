@@ -26,6 +26,7 @@ class XclipsenConfigScreen(
 	private var soundDropdownOpen = false
 	private var soundScrollOffset = 0
 	private var draggingSlider: SliderDragTarget? = null
+	private var pickaxeAlertExpanded = false
 	private var awaitingHideonleafResetConfirmation = false
 	private var statusMessage: Text = Text.empty()
 	private val colorPickerOpen: Boolean
@@ -48,12 +49,17 @@ class XclipsenConfigScreen(
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
 	private lateinit var purpleTerracottaHighlightColorHexField: TextFieldWidget
 	private lateinit var pestEspColorHexField: TextFieldWidget
+	private lateinit var pickaxeAlertTextField: TextFieldWidget
+	private lateinit var mineshaftAutoWarpRuleField: TextFieldWidget
+	private lateinit var mineshaftAutoWarpDelayField: TextFieldWidget
+	private lateinit var mineshaftAutoWarpWindowField: TextFieldWidget
 	private lateinit var lostFightSoundSearchField: TextFieldWidget
+	private lateinit var pickaxeAlertSoundSearchField: TextFieldWidget
 
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
-		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.PICKAXE_COOLDOWN)),
+		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -82,7 +88,12 @@ class XclipsenConfigScreen(
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
 		purpleTerracottaHighlightColorHexField = registerField(ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR, workingCopy.purpleTerracottaHighlightColorHex, "#B06CFF")
 		pestEspColorHexField = registerField(ConfigField.PEST_ESP_COLOR, workingCopy.pestEspColorHex, "#7CFF6B")
+		pickaxeAlertTextField = registerField(ConfigField.PICKAXE_ALERT_TEXT, workingCopy.pickaxeAbilityCooldownAlertText, PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT)
+		mineshaftAutoWarpRuleField = registerField(ConfigField.MINESHAFT_AUTOWARP_RULE, workingCopy.mineshaftAutoWarpCorpseRule, "lapis 2; vanguard 1")
+		mineshaftAutoWarpDelayField = registerField(ConfigField.MINESHAFT_AUTOWARP_DELAY, workingCopy.mineshaftAutoWarpDelayMs.toString(), "3500")
+		mineshaftAutoWarpWindowField = registerField(ConfigField.MINESHAFT_AUTOWARP_WINDOW, workingCopy.mineshaftAutoWarpWindowMs.toString(), "55000")
 		lostFightSoundSearchField = addField(0, 0, 150, "", "Search sound...")
+		pickaxeAlertSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		layoutWidgets()
 	}
 
@@ -176,7 +187,7 @@ class XclipsenConfigScreen(
 
 		val dragTarget = draggingColorPicker
 		val sliderTarget = draggingSlider
-		if (openedSection == ConfigSection.HIDEONLEAF_HELPER && sliderTarget != null) {
+		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN) && sliderTarget != null) {
 			updateSliderFromMouse(click.x().toInt(), sliderTarget)
 			return true
 		}
@@ -199,10 +210,10 @@ class XclipsenConfigScreen(
 	}
 
 	override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, verticalAmount: Double): Boolean {
-		if (openedSection == ConfigSection.HIDEONLEAF_HELPER && soundDropdownOpen) {
+		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN) && soundDropdownOpen) {
 			val list = soundListBounds(settingsBounds())
 			if (list.contains(mouseX.toInt(), mouseY.toInt())) {
-				val filtered = SoundCatalog.filtered(lostFightSoundSearchField.text)
+				val filtered = SoundCatalog.filtered(activeSoundSearchField().text)
 				val maxScroll = (filtered.size - SOUND_VISIBLE_ROWS).coerceAtLeast(0)
 				soundScrollOffset = (soundScrollOffset - verticalAmount.toInt()).coerceIn(0, maxScroll)
 				return true
@@ -225,6 +236,7 @@ class XclipsenConfigScreen(
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled = !workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled = !workingCopy.pestEspModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
+			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled = !workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> return
 		}
 
@@ -243,6 +255,7 @@ class XclipsenConfigScreen(
 		soundScrollOffset = 0
 		draggingColorPicker = null
 		draggingSlider = null
+		pickaxeAlertExpanded = false
 		awaitingHideonleafResetConfirmation = false
 		layoutWidgets()
 	}
@@ -309,6 +322,13 @@ class XclipsenConfigScreen(
 		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
 		candidate.pickaxeAbilityCooldownModuleEnabled = workingCopy.pickaxeAbilityCooldownModuleEnabled
 		candidate.pickaxeAbilityCooldownShowReady = workingCopy.pickaxeAbilityCooldownShowReady
+		candidate.pickaxeAbilityCooldownAlertEnabled = workingCopy.pickaxeAbilityCooldownAlertEnabled
+		candidate.pickaxeAbilityCooldownAlertSoundId = SoundCatalog.normalizeSoundId(workingCopy.pickaxeAbilityCooldownAlertSoundId)
+		candidate.pickaxeAbilityCooldownAlertSoundVolume = workingCopy.pickaxeAbilityCooldownAlertSoundVolume
+		candidate.pickaxeAbilityCooldownAlertSoundPitch = workingCopy.pickaxeAbilityCooldownAlertSoundPitch
+		candidate.pickaxeAbilityCooldownAlertText = pickaxeAlertTextField.text.trim()
+		candidate.mineshaftAutoWarpModuleEnabled = workingCopy.mineshaftAutoWarpModuleEnabled
+		candidate.mineshaftAutoWarpCorpseRule = mineshaftAutoWarpRuleField.text.trim()
 		candidate.hudElements = mod.config().hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		candidate.shulkerGlowColorHex = normalizedHexColor(shulkerGlowColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Glow color must be #RRGGBB.")
@@ -376,6 +396,37 @@ class XclipsenConfigScreen(
 			return null
 		}
 
+		if (candidate.pickaxeAbilityCooldownAlertText.isBlank()) {
+			candidate.pickaxeAbilityCooldownAlertText = PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT
+		}
+		val mineshaftRuleError = MineshaftAutoWarpFeature.validateCorpseRule(candidate.mineshaftAutoWarpCorpseRule)
+		if (mineshaftRuleError != null) {
+			if (updateStatus) statusMessage = Text.literal(mineshaftRuleError)
+			return null
+		}
+
+		try {
+			candidate.mineshaftAutoWarpDelayMs = mineshaftAutoWarpDelayField.text.trim().toLong()
+		} catch (_: NumberFormatException) {
+			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp delay must be a number.")
+			return null
+		}
+		if (candidate.mineshaftAutoWarpDelayMs < 500L) {
+			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp delay must be at least 500 ms.")
+			return null
+		}
+
+		try {
+			candidate.mineshaftAutoWarpWindowMs = mineshaftAutoWarpWindowField.text.trim().toLong()
+		} catch (_: NumberFormatException) {
+			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp window must be a number.")
+			return null
+		}
+		if (candidate.mineshaftAutoWarpWindowMs !in 5_000L..60_000L) {
+			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp window must be between 5000 and 60000 ms.")
+			return null
+		}
+
 		val autoCroesusCandidate = copyOf(workingAutoCroesusConfig)
 		try {
 			autoCroesusCandidate.minClickDelay = autoCroesusClickDelayField.text.trim().toInt()
@@ -437,12 +488,13 @@ class XclipsenConfigScreen(
 			}
 		}
 
-		if (section == ConfigSection.HIDEONLEAF_HELPER && soundDropdownOpen) {
+		if ((section == ConfigSection.HIDEONLEAF_HELPER || section == ConfigSection.PICKAXE_COOLDOWN) && soundDropdownOpen) {
 			val search = soundSearchBounds(menu)
-			lostFightSoundSearchField.setDimensionsAndPosition(search.width(), 18, search.left, search.top)
-			setVisible(lostFightSoundSearchField, true)
+			activeSoundSearchField().setDimensionsAndPosition(search.width(), 18, search.left, search.top)
+			setVisible(activeSoundSearchField(), true)
 		} else {
 			setVisible(lostFightSoundSearchField, false)
+			setVisible(pickaxeAlertSoundSearchField, false)
 		}
 
 		searchField.setDimensionsAndPosition(SEARCH_WIDTH, 22, (width / 2) - (SEARCH_WIDTH / 2), height - 40)
@@ -499,6 +551,7 @@ class XclipsenConfigScreen(
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
+			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> true
 		}
 	}
@@ -527,6 +580,7 @@ class XclipsenConfigScreen(
 			ConfigSection.AUCTION_HOUSE -> drawAuctionHouseSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
+			ConfigSection.MINESHAFT_AUTOWARP -> drawMineshaftAutoWarpSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUTO_CROESUS -> drawAutoCroesusSettings(context, menu, mouseX, mouseY)
 			ConfigSection.DOOR -> drawDoorSettings(context, menu, mouseX, mouseY)
@@ -612,8 +666,27 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawPickaxeCooldownSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
-		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Show When Ready", workingCopy.pickaxeAbilityCooldownShowReady, mouseX, mouseY)
-		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Current State", PickaxeAbilityCooldownFeature.statusLine(), mouseX, mouseY)
+		drawToggleSetting(context, pickaxeShowReadyBounds(menu), "Show When Ready", workingCopy.pickaxeAbilityCooldownShowReady, mouseX, mouseY)
+		drawOptionSetting(context, pickaxeAlertDisclosureBounds(menu), "Alert", if (pickaxeAlertExpanded) "Expanded" else "Collapsed", mouseX, mouseY)
+		if (pickaxeAlertExpanded) {
+			drawToggleSetting(context, pickaxeAlertEnabledBounds(menu), "Enable Alert", workingCopy.pickaxeAbilityCooldownAlertEnabled, mouseX, mouseY)
+			drawTextInputSetting(context, pickaxeAlertTextBounds(menu), "Alert Text", pickaxeAlertTextField, mouseX, mouseY)
+			drawSoundSetting(context, pickaxeAlertSoundBounds(menu), "Alert Sound", workingCopy.pickaxeAbilityCooldownAlertSoundId, mouseX, mouseY)
+			if (soundDropdownOpen) {
+				drawSoundDropdown(context, menu, mouseX, mouseY)
+			}
+			drawSliderSetting(context, pickaxeAlertVolumeBounds(menu), "Volume", workingCopy.pickaxeAbilityCooldownAlertSoundVolume, 0.0f, 2.0f, mouseX, mouseY)
+			drawSliderSetting(context, pickaxeAlertPitchBounds(menu), "Pitch", workingCopy.pickaxeAbilityCooldownAlertSoundPitch, 0.1f, 2.0f, mouseX, mouseY)
+			drawButtonSetting(context, pickaxeAlertPreviewBounds(menu), "Preview Alert", mouseX, mouseY)
+		}
+		drawInfoSetting(context, pickaxeCurrentStateBounds(menu), "Current State", PickaxeAbilityCooldownFeature.statusLine(), mouseX, mouseY)
+	}
+
+	private fun drawMineshaftAutoWarpSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawTextInputSetting(context, mineshaftAutoWarpRuleBounds(menu), "Corpse Rule", mineshaftAutoWarpRuleField, mouseX, mouseY)
+		drawTextInputSetting(context, mineshaftAutoWarpDelayBounds(menu), "Warp Delay (ms)", mineshaftAutoWarpDelayField, mouseX, mouseY)
+		drawTextInputSetting(context, mineshaftAutoWarpWindowBounds(menu), "Warp Window (ms)", mineshaftAutoWarpWindowField, mouseX, mouseY)
+		drawInfoSetting(context, mineshaftAutoWarpStatusBounds(menu), "Current State", MineshaftAutoWarpFeature.statusLine(), mouseX, mouseY)
 	}
 
 	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -755,13 +828,15 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawSoundDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		val searchField = activeSoundSearchField()
+		val selectedSoundId = activeSelectedSoundId()
 		val search = soundSearchBounds(menu)
 		val list = soundListBounds(menu)
 		context.fill(search.left - 4, search.top - 4, search.right + 4, list.bottom + 4, INPUT_BACKGROUND)
 		context.fill(search.left, search.top, search.right, search.bottom, 0xC80F0F0F.toInt())
-		context.fill(search.left, search.bottom - 1, search.right, search.bottom, if (lostFightSoundSearchField.isFocused) ACCENT else 0x1EFFFFFF)
+		context.fill(search.left, search.bottom - 1, search.right, search.bottom, if (searchField.isFocused) ACCENT else 0x1EFFFFFF)
 
-		val filtered = SoundCatalog.filtered(lostFightSoundSearchField.text)
+		val filtered = SoundCatalog.filtered(searchField.text)
 		val maxScroll = (filtered.size - SOUND_VISIBLE_ROWS).coerceAtLeast(0)
 		soundScrollOffset = soundScrollOffset.coerceIn(0, maxScroll)
 
@@ -769,7 +844,7 @@ class XclipsenConfigScreen(
 		filtered.drop(soundScrollOffset).take(SOUND_VISIBLE_ROWS).forEachIndexed { index, sound ->
 			val row = Bounds(list.left, list.top + (index * SOUND_ROW_HEIGHT), list.right, list.top + ((index + 1) * SOUND_ROW_HEIGHT))
 			val hovered = row.contains(mouseX, mouseY)
-			val selected = sound.id == workingCopy.hideonleafLostFightAlertSoundId
+			val selected = sound.id == selectedSoundId
 			if (hovered) {
 				context.fill(row.left, row.top, row.right, row.bottom, HOVER)
 			}
@@ -982,7 +1057,8 @@ class XclipsenConfigScreen(
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
 			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
 			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
-			ConfigSection.PICKAXE_COOLDOWN -> PICKAXE_COOLDOWN_POPUP_HEIGHT
+			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
+			ConfigSection.MINESHAFT_AUTOWARP -> MINESHAFT_AUTOWARP_POPUP_HEIGHT
 			ConfigSection.EXPERIMENTS -> 340
 			ConfigSection.AUTO_CROESUS -> 335
 			ConfigSection.DOOR -> 135
@@ -993,6 +1069,14 @@ class XclipsenConfigScreen(
 		val left = (width / 2) - (menuWidth / 2)
 		val top = (height / 2) - (menuHeight / 2)
 		return Bounds(left, top, left + menuWidth, top + menuHeight)
+	}
+
+	private fun pickaxeCooldownPopupHeight(): Int {
+		return when {
+			!pickaxeAlertExpanded -> PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT
+			soundDropdownOpen -> PICKAXE_COOLDOWN_POPUP_EXPANDED_WITH_DROPDOWN_HEIGHT
+			else -> PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT
+		}
 	}
 
 	private fun handleSettingsClick(section: ConfigSection, mouseX: Int, mouseY: Int, button: Int): Boolean {
@@ -1202,10 +1286,72 @@ class XclipsenConfigScreen(
 			}
 		}
 
-		if (section == ConfigSection.PICKAXE_COOLDOWN && settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
-			readWorkingCopyFromFields(updateStatus = false)
-			workingCopy.pickaxeAbilityCooldownShowReady = !workingCopy.pickaxeAbilityCooldownShowReady
-			return true
+		if (section == ConfigSection.PICKAXE_COOLDOWN) {
+			if (pickaxeShowReadyBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.pickaxeAbilityCooldownShowReady = !workingCopy.pickaxeAbilityCooldownShowReady
+				return true
+			}
+
+			if (pickaxeAlertDisclosureBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				pickaxeAlertExpanded = !pickaxeAlertExpanded
+				if (!pickaxeAlertExpanded) {
+					soundDropdownOpen = false
+				}
+				layoutWidgets()
+				return true
+			}
+
+			if (!pickaxeAlertExpanded) {
+				return false
+			}
+
+			if (pickaxeAlertEnabledBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.pickaxeAbilityCooldownAlertEnabled = !workingCopy.pickaxeAbilityCooldownAlertEnabled
+				return true
+			}
+
+			if (pickaxeAlertSoundBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				soundDropdownOpen = !soundDropdownOpen
+				soundScrollOffset = 0
+				layoutWidgets()
+				return true
+			}
+
+			if (soundDropdownOpen && soundListBounds(menu).contains(mouseX, mouseY)) {
+				val index = soundScrollOffset + ((mouseY - soundListBounds(menu).top) / SOUND_ROW_HEIGHT)
+				val filtered = SoundCatalog.filtered(activeSoundSearchField().text)
+				if (index in filtered.indices) {
+					readWorkingCopyFromFields(updateStatus = false)
+					workingCopy.pickaxeAbilityCooldownAlertSoundId = filtered[index].id
+					soundDropdownOpen = false
+					layoutWidgets()
+				}
+				return true
+			}
+
+			if (pickaxeAlertVolumeBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.PICKAXE_ALERT_VOLUME
+				updateSliderFromMouse(mouseX, SliderDragTarget.PICKAXE_ALERT_VOLUME)
+				return true
+			}
+
+			if (pickaxeAlertPitchBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.PICKAXE_ALERT_PITCH
+				updateSliderFromMouse(mouseX, SliderDragTarget.PICKAXE_ALERT_PITCH)
+				return true
+			}
+
+			if (pickaxeAlertPreviewBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				PickaxeAbilityCooldownFeature.playAlertPreview(workingCopy)
+				return true
+			}
 		}
 
 		if (section == ConfigSection.EXPERIMENTS && autoExperimentsAutoCloseBounds(menu).contains(mouseX, mouseY)) {
@@ -1324,6 +1470,18 @@ class XclipsenConfigScreen(
 				else -> null
 			}
 
+			ConfigSection.PICKAXE_COOLDOWN -> when (field) {
+				ConfigField.PICKAXE_ALERT_TEXT -> if (pickaxeAlertExpanded) pickaxeAlertTextBounds(menu) else null
+				else -> null
+			}
+
+			ConfigSection.MINESHAFT_AUTOWARP -> when (field) {
+				ConfigField.MINESHAFT_AUTOWARP_RULE -> mineshaftAutoWarpRuleBounds(menu)
+				ConfigField.MINESHAFT_AUTOWARP_DELAY -> mineshaftAutoWarpDelayBounds(menu)
+				ConfigField.MINESHAFT_AUTOWARP_WINDOW -> mineshaftAutoWarpWindowBounds(menu)
+				else -> null
+			}
+
 			else -> null
 		}
 	}
@@ -1402,18 +1560,24 @@ class XclipsenConfigScreen(
 			SliderDragTarget.LINE_WIDTH -> tracerLineWidthBounds(menu)
 			SliderDragTarget.ALERT_VOLUME -> lostFightVolumeBounds(menu)
 			SliderDragTarget.ALERT_PITCH -> lostFightPitchBounds(menu)
+			SliderDragTarget.PICKAXE_ALERT_VOLUME -> pickaxeAlertVolumeBounds(menu)
+			SliderDragTarget.PICKAXE_ALERT_PITCH -> pickaxeAlertPitchBounds(menu)
 		}
 		val min = when (target) {
 			SliderDragTarget.LINE_MODE -> 0.0f
 			SliderDragTarget.LINE_WIDTH -> 1.0f
 			SliderDragTarget.ALERT_VOLUME -> 0.0f
 			SliderDragTarget.ALERT_PITCH -> 0.1f
+			SliderDragTarget.PICKAXE_ALERT_VOLUME -> 0.0f
+			SliderDragTarget.PICKAXE_ALERT_PITCH -> 0.1f
 		}
 		val max = when (target) {
 			SliderDragTarget.LINE_MODE -> 3.0f
 			SliderDragTarget.LINE_WIDTH -> 8.0f
 			SliderDragTarget.ALERT_VOLUME -> 2.0f
 			SliderDragTarget.ALERT_PITCH -> 2.0f
+			SliderDragTarget.PICKAXE_ALERT_VOLUME -> 2.0f
+			SliderDragTarget.PICKAXE_ALERT_PITCH -> 2.0f
 		}
 		val barLeft = bounds.left + 8
 		val barRight = bounds.right - 8
@@ -1424,6 +1588,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.LINE_WIDTH -> roundToStep(rawValue, 0.1f)
 			SliderDragTarget.ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.ALERT_PITCH -> roundToStep(rawValue, 0.05f)
+			SliderDragTarget.PICKAXE_ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
+			SliderDragTarget.PICKAXE_ALERT_PITCH -> roundToStep(rawValue, 0.05f)
 		}.coerceIn(min, max)
 
 		when (target) {
@@ -1434,6 +1600,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.LINE_WIDTH -> workingCopy.shulkerTracerLineWidth = value
 			SliderDragTarget.ALERT_VOLUME -> workingCopy.hideonleafLostFightAlertSoundVolume = value
 			SliderDragTarget.ALERT_PITCH -> workingCopy.hideonleafLostFightAlertSoundPitch = value
+			SliderDragTarget.PICKAXE_ALERT_VOLUME -> workingCopy.pickaxeAbilityCooldownAlertSoundVolume = value
+			SliderDragTarget.PICKAXE_ALERT_PITCH -> workingCopy.pickaxeAbilityCooldownAlertSoundPitch = value
 		}
 	}
 
@@ -1533,7 +1701,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun soundSearchBounds(menu: Bounds): Bounds {
-		val top = lostFightSoundBounds(menu).bottom + 4
+		val top = activeSoundAnchorBounds(menu).bottom + 4
 		return Bounds(menu.left + 18, top, menu.right - 18, top + 18)
 	}
 
@@ -1560,6 +1728,76 @@ class XclipsenConfigScreen(
 	private fun resetHideonleafTrackerBounds(menu: Bounds): Bounds {
 		val top = playLostFightSoundBounds(menu).bottom + SETTING_GAP
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeShowReadyBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeAlertDisclosureBounds(menu: Bounds): Bounds {
+		val top = pickaxeShowReadyBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeAlertEnabledBounds(menu: Bounds): Bounds {
+		val top = pickaxeAlertDisclosureBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeAlertTextBounds(menu: Bounds): Bounds {
+		val top = pickaxeAlertEnabledBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun pickaxeAlertSoundBounds(menu: Bounds): Bounds {
+		val top = pickaxeAlertTextBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeAlertVolumeBounds(menu: Bounds): Bounds {
+		val top = if (soundDropdownOpen) soundListBounds(menu).bottom + SETTING_GAP else pickaxeAlertSoundBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeAlertPitchBounds(menu: Bounds): Bounds {
+		val top = pickaxeAlertVolumeBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeAlertPreviewBounds(menu: Bounds): Bounds {
+		val top = pickaxeAlertPitchBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun pickaxeCurrentStateBounds(menu: Bounds): Bounds {
+		val top = if (pickaxeAlertExpanded) pickaxeAlertPreviewBounds(menu).bottom + SETTING_GAP else pickaxeAlertDisclosureBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun mineshaftAutoWarpRuleBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun mineshaftAutoWarpDelayBounds(menu: Bounds): Bounds {
+		val top = mineshaftAutoWarpRuleBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun mineshaftAutoWarpWindowBounds(menu: Bounds): Bounds {
+		val top = mineshaftAutoWarpDelayBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun mineshaftAutoWarpStatusBounds(menu: Bounds): Bounds {
+		val top = mineshaftAutoWarpWindowBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun activeSoundAnchorBounds(menu: Bounds): Bounds {
+		return when (openedSection) {
+			ConfigSection.PICKAXE_COOLDOWN -> pickaxeAlertSoundBounds(menu)
+			else -> lostFightSoundBounds(menu)
+		}
 	}
 
 	private fun settingRowBounds(menu: Bounds, rowIndex: Int, rowHeight: Int): Bounds {
@@ -1690,6 +1928,20 @@ class XclipsenConfigScreen(
 		return "$trimmed..."
 	}
 
+	private fun activeSoundSearchField(): TextFieldWidget {
+		return when (openedSection) {
+			ConfigSection.PICKAXE_COOLDOWN -> pickaxeAlertSoundSearchField
+			else -> lostFightSoundSearchField
+		}
+	}
+
+	private fun activeSelectedSoundId(): String {
+		return when (openedSection) {
+			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownAlertSoundId
+			else -> workingCopy.hideonleafLostFightAlertSoundId
+		}
+	}
+
 	private fun setVisible(widget: TextFieldWidget, visible: Boolean) {
 		widget.visible = visible
 		widget.setEditable(visible)
@@ -1717,6 +1969,8 @@ class XclipsenConfigScreen(
 		LINE_WIDTH,
 		ALERT_VOLUME,
 		ALERT_PITCH,
+		PICKAXE_ALERT_VOLUME,
+		PICKAXE_ALERT_PITCH,
 	}
 
 	private enum class ConfigSection(
@@ -1732,6 +1986,7 @@ class XclipsenConfigScreen(
 		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
+		MINESHAFT_AUTOWARP("Mineshaft AutoWarp", "Auto-requests lead and party-warps when configured corpse counts are found.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
 		EXPERIMENTS("Experimentation", "Shizo-style auto experiments plus SkyHanni keep-items-visible for Superpairs.", toggleable = true),
 		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
@@ -1756,6 +2011,10 @@ class XclipsenConfigScreen(
 		SHULKER_TRACER_LINE_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		PURPLE_TERRACOTTA_HIGHLIGHT_COLOR(ConfigSection.PURPLE_TERRACOTTA),
 		PEST_ESP_COLOR(ConfigSection.PEST_ESP),
+		PICKAXE_ALERT_TEXT(ConfigSection.PICKAXE_COOLDOWN),
+		MINESHAFT_AUTOWARP_RULE(ConfigSection.MINESHAFT_AUTOWARP),
+		MINESHAFT_AUTOWARP_DELAY(ConfigSection.MINESHAFT_AUTOWARP),
+		MINESHAFT_AUTOWARP_WINDOW(ConfigSection.MINESHAFT_AUTOWARP),
 	}
 
 	companion object {
@@ -1789,7 +2048,10 @@ class XclipsenConfigScreen(
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
 		private const val PEST_ESP_POPUP_HEIGHT = 230
-		private const val PICKAXE_COOLDOWN_POPUP_HEIGHT = 145
+		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
+		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT = 320
+		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_WITH_DROPDOWN_HEIGHT = 420
+		private const val MINESHAFT_AUTOWARP_POPUP_HEIGHT = 230
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20
 		private const val TEXT_INPUT_SETTING_HEIGHT = 38
