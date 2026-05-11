@@ -155,13 +155,11 @@ object PestEspFeature {
 		if (entity !is LivingEntity || entity is PlayerEntity || entity is ArmorStandEntity) {
 			return false
 		}
-
-		if (resolveDisplayNames(entity).any { candidate -> PEST_NAMES.any { pestName -> candidate.contains(pestName, ignoreCase = true) } }) {
-			return true
+		if (entity !is BatEntity && entity !is SilverfishEntity) {
+			return false
 		}
 
-		// Fallback for pests before the nametag stand is visible or synced in.
-		return entity is BatEntity || entity is SilverfishEntity
+		return resolveDisplayNames(entity).any(::containsPestName)
 	}
 
 	private fun resolveDisplayNames(entity: LivingEntity): Sequence<String> = sequence {
@@ -175,13 +173,21 @@ object PestEspFeature {
 		) { stand ->
 			stand.isAlive &&
 				!stand.isRemoved &&
-				stand.squaredDistanceTo(entity) <= NAME_SEARCH_DISTANCE_SQUARED
+				stand.squaredDistanceTo(entity) <= NAME_SEARCH_DISTANCE_SQUARED &&
+				kotlin.math.abs(stand.x - entity.x) <= MAX_NAME_OFFSET_XZ &&
+				kotlin.math.abs(stand.z - entity.z) <= MAX_NAME_OFFSET_XZ &&
+				stand.y >= entity.y - MAX_NAME_OFFSET_BELOW &&
+				stand.y <= entity.y + MAX_NAME_OFFSET_ABOVE
 		}
 
-		for (stand in nearbyArmorStands) {
+		for (stand in nearbyArmorStands.sortedBy { it.squaredDistanceTo(entity) }) {
 			stand.customName?.string?.trim()?.takeIf { it.isNotEmpty() }?.let { yield(it) }
 			stand.name.string.trim().takeIf { it.isNotEmpty() }?.let { yield(it) }
 		}
+	}
+
+	private fun containsPestName(candidate: String): Boolean {
+		return PEST_NAMES.any { pestName -> candidate.contains(pestName, ignoreCase = true) }
 	}
 
 	private fun parseColor(hex: String): Int? {
@@ -195,9 +201,12 @@ object PestEspFeature {
 	private fun Double.isFinite(): Boolean = !isNaN() && kotlin.math.abs(this) != Double.POSITIVE_INFINITY
 
 	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
-	private const val NAME_SEARCH_RANGE_XZ = 4.5
-	private const val NAME_SEARCH_RANGE_Y = 6.0
-	private const val NAME_SEARCH_DISTANCE_SQUARED = 81.0
+	private const val NAME_SEARCH_RANGE_XZ = 2.25
+	private const val NAME_SEARCH_RANGE_Y = 3.5
+	private const val NAME_SEARCH_DISTANCE_SQUARED = 12.25
+	private const val MAX_NAME_OFFSET_XZ = 1.5
+	private const val MAX_NAME_OFFSET_BELOW = 0.75
+	private const val MAX_NAME_OFFSET_ABOVE = 2.75
 	private const val DEFAULT_COLOR = 0x7CFF6B
 	private const val CROSSHAIR_OFFSET = 2.0
 	private const val BOX_EXPANSION_XZ = 0.28

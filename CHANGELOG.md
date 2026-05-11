@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.12
+
+- Tightened `Pest ESP` matching so unrelated nearby mobs no longer inherit a pest nametag from loose ArmorStand matching.
+- Removed the overly broad fallback that treated every Garden bat or silverfish as a confirmed pest before the proper nametag had synced.
+
 ## v0.5.11
 
 - Added a new `Pickaxe Cooldown` misc module with a movable HUD widget for Hypixel mining ability cooldowns.
