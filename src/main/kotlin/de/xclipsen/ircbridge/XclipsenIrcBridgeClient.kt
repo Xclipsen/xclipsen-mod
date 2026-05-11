@@ -63,6 +63,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
 			MortDoorBarrierFeature.onWorldChange()
 			PurpleTerracottaHighlightFeature.onWorldChange()
+			PickaxeAbilityCooldownFeature.onWorldChange()
 		}
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
@@ -203,6 +204,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		AuctionHouseUnderbidFeature.onTick(client)
 		MortDoorBarrierFeature.onTick(client)
 		PurpleTerracottaHighlightFeature.onTick(client)
+		PickaxeAbilityCooldownFeature.onTick(client)
 		ModUpdateChecker.onTick(client)
 		ExperimentationTableFeature.onTick(client)
 

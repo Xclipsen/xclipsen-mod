@@ -10,6 +10,7 @@ object XclipsenHudManager {
 		IrcChatTabHudElement,
 		HideonleafLostFightHudElement,
 		HideonleafShardTrackerHudElement,
+		PickaxeAbilityCooldownHudElement,
 	)
 
 	fun render(context: DrawContext) {

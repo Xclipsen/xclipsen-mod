@@ -6,7 +6,6 @@ import net.minecraft.block.Blocks
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.render.VertexRendering
 import net.minecraft.client.render.VertexConsumerProvider
-import net.minecraft.client.render.XclipsenRenderLayers
 import net.minecraft.client.world.ClientWorld
 import net.minecraft.util.math.Box
 import net.minecraft.util.math.BlockPos
@@ -18,8 +17,6 @@ import java.util.function.Predicate
 
 object PurpleTerracottaHighlightFeature {
 	private const val RESCAN_INTERVAL_TICKS = 10
-	private const val OUTLINE_WIDTH = 2.0
-	private const val OUTLINE_ALPHA = 230
 	private const val BOX_EXPANSION = 0.002
 	private const val DEFAULT_COLOR = 0xB06CFF
 	private val TARGET_MATCHER = Predicate<BlockState> { it.isOf(Blocks.PURPLE_TERRACOTTA) }
@@ -82,14 +79,12 @@ object PurpleTerracottaHighlightFeature {
 
 		matrices.push()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-		val entry = matrices.peek()
-		val lineConsumer = consumers.getBuffer(XclipsenRenderLayers.getXrayLine(OUTLINE_WIDTH))
-		val fillConsumer = consumers.getBuffer(XclipsenRenderLayers.getXrayFill())
+		val fillLayer = net.minecraft.client.render.XclipsenRenderLayers.getXrayFill()
+		val fillConsumer = consumers.getBuffer(fillLayer)
 		for (pos in highlightedBlocks) {
-			drawHighlight(matrices, entry, fillConsumer, lineConsumer, pos, redFloat, greenFloat, blueFloat)
+			drawHighlight(matrices, fillConsumer, pos, redFloat, greenFloat, blueFloat)
 		}
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(XclipsenRenderLayers.getXrayFill())
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(XclipsenRenderLayers.getXrayLine(OUTLINE_WIDTH))
+		(consumers as? VertexConsumerProvider.Immediate)?.draw(fillLayer)
 		matrices.pop()
 	}
 
@@ -148,9 +143,7 @@ object PurpleTerracottaHighlightFeature {
 
 	private fun drawHighlight(
 		matrices: net.minecraft.client.util.math.MatrixStack,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
 		fillConsumer: net.minecraft.client.render.VertexConsumer,
-		lineConsumer: net.minecraft.client.render.VertexConsumer,
 		pos: BlockPos,
 		red: Float,
 		green: Float,
@@ -178,7 +171,6 @@ object PurpleTerracottaHighlightFeature {
 			blue,
 			0.12f,
 		)
-		VertexRendering.drawBox(entry, lineConsumer, box, red, green, blue, OUTLINE_ALPHA / 255.0f)
 	}
 
 	private fun parseColor(hex: String): Int? {

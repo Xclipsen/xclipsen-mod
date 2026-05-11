@@ -53,7 +53,7 @@ class XclipsenConfigScreen(
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
-		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP)),
+		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.PICKAXE_COOLDOWN)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -100,7 +100,6 @@ class XclipsenConfigScreen(
 	override fun shouldPause(): Boolean = false
 
 	override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
-		renderBackground(context, mouseX, mouseY, delta)
 		context.fillGradient(0, 0, width, height, 0x88000000.toInt(), 0xCC000000.toInt())
 
 		drawPanels(context, mouseX, mouseY)
@@ -225,6 +224,7 @@ class XclipsenConfigScreen(
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled = !workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled = !workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled = !workingCopy.pestEspModuleEnabled
+			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			else -> return
 		}
 
@@ -307,6 +307,8 @@ class XclipsenConfigScreen(
 		candidate.dungeonRedVignetteEnabled = workingCopy.dungeonRedVignetteEnabled
 		candidate.pestEspModuleEnabled = workingCopy.pestEspModuleEnabled
 		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
+		candidate.pickaxeAbilityCooldownModuleEnabled = workingCopy.pickaxeAbilityCooldownModuleEnabled
+		candidate.pickaxeAbilityCooldownShowReady = workingCopy.pickaxeAbilityCooldownShowReady
 		candidate.hudElements = mod.config().hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		candidate.shulkerGlowColorHex = normalizedHexColor(shulkerGlowColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Glow color must be #RRGGBB.")
@@ -496,6 +498,7 @@ class XclipsenConfigScreen(
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled
+			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			else -> true
 		}
 	}
@@ -523,6 +526,7 @@ class XclipsenConfigScreen(
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUCTION_HOUSE -> drawAuctionHouseSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
+			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUTO_CROESUS -> drawAutoCroesusSettings(context, menu, mouseX, mouseY)
 			ConfigSection.DOOR -> drawDoorSettings(context, menu, mouseX, mouseY)
@@ -605,6 +609,11 @@ class XclipsenConfigScreen(
 		if (colorPickerOpen) {
 			drawColorPicker(context, menu, mouseX, mouseY)
 		}
+	}
+
+	private fun drawPickaxeCooldownSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Show When Ready", workingCopy.pickaxeAbilityCooldownShowReady, mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Current State", PickaxeAbilityCooldownFeature.statusLine(), mouseX, mouseY)
 	}
 
 	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -973,6 +982,7 @@ class XclipsenConfigScreen(
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
 			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
 			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
+			ConfigSection.PICKAXE_COOLDOWN -> PICKAXE_COOLDOWN_POPUP_HEIGHT
 			ConfigSection.EXPERIMENTS -> 340
 			ConfigSection.AUTO_CROESUS -> 335
 			ConfigSection.DOOR -> 135
@@ -1190,6 +1200,12 @@ class XclipsenConfigScreen(
 				updateColorFromPicker(mouseX, mouseY, target)
 				return true
 			}
+		}
+
+		if (section == ConfigSection.PICKAXE_COOLDOWN && settingRowBounds(menu, 0, SETTING_HEIGHT).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.pickaxeAbilityCooldownShowReady = !workingCopy.pickaxeAbilityCooldownShowReady
+			return true
 		}
 
 		if (section == ConfigSection.EXPERIMENTS && autoExperimentsAutoCloseBounds(menu).contains(mouseX, mouseY)) {
@@ -1715,6 +1731,7 @@ class XclipsenConfigScreen(
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
 		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
+		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
 		EXPERIMENTS("Experimentation", "Shizo-style auto experiments plus SkyHanni keep-items-visible for Superpairs.", toggleable = true),
 		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
@@ -1772,6 +1789,7 @@ class XclipsenConfigScreen(
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
 		private const val PEST_ESP_POPUP_HEIGHT = 230
+		private const val PICKAXE_COOLDOWN_POPUP_HEIGHT = 145
 		private const val SETTING_WIDTH = 180
 		private const val SETTING_HEIGHT = 20
 		private const val TEXT_INPUT_SETTING_HEIGHT = 38

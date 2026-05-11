@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.11
+
+- Added a new `Pickaxe Cooldown` misc module with a movable HUD widget for Hypixel mining ability cooldowns.
+- Reads mining ability states such as `Pickobulus` directly from the SkyBlock tab list, following the same signal Skyblocker uses.
+- Added a config toggle to keep the HUD visible even while the ability is ready.
+
 ## v0.5.10
 
 - Added a new `Pest ESP` misc module for Garden pests with configurable box and tracer rendering.

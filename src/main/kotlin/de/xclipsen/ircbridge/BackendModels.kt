@@ -92,6 +92,8 @@ class BridgeConfig {
 	@JvmField var pestEspModuleEnabled: Boolean = false
 	@JvmField var pestEspColorHex: String = "#7CFF6B"
 	@JvmField var pestEspTracerEnabled: Boolean = true
+	@JvmField var pickaxeAbilityCooldownModuleEnabled: Boolean = false
+	@JvmField var pickaxeAbilityCooldownShowReady: Boolean = true
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
@@ -143,6 +145,8 @@ class BridgeConfig {
 		it.pestEspModuleEnabled = pestEspModuleEnabled
 		it.pestEspColorHex = pestEspColorHex
 		it.pestEspTracerEnabled = pestEspTracerEnabled
+		it.pickaxeAbilityCooldownModuleEnabled = pickaxeAbilityCooldownModuleEnabled
+		it.pickaxeAbilityCooldownShowReady = pickaxeAbilityCooldownShowReady
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
 }

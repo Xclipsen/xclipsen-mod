@@ -25,7 +25,6 @@ class XclipsenHudEditorScreen(
 
 	override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
 		MinecraftDrawContextHolder.current = context
-		renderBackground(context, mouseX, mouseY, delta)
 		context.fill(0, 0, width, height, 0x96000000.toInt())
 
 		XclipsenHudManager.elements.forEach { element ->
