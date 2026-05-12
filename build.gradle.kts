@@ -64,7 +64,7 @@ tasks.jar {
 }
 
 val prismTargetDirs: List<String> = listOf(
-	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test/minecraft/mods"
+	"""C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\1.21.10"""
 )
 
 fun Project.findRemappedModJar(): File {
