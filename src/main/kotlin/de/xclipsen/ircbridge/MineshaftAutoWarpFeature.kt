@@ -1,17 +1,13 @@
 package de.xclipsen.ircbridge
 
 import com.autocroesus.util.ColorUtil
+import de.xclipsen.ircbridge.FrozenCorpseDetector.FrozenCorpseType
 import net.minecraft.client.MinecraftClient
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.component.type.NbtComponent
-import net.minecraft.entity.EquipmentSlot
 import net.minecraft.entity.decoration.ArmorStandEntity
-import net.minecraft.item.ItemStack
 import net.minecraft.text.Text
 import net.minecraft.util.math.BlockPos
 import java.util.EnumMap
 import java.util.Locale
-import kotlin.jvm.optionals.getOrNull
 
 object MineshaftAutoWarpFeature {
 	private var tickCounter = 0
@@ -42,7 +38,7 @@ object MineshaftAutoWarpFeature {
 			return
 		}
 
-		if (!isInMineshaft()) {
+		if (!FrozenCorpseDetector.isInMineshaftArea()) {
 			resetMineshaftState()
 			return
 		}
@@ -97,7 +93,7 @@ object MineshaftAutoWarpFeature {
 		if (!LocationTracker.isOnHypixelSkyBlock) {
 			return "Not on Hypixel SkyBlock"
 		}
-		if (!isInMineshaft()) {
+		if (!FrozenCorpseDetector.isInMineshaftArea()) {
 			return leaderStatePrefix() + "Waiting for mineshaft"
 		}
 
@@ -198,11 +194,10 @@ object MineshaftAutoWarpFeature {
 		val world = client.world ?: return
 		for (entity in world.entities) {
 			val armorStand = entity as? ArmorStandEntity ?: continue
-			if (!looksLikeCorpseStand(armorStand)) {
+			if (!FrozenCorpseDetector.looksLikeCorpseStand(armorStand)) {
 				continue
 			}
-
-			val corpseKind = resolveCorpseKind(armorStand.getEquippedStack(EquipmentSlot.HEAD)) ?: continue
+			val corpseKind = FrozenCorpseDetector.resolveCorpseType(armorStand) ?: continue
 			val pos = armorStand.blockPos
 			val existing = detectedCorpses[pos]
 			if (existing == null) {
@@ -213,32 +208,6 @@ object MineshaftAutoWarpFeature {
 		}
 	}
 
-	private fun looksLikeCorpseStand(armorStand: ArmorStandEntity): Boolean {
-		if (!armorStand.isAlive || armorStand.isRemoved || armorStand.isInvisible) {
-			return false
-		}
-		if (armorStand.shouldShowBasePlate()) {
-			return false
-		}
-		if (!armorStand.shouldShowArms()) {
-			return false
-		}
-		val customName = armorStand.customName?.string?.trim().orEmpty()
-		return customName.isEmpty()
-	}
-
-	private fun resolveCorpseKind(stack: ItemStack): CorpseKind? {
-		if (stack.isEmpty) {
-			return null
-		}
-		val customData = stack.get(DataComponentTypes.CUSTOM_DATA) as? NbtComponent ?: return null
-		val id = customData.copyNbt().getString("id").getOrNull()?.trim().orEmpty()
-		if (id.isEmpty()) {
-			return null
-		}
-		return CorpseKind.byInternalId(id)
-	}
-
 	private fun handleMineshaftMessage(message: String) {
 		if (message.equals(CAVE_IN_MESSAGE, ignoreCase = true)) {
 			caveInDetected = true
@@ -246,7 +215,7 @@ object MineshaftAutoWarpFeature {
 		}
 
 		LOOT_PATTERN.matchEntire(message)?.let { match ->
-			val corpseKind = CorpseKind.byName(match.groupValues[1]) ?: return
+			val corpseKind = FrozenCorpseType.byAlias(match.groupValues[1]) ?: return
 			markClosestCorpseLooted(corpseKind)
 			return
 		}
@@ -258,7 +227,7 @@ object MineshaftAutoWarpFeature {
 		}
 	}
 
-	private fun markClosestCorpseLooted(kind: CorpseKind) {
+	private fun markClosestCorpseLooted(kind: FrozenCorpseType) {
 		val playerPos = MinecraftClient.getInstance().player?.blockPos ?: return
 		detectedCorpses.values
 			.asSequence()
@@ -395,10 +364,6 @@ object MineshaftAutoWarpFeature {
 		detectedCorpses.clear()
 	}
 
-	private fun isInMineshaft(): Boolean {
-		return LocationTracker.isOnHypixelSkyBlock && LocationTracker.currentArea.contains("mineshaft", ignoreCase = true)
-	}
-
 	private fun isLocalPlayerLeader(): Boolean {
 		val leader = partyLeader ?: return false
 		return leader.equals(localPlayerName(), ignoreCase = true)
@@ -409,16 +374,16 @@ object MineshaftAutoWarpFeature {
 		return "Leader: $leader | "
 	}
 
-	private fun totalCounts(): EnumMap<CorpseKind, Int> {
-		val counts = EnumMap<CorpseKind, Int>(CorpseKind::class.java)
+	private fun totalCounts(): EnumMap<FrozenCorpseType, Int> {
+		val counts = EnumMap<FrozenCorpseType, Int>(FrozenCorpseType::class.java)
 		for (corpse in detectedCorpses.values) {
 			counts[corpse.kind] = (counts[corpse.kind] ?: 0) + 1
 		}
 		return counts
 	}
 
-	private fun availableCounts(): EnumMap<CorpseKind, Int> {
-		val counts = EnumMap<CorpseKind, Int>(CorpseKind::class.java)
+	private fun availableCounts(): EnumMap<FrozenCorpseType, Int> {
+		val counts = EnumMap<FrozenCorpseType, Int>(FrozenCorpseType::class.java)
 		for (corpse in detectedCorpses.values) {
 			if (corpse.looted) {
 				continue
@@ -428,8 +393,8 @@ object MineshaftAutoWarpFeature {
 		return counts
 	}
 
-	private fun formatCounts(counts: Map<CorpseKind, Int>): String {
-		val summary = CorpseKind.entries
+	private fun formatCounts(counts: Map<FrozenCorpseType, Int>): String {
+		val summary = FrozenCorpseType.entries
 			.mapNotNull { kind ->
 				val amount = counts[kind] ?: 0
 				if (amount <= 0) null else "${amount}${kind.shortCode}"
@@ -517,7 +482,7 @@ object MineshaftAutoWarpFeature {
 	}
 
 	private fun parseClause(raw: String): CorpseClause? {
-		val requirements = EnumMap<CorpseKind, Int>(CorpseKind::class.java)
+		val requirements = EnumMap<FrozenCorpseType, Int>(FrozenCorpseType::class.java)
 		var totalRequired: Int? = null
 		val segments = raw.split(AND_RULE_SPLIT_PATTERN).map { it.trim() }.filter { it.isNotEmpty() }
 		if (segments.isEmpty()) {
@@ -549,7 +514,7 @@ object MineshaftAutoWarpFeature {
 			if (key == "TOTAL" || key == "CORPSE" || key == "CORPSES") {
 				return ParsedRequirement(null, amount, amount)
 			}
-			val kind = CorpseKind.byAlias(key) ?: return null
+			val kind = FrozenCorpseType.byAlias(key) ?: return null
 			return ParsedRequirement(kind, amount, null)
 		}
 
@@ -557,7 +522,7 @@ object MineshaftAutoWarpFeature {
 		if (leadingAmountMatch != null) {
 			val amount = leadingAmountMatch.groupValues[1].toIntOrNull() ?: return null
 			val key = leadingAmountMatch.groupValues[2].uppercase(Locale.ROOT)
-			val kind = CorpseKind.byAlias(key) ?: return null
+			val kind = FrozenCorpseType.byAlias(key) ?: return null
 			return ParsedRequirement(kind, amount, null)
 		}
 
@@ -565,7 +530,7 @@ object MineshaftAutoWarpFeature {
 		if (trailingAmountMatch != null) {
 			val key = trailingAmountMatch.groupValues[1].uppercase(Locale.ROOT)
 			val amount = trailingAmountMatch.groupValues[2].toIntOrNull() ?: return null
-			val kind = CorpseKind.byAlias(key) ?: return null
+			val kind = FrozenCorpseType.byAlias(key) ?: return null
 			return ParsedRequirement(kind, amount, null)
 		}
 
@@ -578,53 +543,30 @@ object MineshaftAutoWarpFeature {
 	)
 
 	private data class ParsedRequirement(
-		val kind: CorpseKind?,
+		val kind: FrozenCorpseType?,
 		val amount: Int,
 		val totalRequired: Int?,
 	)
 
 	private data class DetectedCorpse(
-		val kind: CorpseKind,
+		val kind: FrozenCorpseType,
 		val pos: BlockPos,
 		var looted: Boolean,
 	)
 
 	private data class CorpseRule(val alternatives: List<CorpseClause>) {
-		fun matches(counts: Map<CorpseKind, Int>): Boolean = alternatives.any { it.matches(counts) }
+		fun matches(counts: Map<FrozenCorpseType, Int>): Boolean = alternatives.any { it.matches(counts) }
 	}
 
 	private data class CorpseClause(
-		val requirements: EnumMap<CorpseKind, Int>,
+		val requirements: EnumMap<FrozenCorpseType, Int>,
 		val totalRequired: Int?,
 	) {
-		fun matches(counts: Map<CorpseKind, Int>): Boolean {
+		fun matches(counts: Map<FrozenCorpseType, Int>): Boolean {
 			if (totalRequired != null && counts.values.sum() < totalRequired) {
 				return false
 			}
 			return requirements.all { (kind, amount) -> (counts[kind] ?: 0) >= amount }
-		}
-	}
-
-	private enum class CorpseKind(
-		val shortCode: String,
-		val aliases: Set<String>,
-		val internalId: String,
-	) {
-		LAPIS("L", setOf("L", "LAPIS"), "LAPIS_ARMOR_HELMET"),
-		UMBER("U", setOf("U", "UMBER"), "ARMOR_OF_YOG_HELMET"),
-		TUNGSTEN("T", setOf("T", "TUNGSTEN"), "MINERAL_HELMET"),
-		VANGUARD("V", setOf("V", "VANGUARD"), "VANGUARD_HELMET"),
-		;
-
-		companion object {
-			fun byInternalId(id: String): CorpseKind? = entries.firstOrNull { it.internalId == id }
-
-			fun byAlias(alias: String): CorpseKind? {
-				val normalized = alias.uppercase(Locale.ROOT)
-				return entries.firstOrNull { normalized in it.aliases }
-			}
-
-			fun byName(name: String): CorpseKind? = byAlias(name)
 		}
 	}
 

@@ -59,7 +59,7 @@ class XclipsenConfigScreen(
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
-		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
+		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -235,6 +235,7 @@ class XclipsenConfigScreen(
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled = !workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled = !workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled = !workingCopy.pestEspModuleEnabled
+			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled = !workingCopy.corpseEspModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled = !workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> return
@@ -320,6 +321,11 @@ class XclipsenConfigScreen(
 		candidate.dungeonRedVignetteEnabled = workingCopy.dungeonRedVignetteEnabled
 		candidate.pestEspModuleEnabled = workingCopy.pestEspModuleEnabled
 		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
+		candidate.corpseEspModuleEnabled = workingCopy.corpseEspModuleEnabled
+		candidate.corpseEspLapisEnabled = workingCopy.corpseEspLapisEnabled
+		candidate.corpseEspTungstenEnabled = workingCopy.corpseEspTungstenEnabled
+		candidate.corpseEspUmberEnabled = workingCopy.corpseEspUmberEnabled
+		candidate.corpseEspVanguardEnabled = workingCopy.corpseEspVanguardEnabled
 		candidate.pickaxeAbilityCooldownModuleEnabled = workingCopy.pickaxeAbilityCooldownModuleEnabled
 		candidate.pickaxeAbilityCooldownShowReady = workingCopy.pickaxeAbilityCooldownShowReady
 		candidate.pickaxeAbilityCooldownAlertEnabled = workingCopy.pickaxeAbilityCooldownAlertEnabled
@@ -550,6 +556,7 @@ class XclipsenConfigScreen(
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled
+			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> true
@@ -579,6 +586,7 @@ class XclipsenConfigScreen(
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUCTION_HOUSE -> drawAuctionHouseSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
+			ConfigSection.CORPSE_ESP -> drawCorpseEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MINESHAFT_AUTOWARP -> drawMineshaftAutoWarpSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
@@ -663,6 +671,17 @@ class XclipsenConfigScreen(
 		if (colorPickerOpen) {
 			drawColorPicker(context, menu, mouseX, mouseY)
 		}
+	}
+
+	private fun drawCorpseEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, corpseEspLapisBounds(menu), "Lapis ESP", workingCopy.corpseEspLapisEnabled, mouseX, mouseY)
+		drawInfoSetting(context, corpseEspLapisColorBounds(menu), "Lapis Color", "#2563EB", mouseX, mouseY)
+		drawToggleSetting(context, corpseEspTungstenBounds(menu), "Tungsten ESP", workingCopy.corpseEspTungstenEnabled, mouseX, mouseY)
+		drawInfoSetting(context, corpseEspTungstenColorBounds(menu), "Tungsten Color", "#9CA3AF", mouseX, mouseY)
+		drawToggleSetting(context, corpseEspUmberBounds(menu), "Umber ESP", workingCopy.corpseEspUmberEnabled, mouseX, mouseY)
+		drawInfoSetting(context, corpseEspUmberColorBounds(menu), "Umber Color", "#F97316", mouseX, mouseY)
+		drawToggleSetting(context, corpseEspVanguardBounds(menu), "Vanguard ESP", workingCopy.corpseEspVanguardEnabled, mouseX, mouseY)
+		drawInfoSetting(context, corpseEspVanguardColorBounds(menu), "Vanguard Color", "#7DD3FC", mouseX, mouseY)
 	}
 
 	private fun drawPickaxeCooldownSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -1057,6 +1076,7 @@ class XclipsenConfigScreen(
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
 			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
 			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
+			ConfigSection.CORPSE_ESP -> CORPSE_ESP_POPUP_HEIGHT
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
 			ConfigSection.MINESHAFT_AUTOWARP -> MINESHAFT_AUTOWARP_POPUP_HEIGHT
 			ConfigSection.EXPERIMENTS -> 340
@@ -1282,6 +1302,32 @@ class XclipsenConfigScreen(
 			if (target != null) {
 				draggingColorPicker = target
 				updateColorFromPicker(mouseX, mouseY, target)
+				return true
+			}
+		}
+
+		if (section == ConfigSection.CORPSE_ESP) {
+			if (corpseEspLapisBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.corpseEspLapisEnabled = !workingCopy.corpseEspLapisEnabled
+				return true
+			}
+
+			if (corpseEspTungstenBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.corpseEspTungstenEnabled = !workingCopy.corpseEspTungstenEnabled
+				return true
+			}
+
+			if (corpseEspUmberBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.corpseEspUmberEnabled = !workingCopy.corpseEspUmberEnabled
+				return true
+			}
+
+			if (corpseEspVanguardBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.corpseEspVanguardEnabled = !workingCopy.corpseEspVanguardEnabled
 				return true
 			}
 		}
@@ -1649,6 +1695,45 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
 
+	private fun corpseEspLapisBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
+	private fun corpseEspLapisColorBounds(menu: Bounds): Bounds {
+		val top = corpseEspLapisBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun corpseEspTungstenBounds(menu: Bounds): Bounds {
+		val top = corpseEspLapisColorBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun corpseEspTungstenColorBounds(menu: Bounds): Bounds {
+		val top = corpseEspTungstenBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun corpseEspUmberBounds(menu: Bounds): Bounds {
+		val top = corpseEspTungstenColorBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun corpseEspUmberColorBounds(menu: Bounds): Bounds {
+		val top = corpseEspUmberBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun corpseEspVanguardBounds(menu: Bounds): Bounds {
+		val top = corpseEspUmberColorBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun corpseEspVanguardColorBounds(menu: Bounds): Bounds {
+		val top = corpseEspVanguardBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
 	private fun projectileGlowColorBounds(menu: Bounds): Bounds {
 		val top = shulkerGlowColorBounds(menu).bottom + SETTING_GAP + colorPickerSpaceAfter(ConfigField.SHULKER_GLOW_COLOR)
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
@@ -1985,6 +2070,7 @@ class XclipsenConfigScreen(
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
 		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
+		CORPSE_ESP("Corpse ESP", "Highlights Glacite Mineshaft corpses by armor-stand helmet ID.", toggleable = true),
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		MINESHAFT_AUTOWARP("Mineshaft AutoWarp", "Auto-requests lead and party-warps when configured corpse counts are found.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
@@ -2048,6 +2134,7 @@ class XclipsenConfigScreen(
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
 		private const val PEST_ESP_POPUP_HEIGHT = 230
+		private const val CORPSE_ESP_POPUP_HEIGHT = 410
 		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT = 320
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_WITH_DROPDOWN_HEIGHT = 420

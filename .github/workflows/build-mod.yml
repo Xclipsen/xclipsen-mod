@@ -1,0 +1,67 @@
+name: Build Mod
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ARTIFACT_BASENAME: xclipsen-mod-build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build remapped mod jar
+        run: ./gradlew remapJar
+
+      - name: Package download bundle
+        run: |
+          mkdir -p build/distributions
+          jar_file="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-dev.jar' ! -name '*-sources.jar' | head -n 1)"
+          if [ -z "$jar_file" ]; then
+            echo "No remapped jar found."
+            exit 1
+          fi
+          cp "$jar_file" "build/distributions/"
+          python3 - <<'PY'
+          import os
+          import zipfile
+          from pathlib import Path
+
+          base = Path("build/distributions")
+          jars = sorted(base.glob("*.jar"))
+          if not jars:
+              raise SystemExit("No jar files found in build/distributions")
+
+          archive = base / f"{os.environ['ARTIFACT_BASENAME']}.zip"
+          with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+              for jar in jars:
+                  zf.write(jar, arcname=jar.name)
+          PY
+
+      - name: Upload downloadable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: xclipsen-mod-build
+          path: |
+            build/distributions/*.zip
+            build/distributions/*.jar
+          if-no-files-found: error
+          retention-days: 30

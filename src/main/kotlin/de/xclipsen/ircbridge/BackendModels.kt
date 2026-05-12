@@ -92,6 +92,11 @@ class BridgeConfig {
 	@JvmField var pestEspModuleEnabled: Boolean = false
 	@JvmField var pestEspColorHex: String = "#7CFF6B"
 	@JvmField var pestEspTracerEnabled: Boolean = true
+	@JvmField var corpseEspModuleEnabled: Boolean = false
+	@JvmField var corpseEspLapisEnabled: Boolean = true
+	@JvmField var corpseEspTungstenEnabled: Boolean = true
+	@JvmField var corpseEspUmberEnabled: Boolean = true
+	@JvmField var corpseEspVanguardEnabled: Boolean = true
 	@JvmField var pickaxeAbilityCooldownModuleEnabled: Boolean = false
 	@JvmField var pickaxeAbilityCooldownShowReady: Boolean = true
 	@JvmField var pickaxeAbilityCooldownAlertEnabled: Boolean = false
@@ -154,6 +159,11 @@ class BridgeConfig {
 		it.pestEspModuleEnabled = pestEspModuleEnabled
 		it.pestEspColorHex = pestEspColorHex
 		it.pestEspTracerEnabled = pestEspTracerEnabled
+		it.corpseEspModuleEnabled = corpseEspModuleEnabled
+		it.corpseEspLapisEnabled = corpseEspLapisEnabled
+		it.corpseEspTungstenEnabled = corpseEspTungstenEnabled
+		it.corpseEspUmberEnabled = corpseEspUmberEnabled
+		it.corpseEspVanguardEnabled = corpseEspVanguardEnabled
 		it.pickaxeAbilityCooldownModuleEnabled = pickaxeAbilityCooldownModuleEnabled
 		it.pickaxeAbilityCooldownShowReady = pickaxeAbilityCooldownShowReady
 		it.pickaxeAbilityCooldownAlertEnabled = pickaxeAbilityCooldownAlertEnabled
