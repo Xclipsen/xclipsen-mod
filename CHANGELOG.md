@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.14
+
+- Added Glacite mineshaft corpse ESP so discovered corpses can be highlighted directly in-world.
+- Routed corpse ESP rendering through the shared entity glow path for more consistent highlighting behavior.
+
 ## v0.5.13
 
 - Expanded `Pickaxe Cooldown` with configurable ready alerts, sound settings, and a separate movable alert HUD element.
