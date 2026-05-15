@@ -89,6 +89,7 @@ class BridgeConfigManager(
 		value.autoExperimentsSerumCount = value.autoExperimentsSerumCount.coerceIn(0, 3)
 		value.dungeonDoorMode = value.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		value.pestEspColorHex = normalizedHexColor(value.pestEspColorHex, "#7CFF6B")
+		value.mobModelEntityType = normalizeEntityTypeId(value.mobModelEntityType)
 		value.pickaxeAbilityCooldownAlertSoundId = SoundCatalog.normalizeSoundId(value.pickaxeAbilityCooldownAlertSoundId)
 		value.pickaxeAbilityCooldownAlertSoundVolume = value.pickaxeAbilityCooldownAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.pickaxeAbilityCooldownAlertSoundPitch = value.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f)
@@ -158,8 +159,21 @@ class BridgeConfigManager(
 		return "#${candidate.uppercase(Locale.ROOT)}"
 	}
 
+	private fun normalizeEntityTypeId(value: String?): String {
+		val fallback = "minecraft:zombie"
+		val candidate = safeString(value, fallback)
+			.trim()
+			.lowercase(Locale.ROOT)
+		if (candidate.isBlank()) {
+			return fallback
+		}
+		val namespaced = if (':' in candidate) candidate else "minecraft:$candidate"
+		return if (ENTITY_TYPE_PATTERN.matches(namespaced)) namespaced else fallback
+	}
+
 	companion object {
 		private val GSON: Gson = GsonBuilder().setPrettyPrinting().create()
 		private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
+		private val ENTITY_TYPE_PATTERN = Regex("[a-z0-9_.-]+:[a-z0-9_/.-]+")
 	}
 }

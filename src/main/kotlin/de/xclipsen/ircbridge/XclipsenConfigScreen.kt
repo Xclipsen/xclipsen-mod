@@ -8,6 +8,7 @@ import net.minecraft.client.gui.screen.Screen
 import net.minecraft.client.gui.widget.TextFieldWidget
 import net.minecraft.client.input.KeyInput
 import net.minecraft.text.Text
+import net.minecraft.util.Identifier
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
 import java.io.IOException
@@ -25,6 +26,8 @@ class XclipsenConfigScreen(
 	private var draggingColorPicker: ColorPickerDragTarget? = null
 	private var soundDropdownOpen = false
 	private var soundScrollOffset = 0
+	private var mobModelDropdownOpen = false
+	private var mobModelScrollOffset = 0
 	private var draggingSlider: SliderDragTarget? = null
 	private var pickaxeAlertExpanded = false
 	private var awaitingHideonleafResetConfirmation = false
@@ -49,6 +52,7 @@ class XclipsenConfigScreen(
 	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
 	private lateinit var purpleTerracottaHighlightColorHexField: TextFieldWidget
 	private lateinit var pestEspColorHexField: TextFieldWidget
+	private lateinit var mobModelEntityTypeField: TextFieldWidget
 	private lateinit var pickaxeAlertTextField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpRuleField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpDelayField: TextFieldWidget
@@ -59,7 +63,7 @@ class XclipsenConfigScreen(
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
-		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
+		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -88,6 +92,7 @@ class XclipsenConfigScreen(
 		shulkerTracerLineColorHexField = registerField(ConfigField.SHULKER_TRACER_LINE_COLOR, workingCopy.shulkerTracerLineColorHex, "#36C5F0")
 		purpleTerracottaHighlightColorHexField = registerField(ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR, workingCopy.purpleTerracottaHighlightColorHex, "#B06CFF")
 		pestEspColorHexField = registerField(ConfigField.PEST_ESP_COLOR, workingCopy.pestEspColorHex, "#7CFF6B")
+		mobModelEntityTypeField = registerField(ConfigField.MOB_MODEL_ENTITY_TYPE, "", "Search mobs...")
 		pickaxeAlertTextField = registerField(ConfigField.PICKAXE_ALERT_TEXT, workingCopy.pickaxeAbilityCooldownAlertText, PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT)
 		mineshaftAutoWarpRuleField = registerField(ConfigField.MINESHAFT_AUTOWARP_RULE, workingCopy.mineshaftAutoWarpCorpseRule, "lapis 2; vanguard 1")
 		mineshaftAutoWarpDelayField = registerField(ConfigField.MINESHAFT_AUTOWARP_DELAY, workingCopy.mineshaftAutoWarpDelayMs.toString(), "3500")
@@ -155,12 +160,14 @@ class XclipsenConfigScreen(
 				openedSection = clickedSection
 				openColorField = null
 				soundDropdownOpen = false
+				mobModelDropdownOpen = false
 				draggingColorPicker = null
 				draggingSlider = null
 			} else if (button == RIGHT_MOUSE_BUTTON) {
 				openedSection = clickedSection
 				openColorField = null
 				soundDropdownOpen = false
+				mobModelDropdownOpen = false
 				draggingColorPicker = null
 				draggingSlider = null
 			}
@@ -220,6 +227,16 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (openedSection == ConfigSection.MOB_MODEL && mobModelDropdownOpen) {
+			val list = mobModelListBounds(settingsBounds())
+			if (list.contains(mouseX.toInt(), mouseY.toInt())) {
+				val filtered = filteredMobModelOptions(mobModelEntityTypeField.text)
+				val maxScroll = (filtered.size - MOB_MODEL_VISIBLE_ROWS).coerceAtLeast(0)
+				mobModelScrollOffset = (mobModelScrollOffset - verticalAmount.toInt()).coerceIn(0, maxScroll)
+				return true
+			}
+		}
+
 		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
 	}
 
@@ -236,6 +253,7 @@ class XclipsenConfigScreen(
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled = !workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled = !workingCopy.pestEspModuleEnabled
 			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled = !workingCopy.corpseEspModuleEnabled
+			ConfigSection.MOB_MODEL -> workingCopy.mobModelModuleEnabled = !workingCopy.mobModelModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled = !workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> return
@@ -251,6 +269,7 @@ class XclipsenConfigScreen(
 	private fun closeOpenedSection() {
 		readWorkingCopyFromFields(updateStatus = false)
 		openedSection = null
+		setFocused(null)
 		openColorField = null
 		soundDropdownOpen = false
 		soundScrollOffset = 0
@@ -258,6 +277,8 @@ class XclipsenConfigScreen(
 		draggingSlider = null
 		pickaxeAlertExpanded = false
 		awaitingHideonleafResetConfirmation = false
+		mobModelDropdownOpen = false
+		mobModelScrollOffset = 0
 		layoutWidgets()
 	}
 
@@ -281,6 +302,20 @@ class XclipsenConfigScreen(
 			return
 		}
 		statusMessage = Text.literal(XclipsenIrcBridgeClient.formatStatus(mod.testBackendConnection(candidate)))
+	}
+
+	private fun checkForUpdatesNow() {
+		val candidate = readWorkingCopyFromFields(updateStatus = true) ?: return
+		try {
+			mod.saveAndApplyConfig(candidate)
+			statusMessage = if (ModUpdateChecker.requestCheckNow()) {
+				Text.literal("Started update check.")
+			} else {
+				Text.literal("Update check already running or disabled.")
+			}
+		} catch (_: IOException) {
+			statusMessage = Text.literal("Failed to save config.")
+		}
 	}
 
 	private fun readWorkingCopyFromFields(updateStatus: Boolean): BridgeConfig? {
@@ -326,6 +361,9 @@ class XclipsenConfigScreen(
 		candidate.corpseEspTungstenEnabled = workingCopy.corpseEspTungstenEnabled
 		candidate.corpseEspUmberEnabled = workingCopy.corpseEspUmberEnabled
 		candidate.corpseEspVanguardEnabled = workingCopy.corpseEspVanguardEnabled
+		candidate.mobModelModuleEnabled = workingCopy.mobModelModuleEnabled
+		candidate.mobModelBaby = workingCopy.mobModelBaby
+		candidate.mobModelEntityType = workingCopy.mobModelEntityType
 		candidate.pickaxeAbilityCooldownModuleEnabled = workingCopy.pickaxeAbilityCooldownModuleEnabled
 		candidate.pickaxeAbilityCooldownShowReady = workingCopy.pickaxeAbilityCooldownShowReady
 		candidate.pickaxeAbilityCooldownAlertEnabled = workingCopy.pickaxeAbilityCooldownAlertEnabled
@@ -355,6 +393,20 @@ class XclipsenConfigScreen(
 		candidate.pestEspColorHex = normalizedHexColor(pestEspColorHexField.text) ?: run {
 			if (updateStatus) statusMessage = Text.literal("Pest ESP color must be #RRGGBB.")
 			return null
+		}
+		val normalizedMobModelEntityType = normalizeMobModelEntityType(candidate.mobModelEntityType)
+		val resolvedMobModelEntityType = normalizedMobModelEntityType?.let(MobModelCatalog::resolve)
+		candidate.mobModelEntityType = when {
+			resolvedMobModelEntityType != null -> normalizedMobModelEntityType
+			candidate.mobModelModuleEnabled && normalizedMobModelEntityType == null -> {
+				if (updateStatus) statusMessage = Text.literal("Mob model id must be a valid entity like minecraft:zombie.")
+				return null
+			}
+			candidate.mobModelModuleEnabled -> {
+				if (updateStatus) statusMessage = Text.literal("Mob model entity must be a living mob on this client.")
+				return null
+			}
+			else -> "minecraft:zombie"
 		}
 
 		try {
@@ -503,6 +555,14 @@ class XclipsenConfigScreen(
 			setVisible(pickaxeAlertSoundSearchField, false)
 		}
 
+		if (section == ConfigSection.MOB_MODEL && mobModelDropdownOpen) {
+			val search = mobModelSearchBounds(menu)
+			mobModelEntityTypeField.setDimensionsAndPosition(search.width(), 18, search.left, search.top)
+			setVisible(mobModelEntityTypeField, true)
+		} else if (section != ConfigSection.MOB_MODEL) {
+			setVisible(mobModelEntityTypeField, false)
+		}
+
 		searchField.setDimensionsAndPosition(SEARCH_WIDTH, 22, (width / 2) - (SEARCH_WIDTH / 2), height - 40)
 	}
 
@@ -557,6 +617,7 @@ class XclipsenConfigScreen(
 			ConfigSection.RED_VIGNETTE -> workingCopy.dungeonRedVignetteModuleEnabled
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled
 			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled
+			ConfigSection.MOB_MODEL -> workingCopy.mobModelModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> true
@@ -587,6 +648,7 @@ class XclipsenConfigScreen(
 			ConfigSection.AUCTION_HOUSE -> drawAuctionHouseSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.CORPSE_ESP -> drawCorpseEspSettings(context, menu, mouseX, mouseY)
+			ConfigSection.MOB_MODEL -> drawMobModelSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MINESHAFT_AUTOWARP -> drawMineshaftAutoWarpSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
@@ -653,7 +715,8 @@ class XclipsenConfigScreen(
 	private fun drawStatusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Check for Updates", workingCopy.checkForUpdatesEnabled, mouseX, mouseY)
 		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Auto-Update", workingCopy.autoUpdateEnabled, mouseX, mouseY)
-		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Updater", ModUpdateChecker.statusLine(), mouseX, mouseY)
+		drawButtonSetting(context, updateCheckNowBounds(menu), "Check Now", mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 3, TEXT_INPUT_SETTING_HEIGHT), "Updater", ModUpdateChecker.statusLine(), mouseX, mouseY)
 		drawButtonSetting(context, hudEditorBounds(menu), "Open HUD Editor", mouseX, mouseY)
 	}
 
@@ -682,6 +745,15 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, corpseEspUmberColorBounds(menu), "Umber Color", "#F97316", mouseX, mouseY)
 		drawToggleSetting(context, corpseEspVanguardBounds(menu), "Vanguard ESP", workingCopy.corpseEspVanguardEnabled, mouseX, mouseY)
 		drawInfoSetting(context, corpseEspVanguardColorBounds(menu), "Vanguard Color", "#7DD3FC", mouseX, mouseY)
+	}
+
+	private fun drawMobModelSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawMobModelSetting(context, mobModelEntityTypeBounds(menu), mouseX, mouseY)
+		if (mobModelDropdownOpen) {
+			drawMobModelDropdown(context, menu, mouseX, mouseY)
+		}
+		drawToggleSetting(context, mobModelBabyBounds(menu), "Baby Variant", workingCopy.mobModelBaby, mouseX, mouseY)
+		drawInfoSetting(context, mobModelStatusBounds(menu), "Status", mobModelStatusLine(), mouseX, mouseY)
 	}
 
 	private fun drawPickaxeCooldownSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -869,6 +941,47 @@ class XclipsenConfigScreen(
 			}
 			val textColor = if (selected) ACCENT else if (hovered) TEXT_WHITE else TEXT_MUTED
 			context.drawTextWithShadow(textRenderer, trimToWidth(sound.name, SOUND_LIST_TEXT_WIDTH), row.left + 4, row.top + 3, textColor)
+		}
+		context.disableScissor()
+	}
+
+	private fun drawMobModelSetting(context: DrawContext, row: Bounds, mouseX: Int, mouseY: Int) {
+		val hovered = row.contains(mouseX, mouseY)
+		drawSettingBackground(context, row, hovered || mobModelDropdownOpen)
+		context.drawTextWithShadow(textRenderer, "Mob Model", row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
+		context.drawTextWithShadow(
+			textRenderer,
+			trimToWidth(MobModelCatalog.displayName(workingCopy.mobModelEntityType), 84),
+			row.right - 92,
+			row.top + 4,
+			TEXT_MUTED,
+		)
+		if (mobModelDropdownOpen) {
+			context.fill(row.left, row.bottom - 1, row.right, row.bottom, ACCENT)
+		}
+	}
+
+	private fun drawMobModelDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		val search = mobModelSearchBounds(menu)
+		val list = mobModelListBounds(menu)
+		context.fill(search.left - 4, search.top - 4, search.right + 4, list.bottom + 4, INPUT_BACKGROUND)
+		context.fill(search.left, search.top, search.right, search.bottom, 0xC80F0F0F.toInt())
+		context.fill(search.left, search.bottom - 1, search.right, search.bottom, if (mobModelEntityTypeField.isFocused) ACCENT else 0x1EFFFFFF)
+
+		val filtered = filteredMobModelOptions(mobModelEntityTypeField.text)
+		val maxScroll = (filtered.size - MOB_MODEL_VISIBLE_ROWS).coerceAtLeast(0)
+		mobModelScrollOffset = mobModelScrollOffset.coerceIn(0, maxScroll)
+
+		context.enableScissor(list.left, list.top, list.right, list.bottom)
+		filtered.drop(mobModelScrollOffset).take(MOB_MODEL_VISIBLE_ROWS).forEachIndexed { index, entityId ->
+			val row = Bounds(list.left, list.top + (index * SOUND_ROW_HEIGHT), list.right, list.top + ((index + 1) * SOUND_ROW_HEIGHT))
+			val hovered = row.contains(mouseX, mouseY)
+			val selected = entityId == workingCopy.mobModelEntityType
+			if (hovered) {
+				context.fill(row.left, row.top, row.right, row.bottom, HOVER)
+			}
+			val textColor = if (selected) ACCENT else if (hovered) TEXT_WHITE else TEXT_MUTED
+			context.drawTextWithShadow(textRenderer, trimToWidth(MobModelCatalog.displayName(entityId), SOUND_LIST_TEXT_WIDTH + 20), row.left + 4, row.top + 3, textColor)
 		}
 		context.disableScissor()
 	}
@@ -1077,6 +1190,7 @@ class XclipsenConfigScreen(
 			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
 			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
 			ConfigSection.CORPSE_ESP -> CORPSE_ESP_POPUP_HEIGHT
+			ConfigSection.MOB_MODEL -> mobModelPopupHeight()
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
 			ConfigSection.MINESHAFT_AUTOWARP -> MINESHAFT_AUTOWARP_POPUP_HEIGHT
 			ConfigSection.EXPERIMENTS -> 340
@@ -1097,6 +1211,10 @@ class XclipsenConfigScreen(
 			soundDropdownOpen -> PICKAXE_COOLDOWN_POPUP_EXPANDED_WITH_DROPDOWN_HEIGHT
 			else -> PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT
 		}
+	}
+
+	private fun mobModelPopupHeight(): Int {
+		return if (mobModelDropdownOpen) MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT else MOB_MODEL_POPUP_HEIGHT
 	}
 
 	private fun handleSettingsClick(section: ConfigSection, mouseX: Int, mouseY: Int, button: Int): Boolean {
@@ -1163,6 +1281,7 @@ class XclipsenConfigScreen(
 			if (lostFightSoundBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				openColorField = null
+				mobModelDropdownOpen = false
 				soundDropdownOpen = !soundDropdownOpen
 				soundScrollOffset = 0
 				layoutWidgets()
@@ -1332,6 +1451,44 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (section == ConfigSection.MOB_MODEL && mobModelBabyBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.mobModelBaby = !workingCopy.mobModelBaby
+			return true
+		}
+
+		if (section == ConfigSection.MOB_MODEL && mobModelEntityTypeBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			soundDropdownOpen = false
+			mobModelDropdownOpen = !mobModelDropdownOpen
+			mobModelScrollOffset = 0
+			if (mobModelDropdownOpen) {
+				mobModelEntityTypeField.text = ""
+				setFocused(mobModelEntityTypeField)
+				mobModelEntityTypeField.setFocused(true)
+			} else {
+				setFocused(null)
+				mobModelEntityTypeField.setFocused(false)
+			}
+			layoutWidgets()
+			return true
+		}
+
+		if (section == ConfigSection.MOB_MODEL && mobModelDropdownOpen && mobModelListBounds(menu).contains(mouseX, mouseY)) {
+			val index = mobModelScrollOffset + ((mouseY - mobModelListBounds(menu).top) / SOUND_ROW_HEIGHT)
+			val filtered = filteredMobModelOptions(mobModelEntityTypeField.text)
+			if (index in filtered.indices) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.mobModelEntityType = filtered[index]
+				mobModelEntityTypeField.text = ""
+				setFocused(null)
+				mobModelEntityTypeField.setFocused(false)
+				mobModelDropdownOpen = false
+				layoutWidgets()
+			}
+			return true
+		}
+
 		if (section == ConfigSection.PICKAXE_COOLDOWN) {
 			if (pickaxeShowReadyBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
@@ -1361,6 +1518,7 @@ class XclipsenConfigScreen(
 
 			if (pickaxeAlertSoundBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
+				mobModelDropdownOpen = false
 				soundDropdownOpen = !soundDropdownOpen
 				soundScrollOffset = 0
 				layoutWidgets()
@@ -1478,6 +1636,11 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.STATUS && updateCheckNowBounds(menu).contains(mouseX, mouseY)) {
+			checkForUpdatesNow()
+			return true
+		}
+
 		if (section == ConfigSection.STATUS && hudEditorBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			mod.openHudEditorScreen(this)
@@ -1498,6 +1661,11 @@ class XclipsenConfigScreen(
 
 			ConfigSection.IRC_BRIDGE -> when (field) {
 				ConfigField.IRC_FORMAT -> settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
+				else -> null
+			}
+
+			ConfigSection.MOB_MODEL -> when (field) {
+				ConfigField.MOB_MODEL_ENTITY_TYPE -> null
 				else -> null
 			}
 
@@ -1559,6 +1727,28 @@ class XclipsenConfigScreen(
 	private fun persistAutoCroesusConfig() {
 		AcDataStore.config = copyOf(workingAutoCroesusConfig)
 		AcDataStore.saveConfig()
+	}
+
+	private fun normalizeMobModelEntityType(value: String): String? {
+		return MobModelCatalog.normalize(value)
+	}
+
+	private fun mobModelStatusLine(): String {
+		val catalogCount = MobModelCatalog.count()
+		if (catalogCount == 0) {
+			return "Mob catalog is empty"
+		}
+
+		if (!workingCopy.mobModelModuleEnabled) {
+			return "Disabled ($catalogCount mobs available)"
+		}
+
+		val entityId = normalizeMobModelEntityType(workingCopy.mobModelEntityType) ?: return "Select a mob"
+		return if (MobModelCatalog.resolve(entityId) != null) {
+			"Will render as ${MobModelCatalog.displayName(entityId)} ($catalogCount mobs)"
+		} else {
+			"Invalid mob id: $entityId ($catalogCount mobs)"
+		}
 	}
 
 	private fun normalizedHexColor(value: String): String? {
@@ -1885,6 +2075,16 @@ class XclipsenConfigScreen(
 		}
 	}
 
+	private fun mobModelSearchBounds(menu: Bounds): Bounds {
+		val top = mobModelEntityTypeBounds(menu).bottom + 4
+		return Bounds(menu.left + 18, top, menu.right - 18, top + 18)
+	}
+
+	private fun mobModelListBounds(menu: Bounds): Bounds {
+		val top = mobModelSearchBounds(menu).bottom + 4
+		return Bounds(menu.left + 18, top, menu.right - 18, top + (MOB_MODEL_VISIBLE_ROWS * SOUND_ROW_HEIGHT))
+	}
+
 	private fun settingRowBounds(menu: Bounds, rowIndex: Int, rowHeight: Int): Bounds {
 		val rowTop = menu.top + 40 + (rowIndex * (rowHeight + SETTING_GAP))
 		val rowLeft = menu.left + 10
@@ -1925,9 +2125,29 @@ class XclipsenConfigScreen(
 	}
 
 	private fun hudEditorBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + SETTING_HEIGHT + SETTING_GAP + SETTING_HEIGHT + SETTING_GAP + TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP
+		val rowTop = menu.top + 40 + (3 * (SETTING_HEIGHT + SETTING_GAP)) + TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
+	}
+
+	private fun updateCheckNowBounds(menu: Bounds): Bounds {
+		val rowTop = menu.top + 40 + (2 * (SETTING_HEIGHT + SETTING_GAP))
+		val rowLeft = menu.left + 10
+		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
+	}
+
+	private fun mobModelEntityTypeBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun mobModelBabyBounds(menu: Bounds): Bounds {
+		val top = if (mobModelDropdownOpen) mobModelListBounds(menu).bottom + SETTING_GAP else mobModelEntityTypeBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun mobModelStatusBounds(menu: Bounds): Bounds {
+		val top = mobModelBabyBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun timeChangerModeBounds(menu: Bounds): Bounds {
@@ -2027,6 +2247,16 @@ class XclipsenConfigScreen(
 		}
 	}
 
+	private fun filteredMobModelOptions(query: String): List<String> {
+		val normalizedQuery = query.trim().lowercase(Locale.ROOT)
+		return MobModelCatalog.ids()
+			.filter { entityId ->
+				normalizedQuery.isBlank() ||
+					entityId.contains(normalizedQuery) ||
+					MobModelCatalog.displayName(entityId).lowercase(Locale.ROOT).contains(normalizedQuery)
+			}
+	}
+
 	private fun setVisible(widget: TextFieldWidget, visible: Boolean) {
 		widget.visible = visible
 		widget.setEditable(visible)
@@ -2071,6 +2301,7 @@ class XclipsenConfigScreen(
 		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
 		CORPSE_ESP("Corpse ESP", "Highlights Glacite Mineshaft corpses by armor-stand helmet ID.", toggleable = true),
+		MOB_MODEL("Mob Model", "Replaces the player model client-side with any living mob model and syncs it through the backend.", toggleable = true),
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		MINESHAFT_AUTOWARP("Mineshaft AutoWarp", "Auto-requests lead and party-warps when configured corpse counts are found.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
@@ -2097,6 +2328,7 @@ class XclipsenConfigScreen(
 		SHULKER_TRACER_LINE_COLOR(ConfigSection.HIDEONLEAF_HELPER),
 		PURPLE_TERRACOTTA_HIGHLIGHT_COLOR(ConfigSection.PURPLE_TERRACOTTA),
 		PEST_ESP_COLOR(ConfigSection.PEST_ESP),
+		MOB_MODEL_ENTITY_TYPE(ConfigSection.MOB_MODEL),
 		PICKAXE_ALERT_TEXT(ConfigSection.PICKAXE_COOLDOWN),
 		MINESHAFT_AUTOWARP_RULE(ConfigSection.MINESHAFT_AUTOWARP),
 		MINESHAFT_AUTOWARP_DELAY(ConfigSection.MINESHAFT_AUTOWARP),
@@ -2135,6 +2367,8 @@ class XclipsenConfigScreen(
 		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
 		private const val PEST_ESP_POPUP_HEIGHT = 230
 		private const val CORPSE_ESP_POPUP_HEIGHT = 410
+		private const val MOB_MODEL_POPUP_HEIGHT = 180
+		private const val MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT = 310
 		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT = 320
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_WITH_DROPDOWN_HEIGHT = 420
@@ -2148,6 +2382,7 @@ class XclipsenConfigScreen(
 		private const val EXPERIMENTS_SECTION_GAP = 12
 		private const val SEARCH_WIDTH = 150
 		private const val SOUND_VISIBLE_ROWS = 6
+		private const val MOB_MODEL_VISIBLE_ROWS = 7
 		private const val SOUND_ROW_HEIGHT = 15
 		private const val SOUND_LIST_TEXT_WIDTH = 145
 		private const val DEFAULT_GLOW_COLOR = 0x36C5F0

@@ -48,6 +48,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		HideonleafShardTracker.init()
 		applyBackendBridgeConfig()
 		ModUpdateChecker.onStartup()
+		MobModelFeature.onStartup()
 		AutoCroesus.initialize()
 		ExperimentationTableFeature.init()
 
@@ -62,6 +63,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
 		ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
 			CorpseEspFeature.onDisconnect()
+			MobModelFeature.onDisconnect()
 			MortDoorBarrierFeature.onWorldChange()
 			PurpleTerracottaHighlightFeature.onWorldChange()
 			PickaxeAbilityCooldownFeature.onWorldChange()
@@ -184,6 +186,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		this.config = config
 		applyBackendBridgeConfig()
 		ModUpdateChecker.onConfigChanged()
+		MobModelFeature.onConfigChanged()
 	}
 
 	@Throws(IOException::class)
@@ -210,6 +213,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		PickaxeAbilityCooldownFeature.onTick(client)
 		MineshaftAutoWarpFeature.onTick(client)
 		CorpseEspFeature.onTick(client)
+		MobModelFeature.onTick(client)
 		ModUpdateChecker.onTick(client)
 		ExperimentationTableFeature.onTick(client)
 

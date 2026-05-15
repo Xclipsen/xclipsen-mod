@@ -219,6 +219,70 @@ class ClientBackendBridgeService(
 		}
 	}
 
+	fun uploadMobModelState(playerName: String, snapshot: BackendMobModelState): Boolean {
+		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+			return false
+		}
+
+		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
+		if (safePlayerName.isBlank()) {
+			return false
+		}
+
+		val outgoing = BackendMobModelState().apply {
+			minecraftUsername = safePlayerName
+			enabled = snapshot.enabled
+			entityType = sanitizeInline(snapshot.entityType, 64).lowercase()
+			baby = snapshot.baby
+			updatedAt = snapshot.updatedAt.coerceAtLeast(0L)
+		}
+
+		return try {
+			val request = requestBuilder(backendUrl("/api/mob-model"))
+				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
+				.build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = response.statusCode()
+			response.statusCode() in 200..299
+		} catch (exception: IOException) {
+			logger.debug("Mob model upload failed", exception)
+			false
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			false
+		}
+	}
+
+	fun fetchMobModelStates(playerName: String): BackendMobModelStatesResponse? {
+		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+			return null
+		}
+
+		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
+		if (safePlayerName.isBlank()) {
+			return null
+		}
+
+		return try {
+			val request = requestBuilder(
+				backendUrl("/api/mob-models?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
+			).GET().build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = response.statusCode()
+			if (response.statusCode() != 200) {
+				null
+			} else {
+				GSON.fromJson(response.body(), BackendMobModelStatesResponse::class.java)
+			}
+		} catch (exception: IOException) {
+			logger.debug("Mob model fetch failed", exception)
+			null
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
 	fun uploadHideonleafStats(playerName: String, snapshot: BackendHideonleafStatsUpload): Boolean {
 		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
 			return false

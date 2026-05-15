@@ -64,7 +64,8 @@ tasks.jar {
 }
 
 val prismTargetDirs: List<String> = listOf(
-	"""C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\1.21.10"""
+	"""C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\1.21.10""",
+	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test",
 )
 
 fun Project.findRemappedModJar(): File {
@@ -73,13 +74,33 @@ fun Project.findRemappedModJar(): File {
 		.also { if (!it.exists()) throw GradleException("Remapped mod jar not found: ${it.path}") }
 }
 
+fun Project.resolvePrismModsDir(targetDir: String): File? {
+	val root = file(targetDir)
+	val candidates = listOf(
+		root.resolve("minecraft/mods"),
+		root.resolve(".minecraft/mods"),
+		root,
+	)
+
+	return candidates.firstOrNull(File::isDirectory)
+}
+
 fun Project.copyRemappedModToPrismTargets() {
 	val modJar = findRemappedModJar()
+	var copiedAny = false
 
 	prismTargetDirs.forEach { targetDir ->
-		val target = file(targetDir)
-		if (!target.isDirectory) {
-			throw GradleException("Target directory does not exist: $targetDir")
+		val target = resolvePrismModsDir(targetDir)
+		if (target == null) {
+			println("Skipping Prism deploy; no mods directory found for: $targetDir")
+			return@forEach
+		}
+
+		val root = file(targetDir)
+		if (target != root && root.isDirectory) {
+			fileTree(root) {
+				include("xclipsen-irc-bridge-*.jar", "xclipsen-mod-*.jar")
+			}.files.forEach(File::delete)
 		}
 
 		fileTree(target) {
@@ -91,7 +112,12 @@ fun Project.copyRemappedModToPrismTargets() {
 			into(target)
 		}
 
-		println("Deployed ${modJar.name} to $targetDir")
+		copiedAny = true
+		println("Deployed ${modJar.name} to ${target.path}")
+	}
+
+	if (!copiedAny) {
+		println("Skipped Prism deploy; no configured target directories were available.")
 	}
 }
 

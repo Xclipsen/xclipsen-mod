@@ -11,6 +11,7 @@
     "EntityGlowMixin",
     "HandledScreenAccessor",
     "HandledScreenSlotRenderMixin",
+    "LivingEntityRendererMixin",
     "ScreenHandlerSlotUpdateMixin"
   ],
   "injectors": {

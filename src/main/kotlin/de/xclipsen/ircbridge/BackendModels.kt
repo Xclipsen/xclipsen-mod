@@ -48,7 +48,7 @@ class BridgeConfig {
 	@JvmField var backendAuthToken: String = "change-me"
 	@JvmField var backendPollIntervalMs: Long = 2000L
 	@JvmField var checkForUpdatesEnabled: Boolean = true
-	@JvmField var autoUpdateEnabled: Boolean = false
+	@JvmField var autoUpdateEnabled: Boolean = true
 	@JvmField var linkedDiscordDisplayName: String = ""
 	@JvmField var ircCommandFormat: String = "[IRC] <%player%> %message%"
 	@JvmField var ircBridgeEnabled: Boolean = false
@@ -97,6 +97,9 @@ class BridgeConfig {
 	@JvmField var corpseEspTungstenEnabled: Boolean = true
 	@JvmField var corpseEspUmberEnabled: Boolean = true
 	@JvmField var corpseEspVanguardEnabled: Boolean = true
+	@JvmField var mobModelModuleEnabled: Boolean = false
+	@JvmField var mobModelEntityType: String = "minecraft:zombie"
+	@JvmField var mobModelBaby: Boolean = false
 	@JvmField var pickaxeAbilityCooldownModuleEnabled: Boolean = false
 	@JvmField var pickaxeAbilityCooldownShowReady: Boolean = true
 	@JvmField var pickaxeAbilityCooldownAlertEnabled: Boolean = false
@@ -164,6 +167,9 @@ class BridgeConfig {
 		it.corpseEspTungstenEnabled = corpseEspTungstenEnabled
 		it.corpseEspUmberEnabled = corpseEspUmberEnabled
 		it.corpseEspVanguardEnabled = corpseEspVanguardEnabled
+		it.mobModelModuleEnabled = mobModelModuleEnabled
+		it.mobModelEntityType = mobModelEntityType
+		it.mobModelBaby = mobModelBaby
 		it.pickaxeAbilityCooldownModuleEnabled = pickaxeAbilityCooldownModuleEnabled
 		it.pickaxeAbilityCooldownShowReady = pickaxeAbilityCooldownShowReady
 		it.pickaxeAbilityCooldownAlertEnabled = pickaxeAbilityCooldownAlertEnabled
@@ -212,6 +218,18 @@ class BackendHideonleafStatsUpload {
 	@JvmField var totalDurationMs: Long = 0L
 	@JvmField var updatedAt: Long = 0L
 	@JvmField var items: MutableMap<String, BackendHideonleafTrackedItem> = mutableMapOf()
+}
+
+class BackendMobModelState {
+	@JvmField var minecraftUsername: String = ""
+	@JvmField var enabled: Boolean = false
+	@JvmField var entityType: String = "minecraft:zombie"
+	@JvmField var baby: Boolean = false
+	@JvmField var updatedAt: Long = 0L
+}
+
+class BackendMobModelStatesResponse {
+	@JvmField var states: MutableList<BackendMobModelState> = mutableListOf()
 }
 
 /** Response from GET /api/skyblock/prices */

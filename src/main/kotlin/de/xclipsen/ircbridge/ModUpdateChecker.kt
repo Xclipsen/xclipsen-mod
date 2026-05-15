@@ -35,6 +35,9 @@ object ModUpdateChecker {
 	private var checkStarted = false
 
 	@Volatile
+	private var checkInProgress = false
+
+	@Volatile
 	private var announcementShown = false
 
 	@Volatile
@@ -50,17 +53,49 @@ object ModUpdateChecker {
 	private var lastError: String = ""
 
 	fun onStartup() {
-		maybeStartCheck()
+		requestCheckNow(force = false)
 	}
 
 	fun onConfigChanged() {
 		if (!isEnabled()) {
 			checkStarted = false
+			checkInProgress = false
 			announcementShown = false
 			state = UpdateState.DISABLED
 			return
 		}
-		maybeStartCheck()
+		requestCheckNow(force = true)
+	}
+
+	fun requestCheckNow(force: Boolean = true): Boolean {
+		if (!isEnabled()) {
+			state = UpdateState.DISABLED
+			return false
+		}
+
+		synchronized(this) {
+			if (checkInProgress) {
+				return false
+			}
+			if (!force && checkStarted) {
+				return false
+			}
+
+			checkStarted = true
+			checkInProgress = true
+			announcementShown = false
+			lastError = ""
+			state = UpdateState.CHECKING
+		}
+
+		CompletableFuture.runAsync {
+			try {
+				checkNow()
+			} finally {
+				checkInProgress = false
+			}
+		}
+		return true
 	}
 
 	fun onTick(client: MinecraftClient) {
@@ -123,20 +158,6 @@ object ModUpdateChecker {
 			UpdateState.ERROR -> if (lastError.isBlank()) "Update check failed" else "Update check failed: $lastError"
 			UpdateState.DOWNLOAD_ERROR -> if (lastError.isBlank()) "Download failed" else "Download failed: $lastError"
 		}
-	}
-
-	private fun maybeStartCheck() {
-		if (!isEnabled()) {
-			state = UpdateState.DISABLED
-			return
-		}
-		if (checkStarted) {
-			return
-		}
-
-		checkStarted = true
-		state = UpdateState.CHECKING
-		CompletableFuture.runAsync(::checkNow)
 	}
 
 	private fun checkNow() {
