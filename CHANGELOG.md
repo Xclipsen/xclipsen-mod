@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.16
+
+- Added a new `M5` misc module with Livid finder glow/tracer support, an Ice Spray timer, and a Rag Axe alert for Master Mode Floor 5.
+- Added mob-model variant selection and synced size scaling, with searchable dropdowns for both mob and variant selection.
+- Hardened `remapJar` by cleaning stale output/temp jars before remapping so release builds stop failing on missing `.tmp` artifacts.
+
 ## v0.5.14
 
 - Added Glacite mineshaft corpse ESP so discovered corpses can be highlighted directly in-world.

@@ -99,7 +99,14 @@ class BridgeConfig {
 	@JvmField var corpseEspVanguardEnabled: Boolean = true
 	@JvmField var mobModelModuleEnabled: Boolean = false
 	@JvmField var mobModelEntityType: String = "minecraft:zombie"
+	@JvmField var mobModelVariant: String = ""
 	@JvmField var mobModelBaby: Boolean = false
+	@JvmField var mobModelScale: Float = 1.0f
+	@JvmField var m5ModuleEnabled: Boolean = false
+	@JvmField var m5LividFinderEnabled: Boolean = true
+	@JvmField var m5TracerEnabled: Boolean = true
+	@JvmField var m5IceSprayTimerEnabled: Boolean = true
+	@JvmField var m5RagAxeAlertEnabled: Boolean = true
 	@JvmField var pickaxeAbilityCooldownModuleEnabled: Boolean = false
 	@JvmField var pickaxeAbilityCooldownShowReady: Boolean = true
 	@JvmField var pickaxeAbilityCooldownAlertEnabled: Boolean = false
@@ -169,7 +176,14 @@ class BridgeConfig {
 		it.corpseEspVanguardEnabled = corpseEspVanguardEnabled
 		it.mobModelModuleEnabled = mobModelModuleEnabled
 		it.mobModelEntityType = mobModelEntityType
+		it.mobModelVariant = mobModelVariant
 		it.mobModelBaby = mobModelBaby
+		it.mobModelScale = mobModelScale
+		it.m5ModuleEnabled = m5ModuleEnabled
+		it.m5LividFinderEnabled = m5LividFinderEnabled
+		it.m5TracerEnabled = m5TracerEnabled
+		it.m5IceSprayTimerEnabled = m5IceSprayTimerEnabled
+		it.m5RagAxeAlertEnabled = m5RagAxeAlertEnabled
 		it.pickaxeAbilityCooldownModuleEnabled = pickaxeAbilityCooldownModuleEnabled
 		it.pickaxeAbilityCooldownShowReady = pickaxeAbilityCooldownShowReady
 		it.pickaxeAbilityCooldownAlertEnabled = pickaxeAbilityCooldownAlertEnabled
@@ -224,7 +238,9 @@ class BackendMobModelState {
 	@JvmField var minecraftUsername: String = ""
 	@JvmField var enabled: Boolean = false
 	@JvmField var entityType: String = "minecraft:zombie"
+	@JvmField var variant: String = ""
 	@JvmField var baby: Boolean = false
+	@JvmField var scale: Float = 1.0f
 	@JvmField var updatedAt: Long = 0L
 }
 

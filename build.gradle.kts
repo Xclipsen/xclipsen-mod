@@ -63,6 +63,20 @@ tasks.jar {
 	archiveClassifier.set("dev")
 }
 
+tasks.named("remapJar") {
+	doFirst {
+		val remappedJar = layout.buildDirectory.file("libs/${base.archivesName.get()}-${project.version}.jar").get().asFile
+		val remapTempJar = file("${remappedJar.path}.tmp")
+
+		if (remappedJar.exists()) {
+			remappedJar.delete()
+		}
+		if (remapTempJar.exists()) {
+			remapTempJar.delete()
+		}
+	}
+}
+
 val prismTargetDirs: List<String> = listOf(
 	"""C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\1.21.10""",
 	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test",

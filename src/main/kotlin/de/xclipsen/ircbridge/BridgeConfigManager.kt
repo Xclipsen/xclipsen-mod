@@ -90,6 +90,8 @@ class BridgeConfigManager(
 		value.dungeonDoorMode = value.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		value.pestEspColorHex = normalizedHexColor(value.pestEspColorHex, "#7CFF6B")
 		value.mobModelEntityType = normalizeEntityTypeId(value.mobModelEntityType)
+		value.mobModelVariant = normalizeMobModelVariant(value.mobModelVariant)
+		value.mobModelScale = value.mobModelScale.coerceIn(0.25f, 4.0f)
 		value.pickaxeAbilityCooldownAlertSoundId = SoundCatalog.normalizeSoundId(value.pickaxeAbilityCooldownAlertSoundId)
 		value.pickaxeAbilityCooldownAlertSoundVolume = value.pickaxeAbilityCooldownAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.pickaxeAbilityCooldownAlertSoundPitch = value.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f)
@@ -169,6 +171,15 @@ class BridgeConfigManager(
 		}
 		val namespaced = if (':' in candidate) candidate else "minecraft:$candidate"
 		return if (ENTITY_TYPE_PATTERN.matches(namespaced)) namespaced else fallback
+	}
+
+	private fun normalizeMobModelVariant(value: String?): String {
+		val candidate = safeString(value, "")
+			.replace('\r', ' ')
+			.replace('\n', ' ')
+			.trim()
+			.lowercase(Locale.ROOT)
+		return if (candidate.length <= 96) candidate else candidate.substring(0, 96)
 	}
 
 	companion object {

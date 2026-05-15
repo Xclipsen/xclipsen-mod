@@ -62,7 +62,9 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		}
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
 		ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
+			ServerTickTracker.reset()
 			CorpseEspFeature.onDisconnect()
+			M5Feature.onWorldChange()
 			MobModelFeature.onDisconnect()
 			MortDoorBarrierFeature.onWorldChange()
 			PurpleTerracottaHighlightFeature.onWorldChange()
@@ -81,6 +83,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PurpleTerracottaHighlightFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PestEspFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> CorpseEspFeature.render(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> M5Feature.render(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
@@ -210,6 +213,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		AuctionHouseUnderbidFeature.onTick(client)
 		MortDoorBarrierFeature.onTick(client)
 		PurpleTerracottaHighlightFeature.onTick(client)
+		M5Feature.onTick(client)
 		PickaxeAbilityCooldownFeature.onTick(client)
 		MineshaftAutoWarpFeature.onTick(client)
 		CorpseEspFeature.onTick(client)
@@ -434,6 +438,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun handleIncomingMessage(message: Text?) {
+		M5Feature.onIncomingMessage(message)
 		MineshaftAutoWarpFeature.onIncomingMessage(message)
 		handleHideonleafLostFightAlert(message)
 		HideonleafShardTracker.processChat(message)

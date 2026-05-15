@@ -28,6 +28,8 @@ class XclipsenConfigScreen(
 	private var soundScrollOffset = 0
 	private var mobModelDropdownOpen = false
 	private var mobModelScrollOffset = 0
+	private var mobModelVariantDropdownOpen = false
+	private var mobModelVariantScrollOffset = 0
 	private var draggingSlider: SliderDragTarget? = null
 	private var pickaxeAlertExpanded = false
 	private var awaitingHideonleafResetConfirmation = false
@@ -53,6 +55,7 @@ class XclipsenConfigScreen(
 	private lateinit var purpleTerracottaHighlightColorHexField: TextFieldWidget
 	private lateinit var pestEspColorHexField: TextFieldWidget
 	private lateinit var mobModelEntityTypeField: TextFieldWidget
+	private lateinit var mobModelVariantField: TextFieldWidget
 	private lateinit var pickaxeAlertTextField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpRuleField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpDelayField: TextFieldWidget
@@ -64,7 +67,7 @@ class XclipsenConfigScreen(
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
 		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
-		ConfigPanel("DUNGEON", listOf(ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
+		ConfigPanel("DUNGEON", listOf(ConfigSection.M5, ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
 	)
@@ -93,6 +96,7 @@ class XclipsenConfigScreen(
 		purpleTerracottaHighlightColorHexField = registerField(ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR, workingCopy.purpleTerracottaHighlightColorHex, "#B06CFF")
 		pestEspColorHexField = registerField(ConfigField.PEST_ESP_COLOR, workingCopy.pestEspColorHex, "#7CFF6B")
 		mobModelEntityTypeField = registerField(ConfigField.MOB_MODEL_ENTITY_TYPE, "", "Search mobs...")
+		mobModelVariantField = registerField(ConfigField.MOB_MODEL_VARIANT, "", "Search variants...")
 		pickaxeAlertTextField = registerField(ConfigField.PICKAXE_ALERT_TEXT, workingCopy.pickaxeAbilityCooldownAlertText, PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT)
 		mineshaftAutoWarpRuleField = registerField(ConfigField.MINESHAFT_AUTOWARP_RULE, workingCopy.mineshaftAutoWarpCorpseRule, "lapis 2; vanguard 1")
 		mineshaftAutoWarpDelayField = registerField(ConfigField.MINESHAFT_AUTOWARP_DELAY, workingCopy.mineshaftAutoWarpDelayMs.toString(), "3500")
@@ -161,6 +165,7 @@ class XclipsenConfigScreen(
 				openColorField = null
 				soundDropdownOpen = false
 				mobModelDropdownOpen = false
+				mobModelVariantDropdownOpen = false
 				draggingColorPicker = null
 				draggingSlider = null
 			} else if (button == RIGHT_MOUSE_BUTTON) {
@@ -168,6 +173,7 @@ class XclipsenConfigScreen(
 				openColorField = null
 				soundDropdownOpen = false
 				mobModelDropdownOpen = false
+				mobModelVariantDropdownOpen = false
 				draggingColorPicker = null
 				draggingSlider = null
 			}
@@ -194,7 +200,7 @@ class XclipsenConfigScreen(
 
 		val dragTarget = draggingColorPicker
 		val sliderTarget = draggingSlider
-		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN) && sliderTarget != null) {
+		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.MOB_MODEL) && sliderTarget != null) {
 			updateSliderFromMouse(click.x().toInt(), sliderTarget)
 			return true
 		}
@@ -237,6 +243,16 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (openedSection == ConfigSection.MOB_MODEL && mobModelVariantDropdownOpen) {
+			val list = mobModelVariantListBounds(settingsBounds())
+			if (list.contains(mouseX.toInt(), mouseY.toInt())) {
+				val filtered = filteredMobModelVariantOptions(mobModelVariantField.text)
+				val maxScroll = (filtered.size - MOB_MODEL_VISIBLE_ROWS).coerceAtLeast(0)
+				mobModelVariantScrollOffset = (mobModelVariantScrollOffset - verticalAmount.toInt()).coerceIn(0, maxScroll)
+				return true
+			}
+		}
+
 		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
 	}
 
@@ -254,6 +270,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled = !workingCopy.pestEspModuleEnabled
 			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled = !workingCopy.corpseEspModuleEnabled
 			ConfigSection.MOB_MODEL -> workingCopy.mobModelModuleEnabled = !workingCopy.mobModelModuleEnabled
+			ConfigSection.M5 -> workingCopy.m5ModuleEnabled = !workingCopy.m5ModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled = !workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> return
@@ -279,6 +296,8 @@ class XclipsenConfigScreen(
 		awaitingHideonleafResetConfirmation = false
 		mobModelDropdownOpen = false
 		mobModelScrollOffset = 0
+		mobModelVariantDropdownOpen = false
+		mobModelVariantScrollOffset = 0
 		layoutWidgets()
 	}
 
@@ -362,8 +381,15 @@ class XclipsenConfigScreen(
 		candidate.corpseEspUmberEnabled = workingCopy.corpseEspUmberEnabled
 		candidate.corpseEspVanguardEnabled = workingCopy.corpseEspVanguardEnabled
 		candidate.mobModelModuleEnabled = workingCopy.mobModelModuleEnabled
+		candidate.mobModelVariant = workingCopy.mobModelVariant
 		candidate.mobModelBaby = workingCopy.mobModelBaby
+		candidate.mobModelScale = workingCopy.mobModelScale
 		candidate.mobModelEntityType = workingCopy.mobModelEntityType
+		candidate.m5ModuleEnabled = workingCopy.m5ModuleEnabled
+		candidate.m5LividFinderEnabled = workingCopy.m5LividFinderEnabled
+		candidate.m5TracerEnabled = workingCopy.m5TracerEnabled
+		candidate.m5IceSprayTimerEnabled = workingCopy.m5IceSprayTimerEnabled
+		candidate.m5RagAxeAlertEnabled = workingCopy.m5RagAxeAlertEnabled
 		candidate.pickaxeAbilityCooldownModuleEnabled = workingCopy.pickaxeAbilityCooldownModuleEnabled
 		candidate.pickaxeAbilityCooldownShowReady = workingCopy.pickaxeAbilityCooldownShowReady
 		candidate.pickaxeAbilityCooldownAlertEnabled = workingCopy.pickaxeAbilityCooldownAlertEnabled
@@ -407,6 +433,12 @@ class XclipsenConfigScreen(
 				return null
 			}
 			else -> "minecraft:zombie"
+		}
+		candidate.mobModelVariant = MobModelVariantCatalog.normalize(candidate.mobModelVariant)
+		candidate.mobModelScale = candidate.mobModelScale.coerceIn(0.25f, 4.0f)
+		MobModelVariantCatalog.validate(candidate.mobModelEntityType, candidate.mobModelVariant)?.let { variantError ->
+			if (updateStatus) statusMessage = Text.literal(variantError)
+			return null
 		}
 
 		try {
@@ -563,6 +595,14 @@ class XclipsenConfigScreen(
 			setVisible(mobModelEntityTypeField, false)
 		}
 
+		if (section == ConfigSection.MOB_MODEL && mobModelVariantDropdownOpen) {
+			val search = mobModelVariantSearchBounds(menu)
+			mobModelVariantField.setDimensionsAndPosition(search.width(), 18, search.left, search.top)
+			setVisible(mobModelVariantField, true)
+		} else if (section != ConfigSection.MOB_MODEL) {
+			setVisible(mobModelVariantField, false)
+		}
+
 		searchField.setDimensionsAndPosition(SEARCH_WIDTH, 22, (width / 2) - (SEARCH_WIDTH / 2), height - 40)
 	}
 
@@ -618,6 +658,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled
 			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled
 			ConfigSection.MOB_MODEL -> workingCopy.mobModelModuleEnabled
+			ConfigSection.M5 -> workingCopy.m5ModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled
 			else -> true
@@ -649,6 +690,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.CORPSE_ESP -> drawCorpseEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MOB_MODEL -> drawMobModelSettings(context, menu, mouseX, mouseY)
+			ConfigSection.M5 -> drawM5Settings(context, menu, mouseX, mouseY)
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MINESHAFT_AUTOWARP -> drawMineshaftAutoWarpSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
@@ -752,8 +794,21 @@ class XclipsenConfigScreen(
 		if (mobModelDropdownOpen) {
 			drawMobModelDropdown(context, menu, mouseX, mouseY)
 		}
+		drawMobModelVariantSetting(context, mobModelVariantBounds(menu), mouseX, mouseY)
+		if (mobModelVariantDropdownOpen) {
+			drawMobModelVariantDropdown(context, menu, mouseX, mouseY)
+		}
 		drawToggleSetting(context, mobModelBabyBounds(menu), "Baby Variant", workingCopy.mobModelBaby, mouseX, mouseY)
+		drawSliderSetting(context, mobModelScaleBounds(menu), "Scale", workingCopy.mobModelScale, 0.25f, 4.0f, mouseX, mouseY)
 		drawInfoSetting(context, mobModelStatusBounds(menu), "Status", mobModelStatusLine(), mouseX, mouseY)
+	}
+
+	private fun drawM5Settings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, m5LividFinderBounds(menu), "Livid Finder", workingCopy.m5LividFinderEnabled, mouseX, mouseY)
+		drawToggleSetting(context, m5TracerBounds(menu), "Tracer", workingCopy.m5TracerEnabled, mouseX, mouseY)
+		drawToggleSetting(context, m5IceSprayBounds(menu), "Ice Spray Timer", workingCopy.m5IceSprayTimerEnabled, mouseX, mouseY)
+		drawToggleSetting(context, m5RagAxeBounds(menu), "Rag Axe Alert", workingCopy.m5RagAxeAlertEnabled, mouseX, mouseY)
+		drawInfoSetting(context, m5StatusBounds(menu), "Current State", M5Feature.statusLine(), mouseX, mouseY)
 	}
 
 	private fun drawPickaxeCooldownSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -986,6 +1041,53 @@ class XclipsenConfigScreen(
 		context.disableScissor()
 	}
 
+	private fun drawMobModelVariantSetting(context: DrawContext, row: Bounds, mouseX: Int, mouseY: Int) {
+		val hovered = row.contains(mouseX, mouseY)
+		drawSettingBackground(context, row, hovered || mobModelVariantDropdownOpen)
+		context.drawTextWithShadow(textRenderer, "Variant", row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
+		val selectedVariant = workingCopy.mobModelVariant.ifBlank { "Default" }
+		context.drawTextWithShadow(
+			textRenderer,
+			trimToWidth(selectedVariant, 106),
+			row.right - 114,
+			row.top + 4,
+			TEXT_MUTED,
+		)
+		if (mobModelVariantDropdownOpen) {
+			context.fill(row.left, row.bottom - 1, row.right, row.bottom, ACCENT)
+		}
+	}
+
+	private fun drawMobModelVariantDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		val search = mobModelVariantSearchBounds(menu)
+		val list = mobModelVariantListBounds(menu)
+		context.fill(search.left - 4, search.top - 4, search.right + 4, list.bottom + 4, INPUT_BACKGROUND)
+		context.fill(search.left, search.top, search.right, search.bottom, 0xC80F0F0F.toInt())
+		context.fill(search.left, search.bottom - 1, search.right, search.bottom, if (mobModelVariantField.isFocused) ACCENT else 0x1EFFFFFF)
+
+		val filtered = filteredMobModelVariantOptions(mobModelVariantField.text)
+		val maxScroll = (filtered.size - MOB_MODEL_VISIBLE_ROWS).coerceAtLeast(0)
+		mobModelVariantScrollOffset = mobModelVariantScrollOffset.coerceIn(0, maxScroll)
+
+		context.enableScissor(list.left, list.top, list.right, list.bottom)
+		filtered.drop(mobModelVariantScrollOffset).take(MOB_MODEL_VISIBLE_ROWS).forEachIndexed { index, variantId ->
+			val row = Bounds(list.left, list.top + (index * SOUND_ROW_HEIGHT), list.right, list.top + ((index + 1) * SOUND_ROW_HEIGHT))
+			val hovered = row.contains(mouseX, mouseY)
+			val selected = if (variantId == MobModelVariantCatalog.DEFAULT_OPTION) {
+				workingCopy.mobModelVariant.isBlank()
+			} else {
+				variantId == workingCopy.mobModelVariant
+			}
+			if (hovered) {
+				context.fill(row.left, row.top, row.right, row.bottom, HOVER)
+			}
+			val textColor = if (selected) ACCENT else if (hovered) TEXT_WHITE else TEXT_MUTED
+			val label = if (variantId == MobModelVariantCatalog.DEFAULT_OPTION) "Default" else variantId
+			context.drawTextWithShadow(textRenderer, trimToWidth(label, SOUND_LIST_TEXT_WIDTH + 20), row.left + 4, row.top + 3, textColor)
+		}
+		context.disableScissor()
+	}
+
 	private fun drawButtonSetting(context: DrawContext, row: Bounds, label: String, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
@@ -1191,6 +1293,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
 			ConfigSection.CORPSE_ESP -> CORPSE_ESP_POPUP_HEIGHT
 			ConfigSection.MOB_MODEL -> mobModelPopupHeight()
+			ConfigSection.M5 -> M5_POPUP_HEIGHT
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
 			ConfigSection.MINESHAFT_AUTOWARP -> MINESHAFT_AUTOWARP_POPUP_HEIGHT
 			ConfigSection.EXPERIMENTS -> 340
@@ -1214,7 +1317,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun mobModelPopupHeight(): Int {
-		return if (mobModelDropdownOpen) MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT else MOB_MODEL_POPUP_HEIGHT
+		return if (mobModelDropdownOpen || mobModelVariantDropdownOpen) MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT else MOB_MODEL_POPUP_HEIGHT
 	}
 
 	private fun handleSettingsClick(section: ConfigSection, mouseX: Int, mouseY: Int, button: Int): Boolean {
@@ -1282,6 +1385,7 @@ class XclipsenConfigScreen(
 				readWorkingCopyFromFields(updateStatus = false)
 				openColorField = null
 				mobModelDropdownOpen = false
+				mobModelVariantDropdownOpen = false
 				soundDropdownOpen = !soundDropdownOpen
 				soundScrollOffset = 0
 				layoutWidgets()
@@ -1457,9 +1561,17 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.MOB_MODEL && mobModelScaleBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			draggingSlider = SliderDragTarget.MOB_MODEL_SCALE
+			updateSliderFromMouse(mouseX, SliderDragTarget.MOB_MODEL_SCALE)
+			return true
+		}
+
 		if (section == ConfigSection.MOB_MODEL && mobModelEntityTypeBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			soundDropdownOpen = false
+			mobModelVariantDropdownOpen = false
 			mobModelDropdownOpen = !mobModelDropdownOpen
 			mobModelScrollOffset = 0
 			if (mobModelDropdownOpen) {
@@ -1480,6 +1592,9 @@ class XclipsenConfigScreen(
 			if (index in filtered.indices) {
 				readWorkingCopyFromFields(updateStatus = false)
 				workingCopy.mobModelEntityType = filtered[index]
+				if (MobModelVariantCatalog.validate(workingCopy.mobModelEntityType, workingCopy.mobModelVariant) != null) {
+					workingCopy.mobModelVariant = ""
+				}
 				mobModelEntityTypeField.text = ""
 				setFocused(null)
 				mobModelEntityTypeField.setFocused(false)
@@ -1487,6 +1602,70 @@ class XclipsenConfigScreen(
 				layoutWidgets()
 			}
 			return true
+		}
+
+		if (section == ConfigSection.MOB_MODEL && mobModelVariantBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			val options = mobModelVariantOptions()
+			if (options.isEmpty()) {
+				statusMessage = Text.literal("This mob has no configurable variants.")
+				return true
+			}
+			soundDropdownOpen = false
+			mobModelDropdownOpen = false
+			mobModelVariantDropdownOpen = !mobModelVariantDropdownOpen
+			mobModelVariantScrollOffset = 0
+			if (mobModelVariantDropdownOpen) {
+				mobModelVariantField.text = ""
+				setFocused(mobModelVariantField)
+				mobModelVariantField.setFocused(true)
+			} else {
+				setFocused(null)
+				mobModelVariantField.setFocused(false)
+			}
+			layoutWidgets()
+			return true
+		}
+
+		if (section == ConfigSection.MOB_MODEL && mobModelVariantDropdownOpen && mobModelVariantListBounds(menu).contains(mouseX, mouseY)) {
+			val index = mobModelVariantScrollOffset + ((mouseY - mobModelVariantListBounds(menu).top) / SOUND_ROW_HEIGHT)
+			val filtered = filteredMobModelVariantOptions(mobModelVariantField.text)
+			if (index in filtered.indices) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.mobModelVariant = if (filtered[index] == MobModelVariantCatalog.DEFAULT_OPTION) "" else filtered[index]
+				mobModelVariantField.text = ""
+				setFocused(null)
+				mobModelVariantField.setFocused(false)
+				mobModelVariantDropdownOpen = false
+				layoutWidgets()
+			}
+			return true
+		}
+
+		if (section == ConfigSection.M5) {
+			if (m5LividFinderBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.m5LividFinderEnabled = !workingCopy.m5LividFinderEnabled
+				return true
+			}
+
+			if (m5TracerBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.m5TracerEnabled = !workingCopy.m5TracerEnabled
+				return true
+			}
+
+			if (m5IceSprayBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.m5IceSprayTimerEnabled = !workingCopy.m5IceSprayTimerEnabled
+				return true
+			}
+
+			if (m5RagAxeBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.m5RagAxeAlertEnabled = !workingCopy.m5RagAxeAlertEnabled
+				return true
+			}
 		}
 
 		if (section == ConfigSection.PICKAXE_COOLDOWN) {
@@ -1519,6 +1698,7 @@ class XclipsenConfigScreen(
 			if (pickaxeAlertSoundBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				mobModelDropdownOpen = false
+				mobModelVariantDropdownOpen = false
 				soundDropdownOpen = !soundDropdownOpen
 				soundScrollOffset = 0
 				layoutWidgets()
@@ -1666,6 +1846,7 @@ class XclipsenConfigScreen(
 
 			ConfigSection.MOB_MODEL -> when (field) {
 				ConfigField.MOB_MODEL_ENTITY_TYPE -> null
+				ConfigField.MOB_MODEL_VARIANT -> null
 				else -> null
 			}
 
@@ -1744,11 +1925,24 @@ class XclipsenConfigScreen(
 		}
 
 		val entityId = normalizeMobModelEntityType(workingCopy.mobModelEntityType) ?: return "Select a mob"
+		val variant = MobModelVariantCatalog.normalize(workingCopy.mobModelVariant)
+		val variantError = MobModelVariantCatalog.validate(entityId, variant)
+		if (variantError != null) {
+			return variantError
+		}
+
+		val scaleLabel = String.format(Locale.ROOT, "%.2fx", workingCopy.mobModelScale)
 		return if (MobModelCatalog.resolve(entityId) != null) {
-			"Will render as ${MobModelCatalog.displayName(entityId)} ($catalogCount mobs)"
+			val variantLabel = if (variant.isBlank()) "default" else variant
+			"Will render as ${MobModelCatalog.displayName(entityId)} [$variantLabel, $scaleLabel] ($catalogCount mobs)"
 		} else {
 			"Invalid mob id: $entityId ($catalogCount mobs)"
 		}
+	}
+
+	private fun mobModelVariantOptions(): List<String> {
+		val entityId = normalizeMobModelEntityType(workingCopy.mobModelEntityType) ?: return emptyList()
+		return MobModelVariantCatalog.options(entityId)
 	}
 
 	private fun normalizedHexColor(value: String): String? {
@@ -1794,6 +1988,7 @@ class XclipsenConfigScreen(
 		val bounds = when (target) {
 			SliderDragTarget.LINE_MODE -> tracerLineBounds(menu)
 			SliderDragTarget.LINE_WIDTH -> tracerLineWidthBounds(menu)
+			SliderDragTarget.MOB_MODEL_SCALE -> mobModelScaleBounds(menu)
 			SliderDragTarget.ALERT_VOLUME -> lostFightVolumeBounds(menu)
 			SliderDragTarget.ALERT_PITCH -> lostFightPitchBounds(menu)
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> pickaxeAlertVolumeBounds(menu)
@@ -1802,6 +1997,7 @@ class XclipsenConfigScreen(
 		val min = when (target) {
 			SliderDragTarget.LINE_MODE -> 0.0f
 			SliderDragTarget.LINE_WIDTH -> 1.0f
+			SliderDragTarget.MOB_MODEL_SCALE -> 0.25f
 			SliderDragTarget.ALERT_VOLUME -> 0.0f
 			SliderDragTarget.ALERT_PITCH -> 0.1f
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> 0.0f
@@ -1810,6 +2006,7 @@ class XclipsenConfigScreen(
 		val max = when (target) {
 			SliderDragTarget.LINE_MODE -> 3.0f
 			SliderDragTarget.LINE_WIDTH -> 8.0f
+			SliderDragTarget.MOB_MODEL_SCALE -> 4.0f
 			SliderDragTarget.ALERT_VOLUME -> 2.0f
 			SliderDragTarget.ALERT_PITCH -> 2.0f
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> 2.0f
@@ -1822,6 +2019,7 @@ class XclipsenConfigScreen(
 		val value = when (target) {
 			SliderDragTarget.LINE_MODE -> roundToStep(rawValue, 1.0f)
 			SliderDragTarget.LINE_WIDTH -> roundToStep(rawValue, 0.1f)
+			SliderDragTarget.MOB_MODEL_SCALE -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.ALERT_PITCH -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
@@ -1834,6 +2032,7 @@ class XclipsenConfigScreen(
 				workingCopy.shulkerTracerLineEnabled = value.toInt() > 0
 			}
 			SliderDragTarget.LINE_WIDTH -> workingCopy.shulkerTracerLineWidth = value
+			SliderDragTarget.MOB_MODEL_SCALE -> workingCopy.mobModelScale = value
 			SliderDragTarget.ALERT_VOLUME -> workingCopy.hideonleafLostFightAlertSoundVolume = value
 			SliderDragTarget.ALERT_PITCH -> workingCopy.hideonleafLostFightAlertSoundPitch = value
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> workingCopy.pickaxeAbilityCooldownAlertSoundVolume = value
@@ -2085,6 +2284,16 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 18, top, menu.right - 18, top + (MOB_MODEL_VISIBLE_ROWS * SOUND_ROW_HEIGHT))
 	}
 
+	private fun mobModelVariantSearchBounds(menu: Bounds): Bounds {
+		val top = mobModelVariantBounds(menu).bottom + 4
+		return Bounds(menu.left + 18, top, menu.right - 18, top + 18)
+	}
+
+	private fun mobModelVariantListBounds(menu: Bounds): Bounds {
+		val top = mobModelVariantSearchBounds(menu).bottom + 4
+		return Bounds(menu.left + 18, top, menu.right - 18, top + (MOB_MODEL_VISIBLE_ROWS * SOUND_ROW_HEIGHT))
+	}
+
 	private fun settingRowBounds(menu: Bounds, rowIndex: Int, rowHeight: Int): Bounds {
 		val rowTop = menu.top + 40 + (rowIndex * (rowHeight + SETTING_GAP))
 		val rowLeft = menu.left + 10
@@ -2140,13 +2349,47 @@ class XclipsenConfigScreen(
 		return settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
 	}
 
-	private fun mobModelBabyBounds(menu: Bounds): Bounds {
+	private fun mobModelVariantBounds(menu: Bounds): Bounds {
 		val top = if (mobModelDropdownOpen) mobModelListBounds(menu).bottom + SETTING_GAP else mobModelEntityTypeBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun mobModelBabyBounds(menu: Bounds): Bounds {
+		val top = if (mobModelVariantDropdownOpen) mobModelVariantListBounds(menu).bottom + SETTING_GAP else mobModelVariantBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun mobModelScaleBounds(menu: Bounds): Bounds {
+		val top = mobModelBabyBounds(menu).bottom + SETTING_GAP
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
 
 	private fun mobModelStatusBounds(menu: Bounds): Bounds {
-		val top = mobModelBabyBounds(menu).bottom + SETTING_GAP
+		val top = mobModelScaleBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun m5LividFinderBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
+	private fun m5TracerBounds(menu: Bounds): Bounds {
+		val top = m5LividFinderBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun m5IceSprayBounds(menu: Bounds): Bounds {
+		val top = m5TracerBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun m5RagAxeBounds(menu: Bounds): Bounds {
+		val top = m5IceSprayBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun m5StatusBounds(menu: Bounds): Bounds {
+		val top = m5RagAxeBounds(menu).bottom + SETTING_GAP
 		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
@@ -2257,6 +2500,14 @@ class XclipsenConfigScreen(
 			}
 	}
 
+	private fun filteredMobModelVariantOptions(query: String): List<String> {
+		val normalizedQuery = query.trim().lowercase(Locale.ROOT)
+		return mobModelVariantOptions()
+			.filter { variantId ->
+				normalizedQuery.isBlank() || variantId.contains(normalizedQuery)
+			}
+	}
+
 	private fun setVisible(widget: TextFieldWidget, visible: Boolean) {
 		widget.visible = visible
 		widget.setEditable(visible)
@@ -2282,6 +2533,7 @@ class XclipsenConfigScreen(
 	private enum class SliderDragTarget {
 		LINE_MODE,
 		LINE_WIDTH,
+		MOB_MODEL_SCALE,
 		ALERT_VOLUME,
 		ALERT_PITCH,
 		PICKAXE_ALERT_VOLUME,
@@ -2302,6 +2554,7 @@ class XclipsenConfigScreen(
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
 		CORPSE_ESP("Corpse ESP", "Highlights Glacite Mineshaft corpses by armor-stand helmet ID.", toggleable = true),
 		MOB_MODEL("Mob Model", "Replaces the player model client-side with any living mob model and syncs it through the backend.", toggleable = true),
+		M5("M5", "Livid finder, Ice Spray timer, and Rag Axe alert for Master Mode Floor 5.", toggleable = true),
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		MINESHAFT_AUTOWARP("Mineshaft AutoWarp", "Auto-requests lead and party-warps when configured corpse counts are found.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
@@ -2329,6 +2582,7 @@ class XclipsenConfigScreen(
 		PURPLE_TERRACOTTA_HIGHLIGHT_COLOR(ConfigSection.PURPLE_TERRACOTTA),
 		PEST_ESP_COLOR(ConfigSection.PEST_ESP),
 		MOB_MODEL_ENTITY_TYPE(ConfigSection.MOB_MODEL),
+		MOB_MODEL_VARIANT(ConfigSection.MOB_MODEL),
 		PICKAXE_ALERT_TEXT(ConfigSection.PICKAXE_COOLDOWN),
 		MINESHAFT_AUTOWARP_RULE(ConfigSection.MINESHAFT_AUTOWARP),
 		MINESHAFT_AUTOWARP_DELAY(ConfigSection.MINESHAFT_AUTOWARP),
@@ -2367,8 +2621,9 @@ class XclipsenConfigScreen(
 		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
 		private const val PEST_ESP_POPUP_HEIGHT = 230
 		private const val CORPSE_ESP_POPUP_HEIGHT = 410
-		private const val MOB_MODEL_POPUP_HEIGHT = 180
-		private const val MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT = 310
+		private const val MOB_MODEL_POPUP_HEIGHT = 275
+		private const val MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT = 405
+		private const val M5_POPUP_HEIGHT = 190
 		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT = 320
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_WITH_DROPDOWN_HEIGHT = 420

@@ -10,6 +10,8 @@ object XclipsenHudManager {
 		IrcChatTabHudElement,
 		HideonleafLostFightHudElement,
 		HideonleafShardTrackerHudElement,
+		M5IceSprayHudElement,
+		M5AlertHudElement,
 		PickaxeAbilityCooldownHudElement,
 		PickaxeAbilityReadyAlertHudElement,
 	)

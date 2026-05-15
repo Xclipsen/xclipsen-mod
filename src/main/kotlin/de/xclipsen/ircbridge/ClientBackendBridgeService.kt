@@ -233,7 +233,9 @@ class ClientBackendBridgeService(
 			minecraftUsername = safePlayerName
 			enabled = snapshot.enabled
 			entityType = sanitizeInline(snapshot.entityType, 64).lowercase()
+			variant = sanitizeInline(snapshot.variant, 96).lowercase()
 			baby = snapshot.baby
+			scale = snapshot.scale.coerceIn(0.25f, 4.0f)
 			updatedAt = snapshot.updatedAt.coerceAtLeast(0L)
 		}
 

@@ -6,12 +6,17 @@
     "ChatHudInvoker12110",
     "ChatHudMixin12110",
     "ChatScreenMixin12110",
+    "ClientConnectionMixin",
     "ClientPlayerInteractionManagerMixin",
     "ClientWorldMixin",
+    "EntityComponentInvoker",
     "EntityGlowMixin",
+    "FoxEntityInvoker",
     "HandledScreenAccessor",
     "HandledScreenSlotRenderMixin",
+    "HorseEntityInvoker",
     "LivingEntityRendererMixin",
+    "MooshroomEntityInvoker",
     "ScreenHandlerSlotUpdateMixin"
   ],
   "injectors": {

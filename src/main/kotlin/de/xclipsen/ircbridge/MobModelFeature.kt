@@ -121,8 +121,17 @@ object MobModelFeature {
 
 		return when {
 			resolveEntityType(local.entityType) == null -> "Invalid mob id: ${local.entityType}"
-			syncedCount > 0 -> "Rendering as ${local.entityType} ($syncedCount synced)"
-			else -> "Rendering as ${local.entityType}"
+			MobModelVariantCatalog.validate(local.entityType, local.variant) != null -> MobModelVariantCatalog.validate(local.entityType, local.variant).orEmpty()
+			else -> {
+				val variant = MobModelVariantCatalog.normalize(local.variant)
+				val scale = String.format(Locale.ROOT, "%.2fx", local.scale)
+				val variantLabel = if (variant.isBlank()) "" else ", $variant"
+				if (syncedCount > 0) {
+					"Rendering as ${local.entityType}$variantLabel, $scale ($syncedCount synced)"
+				} else {
+					"Rendering as ${local.entityType}$variantLabel, $scale"
+				}
+			}
 		}
 	}
 
@@ -140,8 +149,14 @@ object MobModelFeature {
 		val renderEntity = prepareRenderEntity(player, selection, entityType) ?: return false
 		return runCatching {
 			val tickProgress = client.renderTickCounter.getTickProgress(false)
-			val renderState = client.entityRenderDispatcher.getAndUpdateRenderState(renderEntity, tickProgress)
-			client.entityRenderDispatcher.getRenderer(renderState).render(renderState, matrices, queue, cameraState)
+			matrices.push()
+			try {
+				matrices.scale(selection.scale, selection.scale, selection.scale)
+				val renderState = client.entityRenderDispatcher.getAndUpdateRenderState(renderEntity, tickProgress)
+				client.entityRenderDispatcher.getRenderer(renderState).render(renderState, matrices, queue, cameraState)
+			} finally {
+				matrices.pop()
+			}
 			true
 		}.getOrElse { failure ->
 			LOGGER.warn("Failed to render mob model replacement for {}", selection.entityType, failure)
@@ -166,7 +181,9 @@ object MobModelFeature {
 			minecraftUsername = playerName
 			enabled = config.mobModelModuleEnabled
 			entityType = normalizeEntityTypeId(config.mobModelEntityType)
+			variant = MobModelVariantCatalog.normalize(config.mobModelVariant)
 			baby = config.mobModelBaby
+			scale = config.mobModelScale.coerceIn(0.25f, 4.0f)
 			updatedAt = System.currentTimeMillis()
 		}
 
@@ -201,7 +218,9 @@ object MobModelFeature {
 		return BackendMobModelState().also {
 			it.enabled = true
 			it.entityType = normalizeEntityTypeId(config.mobModelEntityType)
+			it.variant = MobModelVariantCatalog.normalize(config.mobModelVariant)
 			it.baby = config.mobModelBaby
+			it.scale = config.mobModelScale.coerceIn(0.25f, 4.0f)
 		}
 	}
 
@@ -216,7 +235,10 @@ object MobModelFeature {
 			it.minecraftUsername = playerName
 			it.enabled = incoming.enabled
 			it.entityType = normalizeEntityTypeId(incoming.entityType)
+			val normalizedVariant = MobModelVariantCatalog.normalize(incoming.variant)
+			it.variant = if (MobModelVariantCatalog.validate(it.entityType, normalizedVariant) == null) normalizedVariant else ""
 			it.baby = incoming.baby
+			it.scale = incoming.scale.takeIf { scale -> scale.isFinite() }?.coerceIn(0.25f, 4.0f) ?: 1.0f
 			it.updatedAt = incoming.updatedAt.coerceAtLeast(0L)
 		}
 	}
@@ -227,7 +249,7 @@ object MobModelFeature {
 		entityType: EntityType<*>,
 	): LivingEntity? {
 		val world = player.entityWorld
-		val cacheKey = "${player.gameProfile.name.lowercase(Locale.ROOT)}|${selection.entityType}|${selection.baby}"
+		val cacheKey = "${player.gameProfile.name.lowercase(Locale.ROOT)}|${selection.entityType}|${selection.variant}|${selection.baby}"
 		val existing = renderEntityCache[cacheKey]
 		val renderEntity = if (existing != null && existing.type == entityType && existing.entityWorld == world) {
 			existing
@@ -277,6 +299,7 @@ object MobModelFeature {
 		renderEntity.setCustomName(player.displayName)
 		renderEntity.setCustomNameVisible(true)
 		applyBabyState(renderEntity, selection.baby)
+		MobModelVariantCatalog.apply(renderEntity, selection.entityType, selection.variant)
 		return renderEntity
 	}
 
@@ -326,7 +349,9 @@ object MobModelFeature {
 		return listOf(
 			config.mobModelModuleEnabled.toString(),
 			normalizeEntityTypeId(config.mobModelEntityType),
+			MobModelVariantCatalog.normalize(config.mobModelVariant),
 			config.mobModelBaby.toString(),
+			config.mobModelScale.coerceIn(0.25f, 4.0f).toString(),
 			FabricLoader.getInstance().gameDir.toString(),
 		).joinToString("|")
 	}
