@@ -66,7 +66,7 @@ class XclipsenConfigScreen(
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
-		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
+		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.MINESHAFT_AUTOWARP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.M5, ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -270,6 +270,9 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled = !workingCopy.pestEspModuleEnabled
 			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled = !workingCopy.corpseEspModuleEnabled
 			ConfigSection.MOB_MODEL -> workingCopy.mobModelModuleEnabled = !workingCopy.mobModelModuleEnabled
+			ConfigSection.CROSSHAIR -> workingCopy.customCrosshairModuleEnabled = !workingCopy.customCrosshairModuleEnabled
+			ConfigSection.INVENTORY_PREVIEW -> workingCopy.inventoryPreviewModuleEnabled = !workingCopy.inventoryPreviewModuleEnabled
+			ConfigSection.SILENT_DISCONNECT -> workingCopy.silentDisconnectModuleEnabled = !workingCopy.silentDisconnectModuleEnabled
 			ConfigSection.M5 -> workingCopy.m5ModuleEnabled = !workingCopy.m5ModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled = !workingCopy.mineshaftAutoWarpModuleEnabled
@@ -385,6 +388,15 @@ class XclipsenConfigScreen(
 		candidate.mobModelBaby = workingCopy.mobModelBaby
 		candidate.mobModelScale = workingCopy.mobModelScale
 		candidate.mobModelEntityType = workingCopy.mobModelEntityType
+		candidate.inventoryPreviewModuleEnabled = workingCopy.inventoryPreviewModuleEnabled
+		candidate.inventoryPreviewShowArmor = workingCopy.inventoryPreviewShowArmor
+		candidate.customCrosshairModuleEnabled = workingCopy.customCrosshairModuleEnabled
+		candidate.customCrosshairShowInFirstPerson = workingCopy.customCrosshairShowInFirstPerson
+		candidate.customCrosshairVisibleInF5 = workingCopy.customCrosshairVisibleInF5
+		candidate.customCrosshairPattern = CustomCrosshairFeature.normalizePattern(workingCopy.customCrosshairPattern)
+		candidate.silentDisconnectModuleEnabled = workingCopy.silentDisconnectModuleEnabled
+		candidate.silentDisconnectLastStatus = workingCopy.silentDisconnectLastStatus
+		candidate.silentDisconnectRestorePending = workingCopy.silentDisconnectRestorePending
 		candidate.m5ModuleEnabled = workingCopy.m5ModuleEnabled
 		candidate.m5LividFinderEnabled = workingCopy.m5LividFinderEnabled
 		candidate.m5TracerEnabled = workingCopy.m5TracerEnabled
@@ -658,6 +670,9 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> workingCopy.pestEspModuleEnabled
 			ConfigSection.CORPSE_ESP -> workingCopy.corpseEspModuleEnabled
 			ConfigSection.MOB_MODEL -> workingCopy.mobModelModuleEnabled
+			ConfigSection.CROSSHAIR -> workingCopy.customCrosshairModuleEnabled
+			ConfigSection.INVENTORY_PREVIEW -> workingCopy.inventoryPreviewModuleEnabled
+			ConfigSection.SILENT_DISCONNECT -> workingCopy.silentDisconnectModuleEnabled
 			ConfigSection.M5 -> workingCopy.m5ModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled
@@ -690,6 +705,9 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.CORPSE_ESP -> drawCorpseEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MOB_MODEL -> drawMobModelSettings(context, menu, mouseX, mouseY)
+			ConfigSection.CROSSHAIR -> drawCrosshairSettings(context, menu, mouseX, mouseY)
+			ConfigSection.INVENTORY_PREVIEW -> drawInventoryPreviewSettings(context, menu, mouseX, mouseY)
+			ConfigSection.SILENT_DISCONNECT -> drawSilentDisconnectSettings(context, menu, mouseX, mouseY)
 			ConfigSection.M5 -> drawM5Settings(context, menu, mouseX, mouseY)
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MINESHAFT_AUTOWARP -> drawMineshaftAutoWarpSettings(context, menu, mouseX, mouseY)
@@ -758,8 +776,14 @@ class XclipsenConfigScreen(
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Check for Updates", workingCopy.checkForUpdatesEnabled, mouseX, mouseY)
 		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Auto-Update", workingCopy.autoUpdateEnabled, mouseX, mouseY)
 		drawButtonSetting(context, updateCheckNowBounds(menu), "Check Now", mouseX, mouseY)
-		drawInfoSetting(context, settingRowBounds(menu, 3, TEXT_INPUT_SETTING_HEIGHT), "Updater", ModUpdateChecker.statusLine(), mouseX, mouseY)
+		drawInfoSetting(context, updaterInfoBounds(menu), "Updater", ModUpdateChecker.statusLine(), mouseX, mouseY)
 		drawButtonSetting(context, hudEditorBounds(menu), "Open HUD Editor", mouseX, mouseY)
+	}
+
+	private fun drawSilentDisconnectSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "State", SilentDisconnectFeature.statusLine(workingCopy), mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Behavior", "Sets /status offline on disconnect and restores it on rejoin.", mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Scope", "Hypixel only", mouseX, mouseY)
 	}
 
 	private fun drawTimeChangerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -801,6 +825,18 @@ class XclipsenConfigScreen(
 		drawToggleSetting(context, mobModelBabyBounds(menu), "Baby Variant", workingCopy.mobModelBaby, mouseX, mouseY)
 		drawSliderSetting(context, mobModelScaleBounds(menu), "Scale", workingCopy.mobModelScale, 0.25f, 4.0f, mouseX, mouseY)
 		drawInfoSetting(context, mobModelStatusBounds(menu), "Status", mobModelStatusLine(), mouseX, mouseY)
+	}
+
+	private fun drawInventoryPreviewSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, inventoryPreviewShowArmorBounds(menu), "Show Armor", workingCopy.inventoryPreviewShowArmor, mouseX, mouseY)
+		drawInfoSetting(context, inventoryPreviewHudInfoBounds(menu), "Move / Scale", "Use the HUD Editor in Status.", mouseX, mouseY)
+	}
+
+	private fun drawCrosshairSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, crosshairShowInFirstPersonBounds(menu), "Custom Crosshair", workingCopy.customCrosshairShowInFirstPerson, mouseX, mouseY)
+		drawToggleSetting(context, crosshairVisibleInF5Bounds(menu), "Visible In F5", workingCopy.customCrosshairVisibleInF5, mouseX, mouseY)
+		drawButtonSetting(context, crosshairResetBounds(menu), "Reset Grid", mouseX, mouseY)
+		drawCrosshairGridSetting(context, crosshairGridBounds(menu), mouseX, mouseY)
 	}
 
 	private fun drawM5Settings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -1109,6 +1145,33 @@ class XclipsenConfigScreen(
 		context.drawTextWithShadow(textRenderer, trimToWidth(value, TEXT_INPUT_WIDTH), row.left + 8, row.top + 20, TEXT_MUTED)
 	}
 
+	private fun drawCrosshairGridSetting(context: DrawContext, row: Bounds, mouseX: Int, mouseY: Int) {
+		val hovered = row.contains(mouseX, mouseY)
+		drawSettingBackground(context, row, hovered)
+		context.drawTextWithShadow(textRenderer, "Crosshair Grid", row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
+
+		val cells = CustomCrosshairFeature.decode(workingCopy.customCrosshairPattern)
+		val grid = crosshairGridEditorBounds(row)
+		for (gridRow in 0 until CustomCrosshairFeature.GRID_SIZE) {
+			for (gridColumn in 0 until CustomCrosshairFeature.GRID_SIZE) {
+				val cell = crosshairCellBounds(grid, gridRow, gridColumn)
+				val active = cells[gridRow * CustomCrosshairFeature.GRID_SIZE + gridColumn]
+				val cellHovered = cell.contains(mouseX, mouseY)
+				val fillColor = when {
+					active && cellHovered -> ACCENT
+					active -> SELECTED
+					cellHovered -> HOVER
+					else -> 0x44101010
+				}
+				context.fill(cell.left, cell.top, cell.right, cell.bottom, fillColor)
+				context.fill(cell.left, cell.top, cell.right, cell.top + 1, 0x50FFFFFF)
+				context.fill(cell.left, cell.bottom - 1, cell.right, cell.bottom, 0x50FFFFFF)
+				context.fill(cell.left, cell.top, cell.left + 1, cell.bottom, 0x50FFFFFF)
+				context.fill(cell.right - 1, cell.top, cell.right, cell.bottom, 0x50FFFFFF)
+			}
+		}
+	}
+
 	private fun drawOptionSetting(context: DrawContext, row: Bounds, label: String, value: String, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
@@ -1293,6 +1356,9 @@ class XclipsenConfigScreen(
 			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
 			ConfigSection.CORPSE_ESP -> CORPSE_ESP_POPUP_HEIGHT
 			ConfigSection.MOB_MODEL -> mobModelPopupHeight()
+			ConfigSection.CROSSHAIR -> CROSSHAIR_POPUP_HEIGHT
+			ConfigSection.INVENTORY_PREVIEW -> INVENTORY_PREVIEW_POPUP_HEIGHT
+			ConfigSection.SILENT_DISCONNECT -> SILENT_DISCONNECT_POPUP_HEIGHT
 			ConfigSection.M5 -> M5_POPUP_HEIGHT
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
 			ConfigSection.MINESHAFT_AUTOWARP -> MINESHAFT_AUTOWARP_POPUP_HEIGHT
@@ -1300,6 +1366,7 @@ class XclipsenConfigScreen(
 			ConfigSection.AUTO_CROESUS -> 335
 			ConfigSection.DOOR -> 135
 			ConfigSection.RED_VIGNETTE -> 100
+			ConfigSection.STATUS -> STATUS_POPUP_HEIGHT
 			else -> POPUP_HEIGHT
 		}
 		val menuHeight = targetHeight.coerceAtMost((height - 80).coerceAtLeast(targetHeight))
@@ -1638,6 +1705,41 @@ class XclipsenConfigScreen(
 				mobModelVariantField.setFocused(false)
 				mobModelVariantDropdownOpen = false
 				layoutWidgets()
+			}
+			return true
+		}
+
+		if (section == ConfigSection.INVENTORY_PREVIEW && inventoryPreviewShowArmorBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.inventoryPreviewShowArmor = !workingCopy.inventoryPreviewShowArmor
+			return true
+		}
+
+		if (section == ConfigSection.CROSSHAIR && crosshairShowInFirstPersonBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.customCrosshairShowInFirstPerson = !workingCopy.customCrosshairShowInFirstPerson
+			return true
+		}
+
+		if (section == ConfigSection.CROSSHAIR && crosshairVisibleInF5Bounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.customCrosshairVisibleInF5 = !workingCopy.customCrosshairVisibleInF5
+			return true
+		}
+
+		if (section == ConfigSection.CROSSHAIR && crosshairResetBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.customCrosshairPattern = CustomCrosshairFeature.resetPattern()
+			return true
+		}
+
+		if (section == ConfigSection.CROSSHAIR && crosshairGridBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			val grid = crosshairGridEditorBounds(crosshairGridBounds(menu))
+			val column = (mouseX - grid.left) / CROSSHAIR_GRID_CELL_SIZE
+			val row = (mouseY - grid.top) / CROSSHAIR_GRID_CELL_SIZE
+			if (row in 0 until CustomCrosshairFeature.GRID_SIZE && column in 0 until CustomCrosshairFeature.GRID_SIZE) {
+				workingCopy.customCrosshairPattern = CustomCrosshairFeature.toggleCell(workingCopy.customCrosshairPattern, row, column)
 			}
 			return true
 		}
@@ -2334,7 +2436,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun hudEditorBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + (3 * (SETTING_HEIGHT + SETTING_GAP)) + TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP
+		val rowTop = updaterInfoBounds(menu).bottom + SETTING_GAP
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
@@ -2343,6 +2445,11 @@ class XclipsenConfigScreen(
 		val rowTop = menu.top + 40 + (2 * (SETTING_HEIGHT + SETTING_GAP))
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
+	}
+
+	private fun updaterInfoBounds(menu: Bounds): Bounds {
+		val top = updateCheckNowBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun mobModelEntityTypeBounds(menu: Bounds): Bounds {
@@ -2367,6 +2474,44 @@ class XclipsenConfigScreen(
 	private fun mobModelStatusBounds(menu: Bounds): Bounds {
 		val top = mobModelScaleBounds(menu).bottom + SETTING_GAP
 		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun inventoryPreviewShowArmorBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 0, SETTING_HEIGHT)
+	}
+
+	private fun inventoryPreviewHudInfoBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun crosshairShowInFirstPersonBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 0, SETTING_HEIGHT)
+	}
+
+	private fun crosshairVisibleInF5Bounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 1, SETTING_HEIGHT)
+	}
+
+	private fun crosshairResetBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 2, SETTING_HEIGHT)
+	}
+
+	private fun crosshairGridBounds(menu: Bounds): Bounds {
+		val top = crosshairResetBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + CROSSHAIR_GRID_SETTING_HEIGHT)
+	}
+
+	private fun crosshairGridEditorBounds(row: Bounds): Bounds {
+		val size = CustomCrosshairFeature.GRID_SIZE * CROSSHAIR_GRID_CELL_SIZE
+		val left = row.left + (row.width() - size) / 2
+		val top = row.top + 18
+		return Bounds(left, top, left + size, top + size)
+	}
+
+	private fun crosshairCellBounds(grid: Bounds, row: Int, column: Int): Bounds {
+		val left = grid.left + column * CROSSHAIR_GRID_CELL_SIZE
+		val top = grid.top + row * CROSSHAIR_GRID_CELL_SIZE
+		return Bounds(left, top, left + CROSSHAIR_GRID_CELL_SIZE, top + CROSSHAIR_GRID_CELL_SIZE)
 	}
 
 	private fun m5LividFinderBounds(menu: Bounds): Bounds {
@@ -2554,6 +2699,9 @@ class XclipsenConfigScreen(
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
 		CORPSE_ESP("Corpse ESP", "Highlights Glacite Mineshaft corpses by armor-stand helmet ID.", toggleable = true),
 		MOB_MODEL("Mob Model", "Replaces the player model client-side with any living mob model and syncs it through the backend.", toggleable = true),
+		CROSSHAIR("Crosshair", "Overrides the vanilla or texturepack crosshair with a custom editable grid.", toggleable = true),
+		INVENTORY_PREVIEW("Inventory Preview", "Shows your inventory as a HUD element with optional armor slot rendering.", toggleable = true),
+		SILENT_DISCONNECT("Silent Disconnect", "Sets your Hypixel status offline on disconnect and restores it on rejoin.", toggleable = true),
 		M5("M5", "Livid finder, Ice Spray timer, and Rag Axe alert for Master Mode Floor 5.", toggleable = true),
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		MINESHAFT_AUTOWARP("Mineshaft AutoWarp", "Auto-requests lead and party-warps when configured corpse counts are found.", toggleable = true),
@@ -2623,7 +2771,11 @@ class XclipsenConfigScreen(
 		private const val CORPSE_ESP_POPUP_HEIGHT = 410
 		private const val MOB_MODEL_POPUP_HEIGHT = 275
 		private const val MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT = 405
+		private const val CROSSHAIR_POPUP_HEIGHT = 265
+		private const val INVENTORY_PREVIEW_POPUP_HEIGHT = 165
+		private const val SILENT_DISCONNECT_POPUP_HEIGHT = 185
 		private const val M5_POPUP_HEIGHT = 190
+		private const val STATUS_POPUP_HEIGHT = 255
 		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT = 320
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_WITH_DROPDOWN_HEIGHT = 420
@@ -2640,6 +2792,8 @@ class XclipsenConfigScreen(
 		private const val MOB_MODEL_VISIBLE_ROWS = 7
 		private const val SOUND_ROW_HEIGHT = 15
 		private const val SOUND_LIST_TEXT_WIDTH = 145
+		private const val CROSSHAIR_GRID_CELL_SIZE = 18
+		private const val CROSSHAIR_GRID_SETTING_HEIGHT = 150
 		private const val DEFAULT_GLOW_COLOR = 0x36C5F0
 		private const val COLOR_PICKER_STEP = 2
 		private const val COLOR_PICKER_BLOCK_HEIGHT = 122

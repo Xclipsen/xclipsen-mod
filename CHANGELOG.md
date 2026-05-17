@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.17
+
+- Added a `Crosshair` module with an editable 7x7 grid, reset support, and optional F5 visibility.
+- Added an `Inventory Preview` HUD element with optional armor-slot rendering and HUD editor placement/scaling.
+- Added a `Silent Disconnect` module that sets Hypixel status offline on disconnect and restores the previous status on rejoin.
+- Hardened the auto-updater on Windows by staging pending jars and finishing the install after Minecraft exits.
+
 ## v0.5.16
 
 - Added a new `M5` misc module with Livid finder glow/tracer support, an Ice Spray timer, and a Rag Axe alert for Master Mode Floor 5.

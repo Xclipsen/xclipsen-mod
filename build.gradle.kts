@@ -78,8 +78,9 @@ tasks.named("remapJar") {
 }
 
 val prismTargetDirs: List<String> = listOf(
-	"""C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\1.21.10""",
-	"/home/la/.local/share/PrismLauncher/instances/1.21.10 test",
+	// """C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\1.21.10""",
+	// "/home/la/.local/share/PrismLauncher/instances/1.21.10 test",
+	"/home/la/.local/share/PrismLauncher/instances/1.21.10 skyhanni + sbo/minecraft/mods",
 )
 
 fun Project.findRemappedModJar(): File {

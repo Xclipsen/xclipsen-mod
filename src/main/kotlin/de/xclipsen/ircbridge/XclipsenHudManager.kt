@@ -8,6 +8,7 @@ import net.minecraft.client.gui.screen.Screen
 object XclipsenHudManager {
 	val elements: List<XclipsenHudElement> = listOf(
 		IrcChatTabHudElement,
+		InventoryPreviewHudElement,
 		HideonleafLostFightHudElement,
 		HideonleafShardTrackerHudElement,
 		M5IceSprayHudElement,

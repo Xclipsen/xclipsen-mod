@@ -61,6 +61,9 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			backendBridge.stop()
 		}
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
+		ClientPlayConnectionEvents.JOIN.register { handler, _, client ->
+			SilentDisconnectFeature.onJoin(handler, client)
+		}
 		ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
 			ServerTickTracker.reset()
 			CorpseEspFeature.onDisconnect()
@@ -70,13 +73,19 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			PurpleTerracottaHighlightFeature.onWorldChange()
 			PickaxeAbilityCooldownFeature.onWorldChange()
 			MineshaftAutoWarpFeature.onDisconnect()
+			SilentDisconnectFeature.onPlayDisconnect()
 		}
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
+		ClientReceiveMessageEvents.ALLOW_GAME.register { message, _ -> !SilentDisconnectFeature.shouldSuppressStatusMessage(message) }
+		ClientReceiveMessageEvents.ALLOW_CHAT.register { message, _, _, _, _ -> !SilentDisconnectFeature.shouldSuppressStatusMessage(message) }
 		ClientReceiveMessageEvents.GAME.register { message, _ -> handleIncomingMessage(message) }
 		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ -> handleIncomingMessage(message) }
 		HudElementRegistry.attachElementAfter(VanillaHudElements.CHAT, Identifier.of("xclipsen", "hud")) { context, _ ->
 			XclipsenHudManager.render(context)
+		}
+		HudElementRegistry.attachElementAfter(VanillaHudElements.CROSSHAIR, Identifier.of("xclipsen", "custom_crosshair")) { context, _ ->
+			CustomCrosshairFeature.render(context)
 		}
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> MortDoorBarrierFeature.onRender(context) }
@@ -415,6 +424,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ircChatModeExpiresAt > 0L && System.currentTimeMillis() <= ircChatModeExpiresAt
 
 	private fun handleOutgoingCommand(command: String): Boolean {
+		SilentDisconnectFeature.onOutgoingCommand(command)
+
 		val normalized = command.trim().lowercase()
 		if (normalized == "chat i") {
 			enableIrcChatMode()

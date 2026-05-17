@@ -15,6 +15,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.time.Duration
 import java.util.Locale
@@ -226,45 +227,126 @@ object ModUpdateChecker {
 		val modsDir = FabricLoader.getInstance().gameDir.resolve("mods")
 		val newJarPath = modsDir.resolve(asset.name)
 		val tempPath = modsDir.resolve("${asset.name}.tmp")
+		val pendingPath = modsDir.resolve("${asset.name}.pending")
+		val scriptPath = modsDir.resolve("xclipsen-mod-update.cmd")
 
 		try {
+			Files.createDirectories(modsDir)
+			deleteIfExistsQuietly(tempPath)
+			deleteIfExistsQuietly(pendingPath)
+			deleteIfExistsQuietly(scriptPath)
+
+			val downloadPath = if (isWindows()) pendingPath else tempPath
 			val downloadRequest = HttpRequest.newBuilder(URI.create(asset.browserDownloadUrl))
 				.timeout(Duration.ofSeconds(120))
 				.header("User-Agent", "xclipsen-mod-auto-updater")
 				.GET()
 				.build()
 
-			httpClient.send(downloadRequest, HttpResponse.BodyHandlers.ofFile(tempPath))
+			httpClient.send(downloadRequest, HttpResponse.BodyHandlers.ofFile(downloadPath))
 
-			// Alte xclipsen-mod JARs löschen (außer der neuen)
-			Files.list(modsDir).use { stream ->
-				stream
-					.filter { path ->
-						val name = path.fileName.toString()
-						name.matches(Regex("xclipsen-mod-[0-9]+\\.[0-9]+\\.[0-9]+\\.jar"))
-					}
-					.filter { it != newJarPath }
-					.forEach { Files.deleteIfExists(it) }
+			if (isWindows()) {
+				scheduleWindowsInstall(modsDir, pendingPath, newJarPath, scriptPath)
+			} else {
+				Files.move(tempPath, newJarPath, StandardCopyOption.REPLACE_EXISTING)
+				cleanupOldModJars(modsDir, setOf(newJarPath))
 			}
-
-			// Temp-Datei zur finalen JAR umbenennen
-			Files.move(tempPath, newJarPath, StandardCopyOption.REPLACE_EXISTING)
 
 			state = UpdateState.INSTALLED
 		} catch (exception: IOException) {
 			Files.deleteIfExists(tempPath)
+			Files.deleteIfExists(pendingPath)
 			lastError = exception::class.java.simpleName + (exception.message?.let { ": $it" } ?: "")
 			state = UpdateState.DOWNLOAD_ERROR
 		} catch (exception: InterruptedException) {
 			Files.deleteIfExists(tempPath)
+			Files.deleteIfExists(pendingPath)
 			Thread.currentThread().interrupt()
 			lastError = exception::class.java.simpleName
 			state = UpdateState.DOWNLOAD_ERROR
 		} catch (exception: RuntimeException) {
 			Files.deleteIfExists(tempPath)
+			Files.deleteIfExists(pendingPath)
 			lastError = exception::class.java.simpleName + (exception.message?.let { ": $it" } ?: "")
 			state = UpdateState.DOWNLOAD_ERROR
 		}
+	}
+
+	private fun cleanupOldModJars(modsDir: Path, keep: Set<Path>) {
+		val keepNormalized = keep.map { it.toAbsolutePath().normalize() }.toSet()
+		Files.list(modsDir).use { stream ->
+			stream
+				.filter { path ->
+					val name = path.fileName.toString()
+					name.matches(Regex("xclipsen-mod-[0-9]+\\.[0-9]+\\.[0-9]+\\.jar"))
+				}
+				.filter { it.toAbsolutePath().normalize() !in keepNormalized }
+				.forEach { Files.deleteIfExists(it) }
+		}
+	}
+
+	private fun scheduleWindowsInstall(modsDir: Path, pendingPath: Path, newJarPath: Path, scriptPath: Path) {
+		val script = buildWindowsUpdateScript(modsDir, pendingPath, newJarPath)
+		Files.writeString(scriptPath, script)
+		ProcessBuilder("cmd.exe", "/c", scriptPath.toString())
+			.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+			.redirectError(ProcessBuilder.Redirect.DISCARD)
+			.start()
+	}
+
+	private fun buildWindowsUpdateScript(modsDir: Path, pendingPath: Path, newJarPath: Path): String {
+		val modsDirText = windowsBatchPath(modsDir)
+		val pendingText = windowsBatchPath(pendingPath)
+		val targetText = windowsBatchPath(newJarPath)
+		return """
+			@echo off
+			setlocal EnableExtensions
+			set "MODS_DIR=$modsDirText"
+			set "PENDING=$pendingText"
+			set "TARGET=$targetText"
+			set /a TRIES=0
+			
+			:wait_loop
+			set "BLOCKED="
+			for %%F in ("%MODS_DIR%\xclipsen-mod-*.jar") do (
+				if /I not "%%~fF"=="%TARGET%" (
+					del /f /q "%%~fF" >nul 2>&1
+					if exist "%%~fF" set "BLOCKED=1"
+				)
+			)
+			if not defined BLOCKED goto install
+			set /a TRIES+=1
+			if %TRIES% GEQ 180 goto end
+			timeout /t 1 /nobreak >nul
+			goto wait_loop
+			
+			:install
+			move /y "%PENDING%" "%TARGET%" >nul 2>&1
+			if exist "%PENDING%" copy /y "%PENDING%" "%TARGET%" >nul 2>&1
+			for %%F in ("%MODS_DIR%\xclipsen-mod-*.jar") do (
+				if /I not "%%~fF"=="%TARGET%" del /f /q "%%~fF" >nul 2>&1
+			)
+			
+			:end
+			endlocal
+		""".trimIndent()
+	}
+
+	private fun windowsBatchPath(path: Path): String {
+		return path.toAbsolutePath().normalize().toString()
+			.replace("^", "^^")
+			.replace("&", "^&")
+			.replace("|", "^|")
+			.replace("<", "^<")
+			.replace(">", "^>")
+	}
+
+	private fun isWindows(): Boolean {
+		return System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)
+	}
+
+	private fun deleteIfExistsQuietly(path: Path) {
+		runCatching { Files.deleteIfExists(path) }
 	}
 
 	private fun currentVersion(): String {

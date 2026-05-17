@@ -1,8 +1,10 @@
 package de.xclipsen.ircbridge.mixin
 
+import de.xclipsen.ircbridge.SilentDisconnectFeature
 import de.xclipsen.ircbridge.ServerTickTracker
 import io.netty.channel.ChannelHandlerContext
 import net.minecraft.network.ClientConnection
+import net.minecraft.network.DisconnectionInfo
 import net.minecraft.network.packet.Packet
 import net.minecraft.network.packet.s2c.common.CommonPingS2CPacket
 import org.spongepowered.asm.mixin.Mixin
@@ -20,5 +22,13 @@ abstract class ClientConnectionMixin {
 		if (packet is CommonPingS2CPacket) {
 			ServerTickTracker.onServerTick()
 		}
+	}
+
+	@Inject(
+		method = ["disconnect(Lnet/minecraft/network/DisconnectionInfo;)V"],
+		at = [At("HEAD")],
+	)
+	private fun onDisconnect(info: DisconnectionInfo, ci: CallbackInfo) {
+		SilentDisconnectFeature.onDisconnectStarting()
 	}
 }

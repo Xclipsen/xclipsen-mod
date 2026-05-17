@@ -15,6 +15,7 @@
     "HandledScreenAccessor",
     "HandledScreenSlotRenderMixin",
     "HorseEntityInvoker",
+    "InGameHudMixin",
     "LivingEntityRendererMixin",
     "MooshroomEntityInvoker",
     "ScreenHandlerSlotUpdateMixin"

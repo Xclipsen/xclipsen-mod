@@ -89,6 +89,8 @@ abstract class XclipsenHudElement(
 		placement.scale = 1f
 	}
 
+	protected fun currentPlacement(context: DrawContext): HudElementPlacement = placement(context)
+
 	protected abstract fun draw(context: DrawContext, example: Boolean): Pair<Float, Float>
 
 	private fun drawEditorBackground(context: DrawContext, mouseX: Int, mouseY: Int) {

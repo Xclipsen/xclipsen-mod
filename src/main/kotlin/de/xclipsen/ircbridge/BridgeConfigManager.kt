@@ -92,6 +92,8 @@ class BridgeConfigManager(
 		value.mobModelEntityType = normalizeEntityTypeId(value.mobModelEntityType)
 		value.mobModelVariant = normalizeMobModelVariant(value.mobModelVariant)
 		value.mobModelScale = value.mobModelScale.coerceIn(0.25f, 4.0f)
+		value.customCrosshairPattern = CustomCrosshairFeature.normalizePattern(value.customCrosshairPattern)
+		value.silentDisconnectLastStatus = normalizeSilentDisconnectStatus(value.silentDisconnectLastStatus)
 		value.pickaxeAbilityCooldownAlertSoundId = SoundCatalog.normalizeSoundId(value.pickaxeAbilityCooldownAlertSoundId)
 		value.pickaxeAbilityCooldownAlertSoundVolume = value.pickaxeAbilityCooldownAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.pickaxeAbilityCooldownAlertSoundPitch = value.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f)
@@ -182,9 +184,17 @@ class BridgeConfigManager(
 		return if (candidate.length <= 96) candidate else candidate.substring(0, 96)
 	}
 
+	private fun normalizeSilentDisconnectStatus(value: String?): String {
+		val candidate = safeString(value, "online")
+			.trim()
+			.lowercase(Locale.ROOT)
+		return if (SILENT_DISCONNECT_STATUSES.contains(candidate)) candidate else "online"
+	}
+
 	companion object {
 		private val GSON: Gson = GsonBuilder().setPrettyPrinting().create()
 		private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 		private val ENTITY_TYPE_PATTERN = Regex("[a-z0-9_.-]+:[a-z0-9_/.-]+")
+		private val SILENT_DISCONNECT_STATUSES = setOf("online", "busy", "away", "offline")
 	}
 }

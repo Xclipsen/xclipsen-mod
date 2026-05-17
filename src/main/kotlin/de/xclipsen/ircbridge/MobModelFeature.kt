@@ -25,6 +25,7 @@ object MobModelFeature {
 	private val syncExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
 		Thread(runnable, "xclipsen-mob-model-sync").apply { isDaemon = true }
 	}
+	private val queuedReplacementBypasses = ConcurrentHashMap<Int, Int>()
 	private val renderEntityCache = mutableMapOf<String, LivingEntity>()
 	private val babySetterCache = ConcurrentHashMap<Class<*>, Method?>()
 
@@ -68,6 +69,7 @@ object MobModelFeature {
 
 	fun onDisconnect() {
 		clearRenderCache()
+		queuedReplacementBypasses.clear()
 		syncedStates = emptyMap()
 		lastFetchAt = 0L
 		lastUploadAt = 0L
@@ -141,6 +143,10 @@ object MobModelFeature {
 		queue: OrderedRenderCommandQueue,
 		cameraState: CameraRenderState,
 	): Boolean {
+		if (consumeReplacementBypass(state.id)) {
+			return false
+		}
+
 		val client = MinecraftClient.getInstance()
 		val world = client.world ?: return false
 		val player = world.getEntityById(state.id) as? AbstractClientPlayerEntity ?: return false
@@ -162,6 +168,32 @@ object MobModelFeature {
 			LOGGER.warn("Failed to render mob model replacement for {}", selection.entityType, failure)
 			false
 		}
+	}
+
+	fun inventoryPreviewEntity(player: AbstractClientPlayerEntity, useMobModel: Boolean): LivingEntity {
+		if (!useMobModel) {
+			return player
+		}
+
+		val selection = localSelection(XclipsenIrcBridgeClient.instance?.config() ?: return player) ?: return player
+		val entityType = resolveEntityType(selection.entityType) ?: return player
+		return prepareRenderEntity(player, selection, entityType) ?: player
+	}
+
+	fun queueReplacementBypass(playerId: Int) {
+		queuedReplacementBypasses.merge(playerId, 1, Int::plus)
+	}
+
+	private fun consumeReplacementBypass(playerId: Int): Boolean {
+		var consumed = false
+		queuedReplacementBypasses.compute(playerId) { _, count ->
+			if (count == null || count <= 0) {
+				return@compute count
+			}
+			consumed = true
+			if (count == 1) null else count - 1
+		}
+		return consumed
 	}
 
 	private fun fetchRemoteStates(playerName: String) {
