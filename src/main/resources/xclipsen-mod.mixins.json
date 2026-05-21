@@ -10,6 +10,7 @@
     "ClientPlayerInteractionManagerMixin",
     "ClientWorldMixin",
     "EntityComponentInvoker",
+    "EntityRendererInvoker",
     "EntityGlowMixin",
     "FoxEntityInvoker",
     "HandledScreenAccessor",

@@ -1,6 +1,7 @@
 package de.xclipsen.ircbridge.mixin
 
 import de.xclipsen.ircbridge.MobModelFeature
+import de.xclipsen.ircbridge.FireFreezeFeature
 import net.minecraft.client.render.command.OrderedRenderCommandQueue
 import net.minecraft.client.render.entity.LivingEntityRenderer
 import net.minecraft.client.render.entity.PlayerEntityRenderer
@@ -27,6 +28,11 @@ abstract class LivingEntityRendererMixin {
 		cameraState: CameraRenderState,
 		ci: CallbackInfo,
 	) {
+		if (FireFreezeFeature.shouldSuppressEntityRender(state)) {
+			ci.cancel()
+			return
+		}
+
 		if (this !is PlayerEntityRenderer<*>) {
 			return
 		}

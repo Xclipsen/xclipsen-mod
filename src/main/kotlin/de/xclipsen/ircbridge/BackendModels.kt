@@ -101,6 +101,8 @@ class BridgeConfig {
 	@JvmField var mobModelEntityType: String = "minecraft:zombie"
 	@JvmField var mobModelVariant: String = ""
 	@JvmField var mobModelBaby: Boolean = false
+	@JvmField var mobModelShowArmor: Boolean = true
+	@JvmField var mobModelShowHeldItems: Boolean = true
 	@JvmField var mobModelScale: Float = 1.0f
 	@JvmField var inventoryPreviewModuleEnabled: Boolean = false
 	@JvmField var inventoryPreviewShowArmor: Boolean = true
@@ -123,6 +125,18 @@ class BridgeConfig {
 	@JvmField var pickaxeAbilityCooldownAlertSoundVolume: Float = 1.0f
 	@JvmField var pickaxeAbilityCooldownAlertSoundPitch: Float = 1.0f
 	@JvmField var pickaxeAbilityCooldownAlertText: String = PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT
+	@JvmField var fireFreezeModuleEnabled: Boolean = false
+	@JvmField var fireFreezeMobTimerEnabled: Boolean = true
+	@JvmField var fireFreezeFreezeTimerEnabled: Boolean = true
+	@JvmField var fireFreezeStrongMobsOnly: Boolean = false
+	@JvmField var fireFreezeBoxFrozenMobsEnabled: Boolean = true
+	@JvmField var fireFreezeCustomCircleEnabled: Boolean = true
+	@JvmField var fireFreezeCircleColorHex: String = "#00F5FF"
+	@JvmField var fireFreezeCircleLineWidth: Float = 2.0f
+	@JvmField var fireFreezeRefreezeAlertEnabled: Boolean = true
+	@JvmField var fireFreezeRefreezeAlertSoundId: String = SoundCatalog.defaultSoundId
+	@JvmField var fireFreezeRefreezeAlertSoundVolume: Float = 1.0f
+	@JvmField var fireFreezeRefreezeAlertSoundPitch: Float = 1.0f
 	@JvmField var mineshaftAutoWarpModuleEnabled: Boolean = false
 	@JvmField var mineshaftAutoWarpCorpseRule: String = ""
 	@JvmField var mineshaftAutoWarpDelayMs: Long = 3500L
@@ -187,6 +201,8 @@ class BridgeConfig {
 		it.mobModelEntityType = mobModelEntityType
 		it.mobModelVariant = mobModelVariant
 		it.mobModelBaby = mobModelBaby
+		it.mobModelShowArmor = mobModelShowArmor
+		it.mobModelShowHeldItems = mobModelShowHeldItems
 		it.mobModelScale = mobModelScale
 		it.inventoryPreviewModuleEnabled = inventoryPreviewModuleEnabled
 		it.inventoryPreviewShowArmor = inventoryPreviewShowArmor
@@ -209,6 +225,18 @@ class BridgeConfig {
 		it.pickaxeAbilityCooldownAlertSoundVolume = pickaxeAbilityCooldownAlertSoundVolume
 		it.pickaxeAbilityCooldownAlertSoundPitch = pickaxeAbilityCooldownAlertSoundPitch
 		it.pickaxeAbilityCooldownAlertText = pickaxeAbilityCooldownAlertText
+		it.fireFreezeModuleEnabled = fireFreezeModuleEnabled
+		it.fireFreezeMobTimerEnabled = fireFreezeMobTimerEnabled
+		it.fireFreezeFreezeTimerEnabled = fireFreezeFreezeTimerEnabled
+		it.fireFreezeStrongMobsOnly = fireFreezeStrongMobsOnly
+		it.fireFreezeBoxFrozenMobsEnabled = fireFreezeBoxFrozenMobsEnabled
+		it.fireFreezeCustomCircleEnabled = fireFreezeCustomCircleEnabled
+		it.fireFreezeCircleColorHex = fireFreezeCircleColorHex
+		it.fireFreezeCircleLineWidth = fireFreezeCircleLineWidth
+		it.fireFreezeRefreezeAlertEnabled = fireFreezeRefreezeAlertEnabled
+		it.fireFreezeRefreezeAlertSoundId = fireFreezeRefreezeAlertSoundId
+		it.fireFreezeRefreezeAlertSoundVolume = fireFreezeRefreezeAlertSoundVolume
+		it.fireFreezeRefreezeAlertSoundPitch = fireFreezeRefreezeAlertSoundPitch
 		it.mineshaftAutoWarpModuleEnabled = mineshaftAutoWarpModuleEnabled
 		it.mineshaftAutoWarpCorpseRule = mineshaftAutoWarpCorpseRule
 		it.mineshaftAutoWarpDelayMs = mineshaftAutoWarpDelayMs
@@ -258,6 +286,8 @@ class BackendMobModelState {
 	@JvmField var entityType: String = "minecraft:zombie"
 	@JvmField var variant: String = ""
 	@JvmField var baby: Boolean = false
+	@JvmField var showArmor: Boolean = true
+	@JvmField var showHeldItems: Boolean = true
 	@JvmField var scale: Float = 1.0f
 	@JvmField var updatedAt: Long = 0L
 }

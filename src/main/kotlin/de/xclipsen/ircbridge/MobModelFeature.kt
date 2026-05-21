@@ -1,17 +1,22 @@
 package de.xclipsen.ircbridge
 
+import de.xclipsen.ircbridge.mixin.EntityRendererInvoker
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.AbstractClientPlayerEntity
 import net.minecraft.client.render.command.OrderedRenderCommandQueue
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState
+import net.minecraft.client.render.entity.state.AllayEntityRenderState
 import net.minecraft.client.render.state.CameraRenderState
 import net.minecraft.client.util.math.MatrixStack
 import net.minecraft.entity.EntityType
+import net.minecraft.entity.EquipmentSlot
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.SpawnReason
 import net.minecraft.entity.passive.PassiveEntity
+import net.minecraft.item.ItemStack
 import net.minecraft.util.Identifier
+import net.minecraft.util.Hand
 import net.minecraft.util.math.Vec3d
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Method
@@ -155,14 +160,23 @@ object MobModelFeature {
 		val renderEntity = prepareRenderEntity(player, selection, entityType) ?: return false
 		return runCatching {
 			val tickProgress = client.renderTickCounter.getTickProgress(false)
+			val renderState = client.entityRenderDispatcher.getAndUpdateRenderState(renderEntity, tickProgress)
+			val renderer = client.entityRenderDispatcher.getRenderer(renderState)
+			adjustRenderState(renderState, renderEntity, selection)
+			val displayName = renderState.displayName
+			val nameLabelPos = renderState.nameLabelPos
 			matrices.push()
 			try {
 				matrices.scale(selection.scale, selection.scale, selection.scale)
-				val renderState = client.entityRenderDispatcher.getAndUpdateRenderState(renderEntity, tickProgress)
-				client.entityRenderDispatcher.getRenderer(renderState).render(renderState, matrices, queue, cameraState)
+				renderState.displayName = null
+				renderer.render(renderState, matrices, queue, cameraState)
 			} finally {
 				matrices.pop()
 			}
+			renderState.displayName = displayName
+			renderState.nameLabelPos = adjustedNameLabelPos(nameLabelPos, renderState.height, selection.scale)
+			(renderer as? EntityRendererInvoker)?.invokeRenderLabelIfPresent(renderState, matrices, queue, cameraState)
+			renderState.nameLabelPos = nameLabelPos
 			true
 		}.getOrElse { failure ->
 			LOGGER.warn("Failed to render mob model replacement for {}", selection.entityType, failure)
@@ -215,6 +229,8 @@ object MobModelFeature {
 			entityType = normalizeEntityTypeId(config.mobModelEntityType)
 			variant = MobModelVariantCatalog.normalize(config.mobModelVariant)
 			baby = config.mobModelBaby
+			showArmor = config.mobModelShowArmor
+			showHeldItems = config.mobModelShowHeldItems
 			scale = config.mobModelScale.coerceIn(0.25f, 4.0f)
 			updatedAt = System.currentTimeMillis()
 		}
@@ -252,6 +268,8 @@ object MobModelFeature {
 			it.entityType = normalizeEntityTypeId(config.mobModelEntityType)
 			it.variant = MobModelVariantCatalog.normalize(config.mobModelVariant)
 			it.baby = config.mobModelBaby
+			it.showArmor = config.mobModelShowArmor
+			it.showHeldItems = config.mobModelShowHeldItems
 			it.scale = config.mobModelScale.coerceIn(0.25f, 4.0f)
 		}
 	}
@@ -270,6 +288,8 @@ object MobModelFeature {
 			val normalizedVariant = MobModelVariantCatalog.normalize(incoming.variant)
 			it.variant = if (MobModelVariantCatalog.validate(it.entityType, normalizedVariant) == null) normalizedVariant else ""
 			it.baby = incoming.baby
+			it.showArmor = incoming.showArmor
+			it.showHeldItems = incoming.showHeldItems
 			it.scale = incoming.scale.takeIf { scale -> scale.isFinite() }?.coerceIn(0.25f, 4.0f) ?: 1.0f
 			it.updatedAt = incoming.updatedAt.coerceAtLeast(0L)
 		}
@@ -331,8 +351,58 @@ object MobModelFeature {
 		renderEntity.setCustomName(player.displayName)
 		renderEntity.setCustomNameVisible(true)
 		applyBabyState(renderEntity, selection.baby)
+		applyEquipmentState(renderEntity, player, selection)
 		MobModelVariantCatalog.apply(renderEntity, selection.entityType, selection.variant)
 		return renderEntity
+	}
+
+	private fun applyEquipmentState(
+		renderEntity: LivingEntity,
+		player: AbstractClientPlayerEntity,
+		selection: BackendMobModelState,
+	) {
+		val head = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.HEAD).copy() else ItemStack.EMPTY
+		val chest = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.CHEST).copy() else ItemStack.EMPTY
+		val legs = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.LEGS).copy() else ItemStack.EMPTY
+		val feet = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.FEET).copy() else ItemStack.EMPTY
+		renderEntity.equipStack(EquipmentSlot.HEAD, head)
+		renderEntity.equipStack(EquipmentSlot.CHEST, chest)
+		renderEntity.equipStack(EquipmentSlot.LEGS, legs)
+		renderEntity.equipStack(EquipmentSlot.FEET, feet)
+
+		val mainHand = if (selection.showHeldItems) player.getStackInHand(Hand.MAIN_HAND).copy() else ItemStack.EMPTY
+		val offHand = if (selection.showHeldItems) player.getStackInHand(Hand.OFF_HAND).copy() else ItemStack.EMPTY
+		renderEntity.setStackInHand(Hand.MAIN_HAND, mainHand)
+		renderEntity.setStackInHand(Hand.OFF_HAND, offHand)
+
+		if (selection.showHeldItems && player.isUsingItem) {
+			renderEntity.setCurrentHand(player.activeHand)
+		} else {
+			renderEntity.clearActiveItem()
+		}
+	}
+
+	private fun adjustRenderState(
+		renderState: Any,
+		renderEntity: LivingEntity,
+		selection: BackendMobModelState,
+	) {
+		if (renderState is AllayEntityRenderState) {
+			val isHoldingItem = selection.showHeldItems && (
+				!renderEntity.getStackInHand(Hand.MAIN_HAND).isEmpty || !renderEntity.getStackInHand(Hand.OFF_HAND).isEmpty
+			)
+			renderState.itemHoldAnimationTicks = if (isHoldingItem) 1.0f else 0.0f
+		}
+	}
+
+	private fun adjustedNameLabelPos(base: Vec3d?, entityHeight: Float, scale: Float): Vec3d? {
+		val current = base ?: return null
+		if (scale == 1.0f) {
+			return current
+		}
+
+		val extraY = entityHeight * (scale - 1.0f)
+		return current.add(0.0, extraY.toDouble(), 0.0)
 	}
 
 	private fun applyBabyState(entity: LivingEntity, baby: Boolean) {
@@ -383,6 +453,8 @@ object MobModelFeature {
 			normalizeEntityTypeId(config.mobModelEntityType),
 			MobModelVariantCatalog.normalize(config.mobModelVariant),
 			config.mobModelBaby.toString(),
+			config.mobModelShowArmor.toString(),
+			config.mobModelShowHeldItems.toString(),
 			config.mobModelScale.coerceIn(0.25f, 4.0f).toString(),
 			FabricLoader.getInstance().gameDir.toString(),
 		).joinToString("|")

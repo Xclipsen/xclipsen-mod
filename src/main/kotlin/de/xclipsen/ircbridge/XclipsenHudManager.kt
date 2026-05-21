@@ -13,6 +13,8 @@ object XclipsenHudManager {
 		HideonleafShardTrackerHudElement,
 		M5IceSprayHudElement,
 		M5AlertHudElement,
+		FireFreezeTimersHudElement,
+		FireFreezeRefreezeAlertHudElement,
 		PickaxeAbilityCooldownHudElement,
 		PickaxeAbilityReadyAlertHudElement,
 	)

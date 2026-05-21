@@ -72,6 +72,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			MortDoorBarrierFeature.onWorldChange()
 			PurpleTerracottaHighlightFeature.onWorldChange()
 			PickaxeAbilityCooldownFeature.onWorldChange()
+			FireFreezeFeature.onWorldChange()
 			MineshaftAutoWarpFeature.onDisconnect()
 			SilentDisconnectFeature.onPlayDisconnect()
 		}
@@ -93,6 +94,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PestEspFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> CorpseEspFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> M5Feature.render(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> FireFreezeFeature.render(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
@@ -224,6 +226,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		PurpleTerracottaHighlightFeature.onTick(client)
 		M5Feature.onTick(client)
 		PickaxeAbilityCooldownFeature.onTick(client)
+		FireFreezeFeature.onTick(client)
 		MineshaftAutoWarpFeature.onTick(client)
 		CorpseEspFeature.onTick(client)
 		MobModelFeature.onTick(client)
