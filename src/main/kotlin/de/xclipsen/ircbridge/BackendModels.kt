@@ -113,6 +113,10 @@ class BridgeConfig {
 	@JvmField var silentDisconnectModuleEnabled: Boolean = false
 	@JvmField var silentDisconnectLastStatus: String = "online"
 	@JvmField var silentDisconnectRestorePending: Boolean = false
+	@JvmField var chimeraBookDropEffectsModuleEnabled: Boolean = true
+	@JvmField var chimeraBookDropEffectsSoundId: String = "minecraft:ui.toast.challenge_complete"
+	@JvmField var chimeraBookDropEffectsSoundVolume: Float = 1.0f
+	@JvmField var chimeraBookDropEffectsSoundPitch: Float = 1.0f
 	@JvmField var m5ModuleEnabled: Boolean = false
 	@JvmField var m5LividFinderEnabled: Boolean = true
 	@JvmField var m5TracerEnabled: Boolean = true
@@ -213,6 +217,10 @@ class BridgeConfig {
 		it.silentDisconnectModuleEnabled = silentDisconnectModuleEnabled
 		it.silentDisconnectLastStatus = silentDisconnectLastStatus
 		it.silentDisconnectRestorePending = silentDisconnectRestorePending
+		it.chimeraBookDropEffectsModuleEnabled = chimeraBookDropEffectsModuleEnabled
+		it.chimeraBookDropEffectsSoundId = chimeraBookDropEffectsSoundId
+		it.chimeraBookDropEffectsSoundVolume = chimeraBookDropEffectsSoundVolume
+		it.chimeraBookDropEffectsSoundPitch = chimeraBookDropEffectsSoundPitch
 		it.m5ModuleEnabled = m5ModuleEnabled
 		it.m5LividFinderEnabled = m5LividFinderEnabled
 		it.m5TracerEnabled = m5TracerEnabled

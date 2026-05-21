@@ -80,8 +80,14 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
 		ClientReceiveMessageEvents.ALLOW_GAME.register { message, _ -> !SilentDisconnectFeature.shouldSuppressStatusMessage(message) }
 		ClientReceiveMessageEvents.ALLOW_CHAT.register { message, _, _, _, _ -> !SilentDisconnectFeature.shouldSuppressStatusMessage(message) }
-		ClientReceiveMessageEvents.GAME.register { message, _ -> handleIncomingMessage(message) }
-		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ -> handleIncomingMessage(message) }
+		ClientReceiveMessageEvents.GAME.register { message, overlay ->
+			ChimeraBookDropEffectsFeature.onIncomingGameMessage(message, overlay)
+			handleIncomingMessage(message)
+		}
+		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ ->
+			ChimeraBookDropEffectsFeature.onIncomingChatMessage(message)
+			handleIncomingMessage(message)
+		}
 		HudElementRegistry.attachElementAfter(VanillaHudElements.CHAT, Identifier.of("xclipsen", "hud")) { context, _ ->
 			XclipsenHudManager.render(context)
 		}
@@ -219,6 +225,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun handleEndTick(client: MinecraftClient) {
+		ChimeraBookDropEffectsFeature.onTick()
 		LocationTracker.onTick(client)
 		HideonleafShardTracker.onTick()
 		AuctionHouseUnderbidFeature.onTick(client)

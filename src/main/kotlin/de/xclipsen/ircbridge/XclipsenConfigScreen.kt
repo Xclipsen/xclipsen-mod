@@ -64,11 +64,12 @@ class XclipsenConfigScreen(
 	private lateinit var lostFightSoundSearchField: TextFieldWidget
 	private lateinit var pickaxeAlertSoundSearchField: TextFieldWidget
 	private lateinit var fireFreezeAlertSoundSearchField: TextFieldWidget
+	private lateinit var chimeraDropSoundSearchField: TextFieldWidget
 
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
-		ConfigPanel("MISC", listOf(ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.FIRE_FREEZE, ConfigSection.MINESHAFT_AUTOWARP)),
+		ConfigPanel("MISC", listOf(ConfigSection.CHIMERA_DROP, ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.FIRE_FREEZE, ConfigSection.MINESHAFT_AUTOWARP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.M5, ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -107,6 +108,7 @@ class XclipsenConfigScreen(
 		lostFightSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		pickaxeAlertSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		fireFreezeAlertSoundSearchField = addField(0, 0, 150, "", "Search sound...")
+		chimeraDropSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		layoutWidgets()
 	}
 
@@ -204,7 +206,7 @@ class XclipsenConfigScreen(
 
 		val dragTarget = draggingColorPicker
 		val sliderTarget = draggingSlider
-		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE || openedSection == ConfigSection.MOB_MODEL) && sliderTarget != null) {
+		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE || openedSection == ConfigSection.MOB_MODEL || openedSection == ConfigSection.CHIMERA_DROP) && sliderTarget != null) {
 			updateSliderFromMouse(click.x().toInt(), sliderTarget)
 			return true
 		}
@@ -227,7 +229,7 @@ class XclipsenConfigScreen(
 	}
 
 	override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, verticalAmount: Double): Boolean {
-		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE) && soundDropdownOpen) {
+		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE || openedSection == ConfigSection.CHIMERA_DROP) && soundDropdownOpen) {
 			val list = soundListBounds(settingsBounds())
 			if (list.contains(mouseX.toInt(), mouseY.toInt())) {
 				val filtered = SoundCatalog.filtered(activeSoundSearchField().text)
@@ -277,6 +279,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CROSSHAIR -> workingCopy.customCrosshairModuleEnabled = !workingCopy.customCrosshairModuleEnabled
 			ConfigSection.INVENTORY_PREVIEW -> workingCopy.inventoryPreviewModuleEnabled = !workingCopy.inventoryPreviewModuleEnabled
 			ConfigSection.SILENT_DISCONNECT -> workingCopy.silentDisconnectModuleEnabled = !workingCopy.silentDisconnectModuleEnabled
+			ConfigSection.CHIMERA_DROP -> workingCopy.chimeraBookDropEffectsModuleEnabled = !workingCopy.chimeraBookDropEffectsModuleEnabled
 			ConfigSection.M5 -> workingCopy.m5ModuleEnabled = !workingCopy.m5ModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeModuleEnabled = !workingCopy.fireFreezeModuleEnabled
@@ -404,6 +407,10 @@ class XclipsenConfigScreen(
 		candidate.silentDisconnectModuleEnabled = workingCopy.silentDisconnectModuleEnabled
 		candidate.silentDisconnectLastStatus = workingCopy.silentDisconnectLastStatus
 		candidate.silentDisconnectRestorePending = workingCopy.silentDisconnectRestorePending
+		candidate.chimeraBookDropEffectsModuleEnabled = workingCopy.chimeraBookDropEffectsModuleEnabled
+		candidate.chimeraBookDropEffectsSoundId = SoundCatalog.normalizeSoundId(workingCopy.chimeraBookDropEffectsSoundId)
+		candidate.chimeraBookDropEffectsSoundVolume = workingCopy.chimeraBookDropEffectsSoundVolume
+		candidate.chimeraBookDropEffectsSoundPitch = workingCopy.chimeraBookDropEffectsSoundPitch
 		candidate.m5ModuleEnabled = workingCopy.m5ModuleEnabled
 		candidate.m5LividFinderEnabled = workingCopy.m5LividFinderEnabled
 		candidate.m5TracerEnabled = workingCopy.m5TracerEnabled
@@ -613,7 +620,7 @@ class XclipsenConfigScreen(
 			}
 		}
 
-		if ((section == ConfigSection.HIDEONLEAF_HELPER || section == ConfigSection.PICKAXE_COOLDOWN || section == ConfigSection.FIRE_FREEZE) && soundDropdownOpen) {
+		if ((section == ConfigSection.HIDEONLEAF_HELPER || section == ConfigSection.PICKAXE_COOLDOWN || section == ConfigSection.FIRE_FREEZE || section == ConfigSection.CHIMERA_DROP) && soundDropdownOpen) {
 			val search = soundSearchBounds(menu)
 			activeSoundSearchField().setDimensionsAndPosition(search.width(), 18, search.left, search.top)
 			setVisible(activeSoundSearchField(), true)
@@ -621,6 +628,7 @@ class XclipsenConfigScreen(
 			setVisible(lostFightSoundSearchField, false)
 			setVisible(pickaxeAlertSoundSearchField, false)
 			setVisible(fireFreezeAlertSoundSearchField, false)
+			setVisible(chimeraDropSoundSearchField, false)
 		}
 
 		if (section == ConfigSection.MOB_MODEL && mobModelDropdownOpen) {
@@ -697,6 +705,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CROSSHAIR -> workingCopy.customCrosshairModuleEnabled
 			ConfigSection.INVENTORY_PREVIEW -> workingCopy.inventoryPreviewModuleEnabled
 			ConfigSection.SILENT_DISCONNECT -> workingCopy.silentDisconnectModuleEnabled
+			ConfigSection.CHIMERA_DROP -> workingCopy.chimeraBookDropEffectsModuleEnabled
 			ConfigSection.M5 -> workingCopy.m5ModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeModuleEnabled
@@ -733,6 +742,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CROSSHAIR -> drawCrosshairSettings(context, menu, mouseX, mouseY)
 			ConfigSection.INVENTORY_PREVIEW -> drawInventoryPreviewSettings(context, menu, mouseX, mouseY)
 			ConfigSection.SILENT_DISCONNECT -> drawSilentDisconnectSettings(context, menu, mouseX, mouseY)
+			ConfigSection.CHIMERA_DROP -> drawChimeraDropSettings(context, menu, mouseX, mouseY)
 			ConfigSection.M5 -> drawM5Settings(context, menu, mouseX, mouseY)
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.FIRE_FREEZE -> drawFireFreezeSettings(context, menu, mouseX, mouseY)
@@ -810,6 +820,18 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "State", SilentDisconnectFeature.statusLine(workingCopy), mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Behavior", "Sets /status offline on disconnect and restores it on rejoin.", mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Scope", "Hypixel only", mouseX, mouseY)
+	}
+
+	private fun drawChimeraDropSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Status", ChimeraBookDropEffectsFeature.statusLine(), mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Trigger", "RARE DROP! Enchanted Book (Chimera I)", mouseX, mouseY)
+		drawSoundSetting(context, chimeraDropSoundBounds(menu), "Sound", workingCopy.chimeraBookDropEffectsSoundId, mouseX, mouseY)
+		if (soundDropdownOpen) {
+			drawSoundDropdown(context, menu, mouseX, mouseY)
+		}
+		drawSliderSetting(context, chimeraDropVolumeBounds(menu), "Volume", workingCopy.chimeraBookDropEffectsSoundVolume, 0.0f, 2.0f, mouseX, mouseY)
+		drawSliderSetting(context, chimeraDropPitchBounds(menu), "Pitch", workingCopy.chimeraBookDropEffectsSoundPitch, 0.1f, 2.0f, mouseX, mouseY)
+		drawButtonSetting(context, chimeraDropTestBounds(menu), "Test Effect", mouseX, mouseY)
 	}
 
 	private fun drawTimeChangerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -1409,6 +1431,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CROSSHAIR -> CROSSHAIR_POPUP_HEIGHT
 			ConfigSection.INVENTORY_PREVIEW -> INVENTORY_PREVIEW_POPUP_HEIGHT
 			ConfigSection.SILENT_DISCONNECT -> SILENT_DISCONNECT_POPUP_HEIGHT
+			ConfigSection.CHIMERA_DROP -> if (soundDropdownOpen) CHIMERA_DROP_POPUP_WITH_DROPDOWN_HEIGHT else CHIMERA_DROP_POPUP_HEIGHT
 			ConfigSection.M5 -> M5_POPUP_HEIGHT
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
 			ConfigSection.FIRE_FREEZE -> if (soundDropdownOpen) FIRE_FREEZE_POPUP_WITH_DROPDOWN_HEIGHT else FIRE_FREEZE_POPUP_HEIGHT
@@ -1903,6 +1926,54 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (section == ConfigSection.CHIMERA_DROP) {
+			if (chimeraDropSoundBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				mobModelDropdownOpen = false
+				mobModelVariantDropdownOpen = false
+				soundDropdownOpen = !soundDropdownOpen
+				soundScrollOffset = 0
+				layoutWidgets()
+				return true
+			}
+
+			if (soundDropdownOpen && soundListBounds(menu).contains(mouseX, mouseY)) {
+				val index = soundScrollOffset + ((mouseY - soundListBounds(menu).top) / SOUND_ROW_HEIGHT)
+				val filtered = SoundCatalog.filtered(activeSoundSearchField().text)
+				if (index in filtered.indices) {
+					readWorkingCopyFromFields(updateStatus = false)
+					workingCopy.chimeraBookDropEffectsSoundId = filtered[index].id
+					soundDropdownOpen = false
+					layoutWidgets()
+				}
+				return true
+			}
+
+			if (chimeraDropVolumeBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.CHIMERA_DROP_VOLUME
+				updateSliderFromMouse(mouseX, SliderDragTarget.CHIMERA_DROP_VOLUME)
+				return true
+			}
+
+			if (chimeraDropPitchBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.CHIMERA_DROP_PITCH
+				updateSliderFromMouse(mouseX, SliderDragTarget.CHIMERA_DROP_PITCH)
+				return true
+			}
+
+			if (chimeraDropTestBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				statusMessage = if (ChimeraBookDropEffectsFeature.runTest(workingCopy)) {
+					Text.literal("Triggered Chimera book effect test.")
+				} else {
+					Text.literal("Module is disabled.")
+				}
+				return true
+			}
+		}
+
 		if (section == ConfigSection.FIRE_FREEZE) {
 			when {
 				fireFreezeMobTimerBounds(menu).contains(mouseX, mouseY) -> workingCopy.fireFreezeMobTimerEnabled = !workingCopy.fireFreezeMobTimerEnabled
@@ -2212,6 +2283,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.ALERT_PITCH -> lostFightPitchBounds(menu)
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> pickaxeAlertVolumeBounds(menu)
 			SliderDragTarget.PICKAXE_ALERT_PITCH -> pickaxeAlertPitchBounds(menu)
+			SliderDragTarget.CHIMERA_DROP_VOLUME -> chimeraDropVolumeBounds(menu)
+			SliderDragTarget.CHIMERA_DROP_PITCH -> chimeraDropPitchBounds(menu)
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> fireFreezeAlertVolumeBounds(menu)
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> fireFreezeAlertPitchBounds(menu)
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> fireFreezeLineWidthBounds(menu)
@@ -2224,6 +2297,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.ALERT_PITCH -> 0.1f
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> 0.0f
 			SliderDragTarget.PICKAXE_ALERT_PITCH -> 0.1f
+			SliderDragTarget.CHIMERA_DROP_VOLUME -> 0.0f
+			SliderDragTarget.CHIMERA_DROP_PITCH -> 0.1f
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> 0.0f
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> 0.1f
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> 1.0f
@@ -2236,6 +2311,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.ALERT_PITCH -> 2.0f
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> 2.0f
 			SliderDragTarget.PICKAXE_ALERT_PITCH -> 2.0f
+			SliderDragTarget.CHIMERA_DROP_VOLUME -> 2.0f
+			SliderDragTarget.CHIMERA_DROP_PITCH -> 2.0f
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> 2.0f
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> 2.0f
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> 8.0f
@@ -2252,6 +2329,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.ALERT_PITCH -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.PICKAXE_ALERT_PITCH -> roundToStep(rawValue, 0.05f)
+			SliderDragTarget.CHIMERA_DROP_VOLUME -> roundToStep(rawValue, 0.05f)
+			SliderDragTarget.CHIMERA_DROP_PITCH -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> roundToStep(rawValue, 0.1f)
@@ -2268,6 +2347,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.ALERT_PITCH -> workingCopy.hideonleafLostFightAlertSoundPitch = value
 			SliderDragTarget.PICKAXE_ALERT_VOLUME -> workingCopy.pickaxeAbilityCooldownAlertSoundVolume = value
 			SliderDragTarget.PICKAXE_ALERT_PITCH -> workingCopy.pickaxeAbilityCooldownAlertSoundPitch = value
+			SliderDragTarget.CHIMERA_DROP_VOLUME -> workingCopy.chimeraBookDropEffectsSoundVolume = value
+			SliderDragTarget.CHIMERA_DROP_PITCH -> workingCopy.chimeraBookDropEffectsSoundPitch = value
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> workingCopy.fireFreezeRefreezeAlertSoundVolume = value
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> workingCopy.fireFreezeRefreezeAlertSoundPitch = value
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> workingCopy.fireFreezeCircleLineWidth = value
@@ -2483,6 +2564,26 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
+	private fun chimeraDropSoundBounds(menu: Bounds): Bounds {
+		val top = settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun chimeraDropVolumeBounds(menu: Bounds): Bounds {
+		val top = if (soundDropdownOpen) soundListBounds(menu).bottom + SETTING_GAP else chimeraDropSoundBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun chimeraDropPitchBounds(menu: Bounds): Bounds {
+		val top = chimeraDropVolumeBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun chimeraDropTestBounds(menu: Bounds): Bounds {
+		val top = chimeraDropPitchBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
 	private fun fireFreezeMobTimerBounds(menu: Bounds): Bounds = settingRowBounds(menu, 0, SETTING_HEIGHT)
 
 	private fun fireFreezeFreezeTimerBounds(menu: Bounds): Bounds = settingRowBounds(menu, 1, SETTING_HEIGHT)
@@ -2547,6 +2648,7 @@ class XclipsenConfigScreen(
 	private fun activeSoundAnchorBounds(menu: Bounds): Bounds {
 		return when (openedSection) {
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeAlertSoundBounds(menu)
+			ConfigSection.CHIMERA_DROP -> chimeraDropSoundBounds(menu)
 			ConfigSection.FIRE_FREEZE -> fireFreezeAlertSoundBounds(menu)
 			else -> lostFightSoundBounds(menu)
 		}
@@ -2810,6 +2912,7 @@ class XclipsenConfigScreen(
 	private fun activeSoundSearchField(): TextFieldWidget {
 		return when (openedSection) {
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeAlertSoundSearchField
+			ConfigSection.CHIMERA_DROP -> chimeraDropSoundSearchField
 			ConfigSection.FIRE_FREEZE -> fireFreezeAlertSoundSearchField
 			else -> lostFightSoundSearchField
 		}
@@ -2818,6 +2921,7 @@ class XclipsenConfigScreen(
 	private fun activeSelectedSoundId(): String {
 		return when (openedSection) {
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownAlertSoundId
+			ConfigSection.CHIMERA_DROP -> workingCopy.chimeraBookDropEffectsSoundId
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeRefreezeAlertSoundId
 			else -> workingCopy.hideonleafLostFightAlertSoundId
 		}
@@ -2871,6 +2975,8 @@ class XclipsenConfigScreen(
 		ALERT_PITCH,
 		PICKAXE_ALERT_VOLUME,
 		PICKAXE_ALERT_PITCH,
+		CHIMERA_DROP_VOLUME,
+		CHIMERA_DROP_PITCH,
 		FIRE_FREEZE_LINE_WIDTH,
 		FIRE_FREEZE_ALERT_VOLUME,
 		FIRE_FREEZE_ALERT_PITCH,
@@ -2893,6 +2999,7 @@ class XclipsenConfigScreen(
 		CROSSHAIR("Crosshair", "Overrides the vanilla or texturepack crosshair with a custom editable grid.", toggleable = true),
 		INVENTORY_PREVIEW("Inventory Preview", "Shows your inventory as a HUD element with optional armor slot rendering.", toggleable = true),
 		SILENT_DISCONNECT("Silent Disconnect", "Sets your Hypixel status offline on disconnect and restores it on rejoin.", toggleable = true),
+		CHIMERA_DROP("Chimera Drop", "Shows the Totem-style screen effect when a Chimera book drops.", toggleable = true),
 		M5("M5", "Livid finder, Ice Spray timer, and Rag Axe alert for Master Mode Floor 5.", toggleable = true),
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		FIRE_FREEZE("Fire Freeze", "SkyHanni-style Fire Freeze timers, circle, mob boxes, and refreeze alert.", toggleable = true),
@@ -2967,6 +3074,8 @@ class XclipsenConfigScreen(
 		private const val CROSSHAIR_POPUP_HEIGHT = 265
 		private const val INVENTORY_PREVIEW_POPUP_HEIGHT = 165
 		private const val SILENT_DISCONNECT_POPUP_HEIGHT = 185
+		private const val CHIMERA_DROP_POPUP_HEIGHT = 380
+		private const val CHIMERA_DROP_POPUP_WITH_DROPDOWN_HEIGHT = 480
 		private const val M5_POPUP_HEIGHT = 190
 		private const val STATUS_POPUP_HEIGHT = 255
 		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
