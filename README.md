@@ -2,7 +2,7 @@
 
 Fabric-Clientmod fuer Minecraft `1.21.10`.
 
-Aktuelle Version: `0.5.14`
+Aktuelle Version: `0.5.19`
 
 ## Kurzuebersicht
 

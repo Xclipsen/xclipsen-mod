@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.19
+
+- Added a new `Chat` module with an `Implosion Hider` for Hypixel Implosion damage messages.
+- Added `Slayer` boss-spawn announcements with configurable text, sound, and HUD alert.
+- Added `Deployble` tracking for deployable timers with HUD alerts before expiry.
+
 ## v0.5.17
 
 - Added a `Crosshair` module with an editable 7x7 grid, reset support, and optional F5 visibility.

@@ -53,6 +53,8 @@ class BridgeConfig {
 	@JvmField var ircCommandFormat: String = "[IRC] <%player%> %message%"
 	@JvmField var ircBridgeEnabled: Boolean = false
 	@JvmField var coopChatRelayEnabled: Boolean = false
+	@JvmField var chatModuleEnabled: Boolean = false
+	@JvmField var chatImplosionHiderEnabled: Boolean = true
 	@JvmField var hideonleafHelperEnabled: Boolean = false
 	@JvmField var shulkerGlowEnabled: Boolean = true
 	@JvmField var shulkerGlowColorHex: String = "#36C5F0"
@@ -145,6 +147,13 @@ class BridgeConfig {
 	@JvmField var mineshaftAutoWarpCorpseRule: String = ""
 	@JvmField var mineshaftAutoWarpDelayMs: Long = 3500L
 	@JvmField var mineshaftAutoWarpWindowMs: Long = 55000L
+	@JvmField var deploybleModuleEnabled: Boolean = false
+	@JvmField var slayerModuleEnabled: Boolean = false
+	@JvmField var slayerSpawnAnnouncerEnabled: Boolean = true
+	@JvmField var slayerSpawnAnnouncerText: String = SlayerFeature.DEFAULT_ANNOUNCER_TEXT
+	@JvmField var slayerSpawnAnnouncerSoundId: String = SoundCatalog.defaultSoundId
+	@JvmField var slayerSpawnAnnouncerSoundVolume: Float = 1.0f
+	@JvmField var slayerSpawnAnnouncerSoundPitch: Float = 1.0f
 	@JvmField var hudElements: MutableMap<String, HudElementPlacement> = mutableMapOf()
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
@@ -157,6 +166,8 @@ class BridgeConfig {
 		it.ircCommandFormat = ircCommandFormat
 		it.ircBridgeEnabled = ircBridgeEnabled
 		it.coopChatRelayEnabled = coopChatRelayEnabled
+		it.chatModuleEnabled = chatModuleEnabled
+		it.chatImplosionHiderEnabled = chatImplosionHiderEnabled
 		it.hideonleafHelperEnabled = hideonleafHelperEnabled
 		it.shulkerGlowEnabled = shulkerGlowEnabled
 		it.shulkerGlowColorHex = shulkerGlowColorHex
@@ -249,6 +260,13 @@ class BridgeConfig {
 		it.mineshaftAutoWarpCorpseRule = mineshaftAutoWarpCorpseRule
 		it.mineshaftAutoWarpDelayMs = mineshaftAutoWarpDelayMs
 		it.mineshaftAutoWarpWindowMs = mineshaftAutoWarpWindowMs
+		it.deploybleModuleEnabled = deploybleModuleEnabled
+		it.slayerModuleEnabled = slayerModuleEnabled
+		it.slayerSpawnAnnouncerEnabled = slayerSpawnAnnouncerEnabled
+		it.slayerSpawnAnnouncerText = slayerSpawnAnnouncerText
+		it.slayerSpawnAnnouncerSoundId = slayerSpawnAnnouncerSoundId
+		it.slayerSpawnAnnouncerSoundVolume = slayerSpawnAnnouncerSoundVolume
+		it.slayerSpawnAnnouncerSoundPitch = slayerSpawnAnnouncerSoundPitch
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 	}
 }

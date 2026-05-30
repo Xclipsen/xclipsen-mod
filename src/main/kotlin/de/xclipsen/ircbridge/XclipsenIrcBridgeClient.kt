@@ -51,6 +51,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		MobModelFeature.onStartup()
 		AutoCroesus.initialize()
 		ExperimentationTableFeature.init()
+		DeploybleFeature.init()
 
 		// Register HUD click handler via Fabric ScreenEvents
 		ScreenMouseClickHandler.register()
@@ -74,12 +75,13 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			PickaxeAbilityCooldownFeature.onWorldChange()
 			FireFreezeFeature.onWorldChange()
 			MineshaftAutoWarpFeature.onDisconnect()
+			DeploybleFeature.onWorldChange()
 			SilentDisconnectFeature.onPlayDisconnect()
 		}
 		ClientSendMessageEvents.ALLOW_CHAT.register(::handleOutgoingChatMessage)
 		ClientSendMessageEvents.ALLOW_COMMAND.register(::handleOutgoingCommand)
-		ClientReceiveMessageEvents.ALLOW_GAME.register { message, _ -> !SilentDisconnectFeature.shouldSuppressStatusMessage(message) }
-		ClientReceiveMessageEvents.ALLOW_CHAT.register { message, _, _, _, _ -> !SilentDisconnectFeature.shouldSuppressStatusMessage(message) }
+		ClientReceiveMessageEvents.ALLOW_GAME.register { message, _ -> !shouldSuppressIncomingMessage(message) }
+		ClientReceiveMessageEvents.ALLOW_CHAT.register { message, _, _, _, _ -> !shouldSuppressIncomingMessage(message) }
 		ClientReceiveMessageEvents.GAME.register { message, overlay ->
 			ChimeraBookDropEffectsFeature.onIncomingGameMessage(message, overlay)
 			handleIncomingMessage(message)
@@ -152,7 +154,12 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 					.executes(::openConfigScreen)
 					.then(ClientCommandManager.literal("config").executes(::openConfigScreen))
 					.then(ClientCommandManager.literal("settings").executes(::openConfigScreen))
-					.then(ClientCommandManager.literal("hud").executes(::openHudEditor)),
+					.then(ClientCommandManager.literal("hud").executes(::openHudEditor))
+					.then(
+						ClientCommandManager.literal("dev")
+							.then(ClientCommandManager.literal("chim").executes(::runDevTest))
+							.then(ClientCommandManager.literal("test").executes(::runDevTest)),
+					)
 			)
 
 			dispatcher.register(
@@ -224,6 +231,16 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		return 1
 	}
 
+	private fun runDevTest(context: CommandContext<FabricClientCommandSource>): Int {
+		return if (ChimeraBookDropEffectsFeature.runTest()) {
+			context.source.sendFeedback(Text.literal("Triggered Chimera book drop effect test."))
+			1
+		} else {
+			context.source.sendError(Text.literal("Chimera book drop effects module is disabled."))
+			0
+		}
+	}
+
 	private fun handleEndTick(client: MinecraftClient) {
 		ChimeraBookDropEffectsFeature.onTick()
 		LocationTracker.onTick(client)
@@ -239,6 +256,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		MobModelFeature.onTick(client)
 		ModUpdateChecker.onTick(client)
 		ExperimentationTableFeature.onTick(client)
+		DeploybleFeature.onTick(client)
 
 		if (client.currentScreen !is ChatScreen) {
 			ImagePreviewManager.setHoverPreviewActive(false)
@@ -461,9 +479,15 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private fun handleIncomingMessage(message: Text?) {
 		M5Feature.onIncomingMessage(message)
 		MineshaftAutoWarpFeature.onIncomingMessage(message)
+		DeploybleFeature.onIncomingMessage(message)
+		SlayerFeature.onIncomingMessage(message)
 		handleHideonleafLostFightAlert(message)
 		HideonleafShardTracker.processChat(message)
 		handleIncomingCoopChat(message)
+	}
+
+	private fun shouldSuppressIncomingMessage(message: Text?): Boolean {
+		return SilentDisconnectFeature.shouldSuppressStatusMessage(message) || ChatFeature.shouldSuppressMessage(message)
 	}
 
 	private fun handleHideonleafLostFightAlert(message: Text?) {

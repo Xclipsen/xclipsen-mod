@@ -58,6 +58,7 @@ class XclipsenConfigScreen(
 	private lateinit var mobModelEntityTypeField: TextFieldWidget
 	private lateinit var mobModelVariantField: TextFieldWidget
 	private lateinit var pickaxeAlertTextField: TextFieldWidget
+	private lateinit var slayerAnnouncerTextField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpRuleField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpDelayField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpWindowField: TextFieldWidget
@@ -65,11 +66,12 @@ class XclipsenConfigScreen(
 	private lateinit var pickaxeAlertSoundSearchField: TextFieldWidget
 	private lateinit var fireFreezeAlertSoundSearchField: TextFieldWidget
 	private lateinit var chimeraDropSoundSearchField: TextFieldWidget
+	private lateinit var slayerAnnouncerSoundSearchField: TextFieldWidget
 
 	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
 	private val sectionRows = listOf(
-		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE)),
-		ConfigPanel("MISC", listOf(ConfigSection.CHIMERA_DROP, ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.FIRE_FREEZE, ConfigSection.MINESHAFT_AUTOWARP)),
+		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.CHAT, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE, ConfigSection.SLAYER)),
+		ConfigPanel("MISC", listOf(ConfigSection.CHIMERA_DROP, ConfigSection.DEPLOYBLE, ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.FIRE_FREEZE, ConfigSection.MINESHAFT_AUTOWARP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.M5, ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
@@ -102,6 +104,7 @@ class XclipsenConfigScreen(
 		mobModelEntityTypeField = registerField(ConfigField.MOB_MODEL_ENTITY_TYPE, "", "Search mobs...")
 		mobModelVariantField = registerField(ConfigField.MOB_MODEL_VARIANT, "", "Search variants...")
 		pickaxeAlertTextField = registerField(ConfigField.PICKAXE_ALERT_TEXT, workingCopy.pickaxeAbilityCooldownAlertText, PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT)
+		slayerAnnouncerTextField = registerField(ConfigField.SLAYER_ANNOUNCER_TEXT, workingCopy.slayerSpawnAnnouncerText, SlayerFeature.DEFAULT_ANNOUNCER_TEXT)
 		mineshaftAutoWarpRuleField = registerField(ConfigField.MINESHAFT_AUTOWARP_RULE, workingCopy.mineshaftAutoWarpCorpseRule, "lapis 2; vanguard 1")
 		mineshaftAutoWarpDelayField = registerField(ConfigField.MINESHAFT_AUTOWARP_DELAY, workingCopy.mineshaftAutoWarpDelayMs.toString(), "3500")
 		mineshaftAutoWarpWindowField = registerField(ConfigField.MINESHAFT_AUTOWARP_WINDOW, workingCopy.mineshaftAutoWarpWindowMs.toString(), "55000")
@@ -109,6 +112,7 @@ class XclipsenConfigScreen(
 		pickaxeAlertSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		fireFreezeAlertSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		chimeraDropSoundSearchField = addField(0, 0, 150, "", "Search sound...")
+		slayerAnnouncerSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		layoutWidgets()
 	}
 
@@ -206,7 +210,7 @@ class XclipsenConfigScreen(
 
 		val dragTarget = draggingColorPicker
 		val sliderTarget = draggingSlider
-		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE || openedSection == ConfigSection.MOB_MODEL || openedSection == ConfigSection.CHIMERA_DROP) && sliderTarget != null) {
+		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE || openedSection == ConfigSection.MOB_MODEL || openedSection == ConfigSection.CHIMERA_DROP || openedSection == ConfigSection.SLAYER) && sliderTarget != null) {
 			updateSliderFromMouse(click.x().toInt(), sliderTarget)
 			return true
 		}
@@ -229,7 +233,7 @@ class XclipsenConfigScreen(
 	}
 
 	override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, verticalAmount: Double): Boolean {
-		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE || openedSection == ConfigSection.CHIMERA_DROP) && soundDropdownOpen) {
+		if ((openedSection == ConfigSection.HIDEONLEAF_HELPER || openedSection == ConfigSection.PICKAXE_COOLDOWN || openedSection == ConfigSection.FIRE_FREEZE || openedSection == ConfigSection.CHIMERA_DROP || openedSection == ConfigSection.SLAYER) && soundDropdownOpen) {
 			val list = soundListBounds(settingsBounds())
 			if (list.contains(mouseX.toInt(), mouseY.toInt())) {
 				val filtered = SoundCatalog.filtered(activeSoundSearchField().text)
@@ -265,10 +269,12 @@ class XclipsenConfigScreen(
 	private fun toggleModule(section: ConfigSection) {
 		when (section) {
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled = !workingCopy.ircBridgeEnabled
+			ConfigSection.CHAT -> workingCopy.chatModuleEnabled = !workingCopy.chatModuleEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled = !workingCopy.hideonleafHelperEnabled
 			ConfigSection.PURPLE_TERRACOTTA -> workingCopy.purpleTerracottaHighlightModuleEnabled = !workingCopy.purpleTerracottaHighlightModuleEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled = !workingCopy.timeChangerEnabled
 			ConfigSection.AUCTION_HOUSE -> workingCopy.auctionHouseModuleEnabled = !workingCopy.auctionHouseModuleEnabled
+			ConfigSection.SLAYER -> workingCopy.slayerModuleEnabled = !workingCopy.slayerModuleEnabled
 			ConfigSection.AUTO_CROESUS -> workingCopy.autoCroesusModuleEnabled = !workingCopy.autoCroesusModuleEnabled
 			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled = !workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled = !workingCopy.dungeonDoorModuleEnabled
@@ -284,6 +290,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeModuleEnabled = !workingCopy.fireFreezeModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled = !workingCopy.mineshaftAutoWarpModuleEnabled
+			ConfigSection.DEPLOYBLE -> workingCopy.deploybleModuleEnabled = !workingCopy.deploybleModuleEnabled
 			else -> return
 		}
 
@@ -357,6 +364,8 @@ class XclipsenConfigScreen(
 		candidate.ircBridgeEnabled = workingCopy.ircBridgeEnabled
 		candidate.ircCommandFormat = ircFormatField.text
 		candidate.coopChatRelayEnabled = workingCopy.coopChatRelayEnabled
+		candidate.chatModuleEnabled = workingCopy.chatModuleEnabled
+		candidate.chatImplosionHiderEnabled = workingCopy.chatImplosionHiderEnabled
 		candidate.hideonleafHelperEnabled = workingCopy.hideonleafHelperEnabled
 		candidate.shulkerTracerLineMode = workingCopy.shulkerTracerLineMode.coerceIn(0, 3)
 		candidate.shulkerTracerLineEnabled = candidate.shulkerTracerLineMode > 0
@@ -371,6 +380,12 @@ class XclipsenConfigScreen(
 		candidate.timeChangerMode = workingCopy.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
 		candidate.auctionHouseModuleEnabled = workingCopy.auctionHouseModuleEnabled
 		candidate.auctionHouseAutoCopyUnderbidEnabled = workingCopy.auctionHouseAutoCopyUnderbidEnabled
+		candidate.slayerModuleEnabled = workingCopy.slayerModuleEnabled
+		candidate.slayerSpawnAnnouncerEnabled = workingCopy.slayerSpawnAnnouncerEnabled
+		candidate.slayerSpawnAnnouncerText = slayerAnnouncerTextField.text.trim()
+		candidate.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(workingCopy.slayerSpawnAnnouncerSoundId)
+		candidate.slayerSpawnAnnouncerSoundVolume = workingCopy.slayerSpawnAnnouncerSoundVolume
+		candidate.slayerSpawnAnnouncerSoundPitch = workingCopy.slayerSpawnAnnouncerSoundPitch
 		candidate.autoCroesusModuleEnabled = workingCopy.autoCroesusModuleEnabled
 		candidate.experimentationTableModuleEnabled = workingCopy.experimentationTableModuleEnabled
 		candidate.autoExperimentsEnabled = workingCopy.autoExperimentsEnabled
@@ -531,6 +546,9 @@ class XclipsenConfigScreen(
 		if (candidate.pickaxeAbilityCooldownAlertText.isBlank()) {
 			candidate.pickaxeAbilityCooldownAlertText = PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT
 		}
+		if (candidate.slayerSpawnAnnouncerText.isBlank()) {
+			candidate.slayerSpawnAnnouncerText = SlayerFeature.DEFAULT_ANNOUNCER_TEXT
+		}
 		val mineshaftRuleError = MineshaftAutoWarpFeature.validateCorpseRule(candidate.mineshaftAutoWarpCorpseRule)
 		if (mineshaftRuleError != null) {
 			if (updateStatus) statusMessage = Text.literal(mineshaftRuleError)
@@ -620,7 +638,7 @@ class XclipsenConfigScreen(
 			}
 		}
 
-		if ((section == ConfigSection.HIDEONLEAF_HELPER || section == ConfigSection.PICKAXE_COOLDOWN || section == ConfigSection.FIRE_FREEZE || section == ConfigSection.CHIMERA_DROP) && soundDropdownOpen) {
+		if ((section == ConfigSection.HIDEONLEAF_HELPER || section == ConfigSection.PICKAXE_COOLDOWN || section == ConfigSection.FIRE_FREEZE || section == ConfigSection.CHIMERA_DROP || section == ConfigSection.SLAYER) && soundDropdownOpen) {
 			val search = soundSearchBounds(menu)
 			activeSoundSearchField().setDimensionsAndPosition(search.width(), 18, search.left, search.top)
 			setVisible(activeSoundSearchField(), true)
@@ -629,6 +647,7 @@ class XclipsenConfigScreen(
 			setVisible(pickaxeAlertSoundSearchField, false)
 			setVisible(fireFreezeAlertSoundSearchField, false)
 			setVisible(chimeraDropSoundSearchField, false)
+			setVisible(slayerAnnouncerSoundSearchField, false)
 		}
 
 		if (section == ConfigSection.MOB_MODEL && mobModelDropdownOpen) {
@@ -691,10 +710,12 @@ class XclipsenConfigScreen(
 	private fun isModuleEnabled(section: ConfigSection): Boolean {
 		return when (section) {
 			ConfigSection.IRC_BRIDGE -> workingCopy.ircBridgeEnabled
+			ConfigSection.CHAT -> workingCopy.chatModuleEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled
 			ConfigSection.PURPLE_TERRACOTTA -> workingCopy.purpleTerracottaHighlightModuleEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled
 			ConfigSection.AUCTION_HOUSE -> workingCopy.auctionHouseModuleEnabled
+			ConfigSection.SLAYER -> workingCopy.slayerModuleEnabled
 			ConfigSection.AUTO_CROESUS -> workingCopy.autoCroesusModuleEnabled
 			ConfigSection.EXPERIMENTS -> workingCopy.experimentationTableModuleEnabled
 			ConfigSection.DOOR -> workingCopy.dungeonDoorModuleEnabled
@@ -710,6 +731,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled
+			ConfigSection.DEPLOYBLE -> workingCopy.deploybleModuleEnabled
 			else -> true
 		}
 	}
@@ -732,10 +754,12 @@ class XclipsenConfigScreen(
 		when (section) {
 			ConfigSection.SETUP -> drawSetupSettings(context, menu, mouseX, mouseY)
 			ConfigSection.IRC_BRIDGE -> drawIrcBridgeSettings(context, menu, mouseX, mouseY)
+			ConfigSection.CHAT -> drawChatSettings(context, menu, mouseX, mouseY)
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PURPLE_TERRACOTTA -> drawPurpleTerracottaSettings(context, menu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUCTION_HOUSE -> drawAuctionHouseSettings(context, menu, mouseX, mouseY)
+			ConfigSection.SLAYER -> drawSlayerSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PEST_ESP -> drawPestEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.CORPSE_ESP -> drawCorpseEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MOB_MODEL -> drawMobModelSettings(context, menu, mouseX, mouseY)
@@ -747,6 +771,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.FIRE_FREEZE -> drawFireFreezeSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MINESHAFT_AUTOWARP -> drawMineshaftAutoWarpSettings(context, menu, mouseX, mouseY)
+			ConfigSection.DEPLOYBLE -> drawDeploybleSettings(context, menu, mouseX, mouseY)
 			ConfigSection.EXPERIMENTS -> drawExperimentationSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUTO_CROESUS -> drawAutoCroesusSettings(context, menu, mouseX, mouseY)
 			ConfigSection.DOOR -> drawDoorSettings(context, menu, mouseX, mouseY)
@@ -770,6 +795,11 @@ class XclipsenConfigScreen(
 	private fun drawIrcBridgeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawTextInputSetting(context, menu, 0, "IRC Format", ircFormatField, mouseX, mouseY)
 		drawToggleSetting(context, coopRelayToggleBounds(menu), "Co-op Relay", workingCopy.coopChatRelayEnabled, mouseX, mouseY)
+	}
+
+	private fun drawChatSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, chatImplosionHiderBounds(menu), "Implosion Hider", workingCopy.chatImplosionHiderEnabled, mouseX, mouseY)
+		drawInfoSetting(context, chatImplosionExampleBounds(menu), "Hides", "Your Implosion hit ... damage.", mouseX, mouseY)
 	}
 
 	private fun drawHideonleafHelperSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -840,6 +870,18 @@ class XclipsenConfigScreen(
 
 	private fun drawAuctionHouseSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, auctionHouseAutoCopyBounds(menu), "Auto Copy Underbid", workingCopy.auctionHouseAutoCopyUnderbidEnabled, mouseX, mouseY)
+	}
+
+	private fun drawSlayerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, slayerSpawnAnnouncerBounds(menu), "Spawn Announcer", workingCopy.slayerSpawnAnnouncerEnabled, mouseX, mouseY)
+		drawTextInputSetting(context, slayerAnnouncerTextBounds(menu), "Announcer Text", slayerAnnouncerTextField, mouseX, mouseY)
+		drawSoundSetting(context, slayerAnnouncerSoundBounds(menu), "Announcer Sound", workingCopy.slayerSpawnAnnouncerSoundId, mouseX, mouseY)
+		if (soundDropdownOpen) {
+			drawSoundDropdown(context, menu, mouseX, mouseY)
+		}
+		drawSliderSetting(context, slayerAnnouncerVolumeBounds(menu), "Volume", workingCopy.slayerSpawnAnnouncerSoundVolume, 0.0f, 2.0f, mouseX, mouseY)
+		drawSliderSetting(context, slayerAnnouncerPitchBounds(menu), "Pitch", workingCopy.slayerSpawnAnnouncerSoundPitch, 0.1f, 2.0f, mouseX, mouseY)
+		drawButtonSetting(context, slayerAnnouncerPreviewBounds(menu), "Preview Announcer", mouseX, mouseY)
 	}
 
 	private fun drawPestEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -940,6 +982,12 @@ class XclipsenConfigScreen(
 		drawTextInputSetting(context, mineshaftAutoWarpDelayBounds(menu), "Warp Delay (ms)", mineshaftAutoWarpDelayField, mouseX, mouseY)
 		drawTextInputSetting(context, mineshaftAutoWarpWindowBounds(menu), "Warp Window (ms)", mineshaftAutoWarpWindowField, mouseX, mouseY)
 		drawInfoSetting(context, mineshaftAutoWarpStatusBounds(menu), "Current State", MineshaftAutoWarpFeature.statusLine(), mouseX, mouseY)
+	}
+
+	private fun drawDeploybleSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Alert", "Shows a HUD alert and sound at 10 seconds.", mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Types", "Totem, Black Hole, Umberella, Flare, Lantern", mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Status", DeploybleFeature.statusLine(), mouseX, mouseY)
 	}
 
 	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -1421,10 +1469,12 @@ class XclipsenConfigScreen(
 		val targetHeight = when (openedSection) {
 			ConfigSection.SETUP -> SETUP_POPUP_HEIGHT
 			ConfigSection.IRC_BRIDGE -> IRC_POPUP_HEIGHT
+			ConfigSection.CHAT -> CHAT_POPUP_HEIGHT
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
 			ConfigSection.PURPLE_TERRACOTTA -> PURPLE_TERRACOTTA_POPUP_HEIGHT
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
 			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
+			ConfigSection.SLAYER -> slayerPopupHeight()
 			ConfigSection.PEST_ESP -> PEST_ESP_POPUP_HEIGHT
 			ConfigSection.CORPSE_ESP -> CORPSE_ESP_POPUP_HEIGHT
 			ConfigSection.MOB_MODEL -> mobModelPopupHeight()
@@ -1436,6 +1486,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
 			ConfigSection.FIRE_FREEZE -> if (soundDropdownOpen) FIRE_FREEZE_POPUP_WITH_DROPDOWN_HEIGHT else FIRE_FREEZE_POPUP_HEIGHT
 			ConfigSection.MINESHAFT_AUTOWARP -> MINESHAFT_AUTOWARP_POPUP_HEIGHT
+			ConfigSection.DEPLOYBLE -> 165
 			ConfigSection.EXPERIMENTS -> 340
 			ConfigSection.AUTO_CROESUS -> 335
 			ConfigSection.DOOR -> 135
@@ -1459,6 +1510,10 @@ class XclipsenConfigScreen(
 
 	private fun mobModelPopupHeight(): Int {
 		return if (mobModelDropdownOpen || mobModelVariantDropdownOpen) MOB_MODEL_POPUP_WITH_DROPDOWN_HEIGHT else MOB_MODEL_POPUP_HEIGHT
+	}
+
+	private fun slayerPopupHeight(): Int {
+		return if (soundDropdownOpen) SLAYER_POPUP_WITH_DROPDOWN_HEIGHT else SLAYER_POPUP_HEIGHT
 	}
 
 	private fun handleSettingsClick(section: ConfigSection, mouseX: Int, mouseY: Int, button: Int): Boolean {
@@ -1627,6 +1682,12 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.CHAT && chatImplosionHiderBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.chatImplosionHiderEnabled = !workingCopy.chatImplosionHiderEnabled
+			return true
+		}
+
 		if (section == ConfigSection.TIME_CHANGER && timeChangerModeBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.timeChangerMode = (workingCopy.timeChangerMode + 1) % ClientTimeChanger.modeCount
@@ -1637,6 +1698,57 @@ class XclipsenConfigScreen(
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.auctionHouseAutoCopyUnderbidEnabled = !workingCopy.auctionHouseAutoCopyUnderbidEnabled
 			return true
+		}
+
+
+		if (section == ConfigSection.SLAYER) {
+			if (slayerSpawnAnnouncerBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerSpawnAnnouncerEnabled = !workingCopy.slayerSpawnAnnouncerEnabled
+				return true
+			}
+
+			if (slayerAnnouncerSoundBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				mobModelDropdownOpen = false
+				mobModelVariantDropdownOpen = false
+				soundDropdownOpen = !soundDropdownOpen
+				soundScrollOffset = 0
+				layoutWidgets()
+				return true
+			}
+
+			if (soundDropdownOpen && soundListBounds(menu).contains(mouseX, mouseY)) {
+				val index = soundScrollOffset + ((mouseY - soundListBounds(menu).top) / SOUND_ROW_HEIGHT)
+				val filtered = SoundCatalog.filtered(activeSoundSearchField().text)
+				if (index in filtered.indices) {
+					readWorkingCopyFromFields(updateStatus = false)
+					workingCopy.slayerSpawnAnnouncerSoundId = filtered[index].id
+					soundDropdownOpen = false
+					layoutWidgets()
+				}
+				return true
+			}
+
+			if (slayerAnnouncerVolumeBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.SLAYER_ANNOUNCER_VOLUME
+				updateSliderFromMouse(mouseX, SliderDragTarget.SLAYER_ANNOUNCER_VOLUME)
+				return true
+			}
+
+			if (slayerAnnouncerPitchBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				draggingSlider = SliderDragTarget.SLAYER_ANNOUNCER_PITCH
+				updateSliderFromMouse(mouseX, SliderDragTarget.SLAYER_ANNOUNCER_PITCH)
+				return true
+			}
+
+			if (slayerAnnouncerPreviewBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				SlayerFeature.playPreview(workingCopy)
+				return true
+			}
 		}
 
 		if (section == ConfigSection.PEST_ESP) {
@@ -2134,6 +2246,11 @@ class XclipsenConfigScreen(
 				else -> null
 			}
 
+			ConfigSection.SLAYER -> when (field) {
+				ConfigField.SLAYER_ANNOUNCER_TEXT -> slayerAnnouncerTextBounds(menu)
+				else -> null
+			}
+
 			ConfigSection.MOB_MODEL -> when (field) {
 				ConfigField.MOB_MODEL_ENTITY_TYPE -> null
 				ConfigField.MOB_MODEL_VARIANT -> null
@@ -2288,6 +2405,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> fireFreezeAlertVolumeBounds(menu)
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> fireFreezeAlertPitchBounds(menu)
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> fireFreezeLineWidthBounds(menu)
+			SliderDragTarget.SLAYER_ANNOUNCER_VOLUME -> slayerAnnouncerVolumeBounds(menu)
+			SliderDragTarget.SLAYER_ANNOUNCER_PITCH -> slayerAnnouncerPitchBounds(menu)
 		}
 		val min = when (target) {
 			SliderDragTarget.LINE_MODE -> 0.0f
@@ -2302,6 +2421,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> 0.0f
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> 0.1f
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> 1.0f
+			SliderDragTarget.SLAYER_ANNOUNCER_VOLUME -> 0.0f
+			SliderDragTarget.SLAYER_ANNOUNCER_PITCH -> 0.1f
 		}
 		val max = when (target) {
 			SliderDragTarget.LINE_MODE -> 3.0f
@@ -2316,6 +2437,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> 2.0f
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> 2.0f
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> 8.0f
+			SliderDragTarget.SLAYER_ANNOUNCER_VOLUME -> 2.0f
+			SliderDragTarget.SLAYER_ANNOUNCER_PITCH -> 2.0f
 		}
 		val barLeft = bounds.left + 8
 		val barRight = bounds.right - 8
@@ -2334,6 +2457,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> roundToStep(rawValue, 0.05f)
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> roundToStep(rawValue, 0.1f)
+			SliderDragTarget.SLAYER_ANNOUNCER_VOLUME -> roundToStep(rawValue, 0.05f)
+			SliderDragTarget.SLAYER_ANNOUNCER_PITCH -> roundToStep(rawValue, 0.05f)
 		}.coerceIn(min, max)
 
 		when (target) {
@@ -2352,6 +2477,8 @@ class XclipsenConfigScreen(
 			SliderDragTarget.FIRE_FREEZE_ALERT_VOLUME -> workingCopy.fireFreezeRefreezeAlertSoundVolume = value
 			SliderDragTarget.FIRE_FREEZE_ALERT_PITCH -> workingCopy.fireFreezeRefreezeAlertSoundPitch = value
 			SliderDragTarget.FIRE_FREEZE_LINE_WIDTH -> workingCopy.fireFreezeCircleLineWidth = value
+			SliderDragTarget.SLAYER_ANNOUNCER_VOLUME -> workingCopy.slayerSpawnAnnouncerSoundVolume = value
+			SliderDragTarget.SLAYER_ANNOUNCER_PITCH -> workingCopy.slayerSpawnAnnouncerSoundPitch = value
 		}
 	}
 
@@ -2650,6 +2777,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeAlertSoundBounds(menu)
 			ConfigSection.CHIMERA_DROP -> chimeraDropSoundBounds(menu)
 			ConfigSection.FIRE_FREEZE -> fireFreezeAlertSoundBounds(menu)
+			ConfigSection.SLAYER -> slayerAnnouncerSoundBounds(menu)
 			else -> lostFightSoundBounds(menu)
 		}
 	}
@@ -2705,6 +2833,13 @@ class XclipsenConfigScreen(
 	private fun coopRelayToggleBounds(menu: Bounds): Bounds {
 		val rowTop = menu.top + 40 + (1 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
 		return Bounds(menu.left + 10, rowTop, menu.left + 10 + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
+	}
+
+	private fun chatImplosionHiderBounds(menu: Bounds): Bounds = settingRowBounds(menu, 0, SETTING_HEIGHT)
+
+	private fun chatImplosionExampleBounds(menu: Bounds): Bounds {
+		val top = chatImplosionHiderBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
 	private fun setupTestConnectionBounds(menu: Bounds): Bounds {
@@ -2834,6 +2969,34 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
 
+	private fun slayerSpawnAnnouncerBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 0, SETTING_HEIGHT)
+	}
+
+	private fun slayerAnnouncerTextBounds(menu: Bounds): Bounds {
+		return settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun slayerAnnouncerSoundBounds(menu: Bounds): Bounds {
+		val top = slayerAnnouncerTextBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun slayerAnnouncerPreviewBounds(menu: Bounds): Bounds {
+		val top = slayerAnnouncerPitchBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun slayerAnnouncerVolumeBounds(menu: Bounds): Bounds {
+		val top = if (soundDropdownOpen) soundListBounds(menu).bottom + SETTING_GAP else slayerAnnouncerSoundBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
+	private fun slayerAnnouncerPitchBounds(menu: Bounds): Bounds {
+		val top = slayerAnnouncerVolumeBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
+	}
+
 	private fun autoExperimentsClickDelayBounds(menu: Bounds): Bounds {
 		return experimentationRowBounds(menu, 3, TEXT_INPUT_SETTING_HEIGHT)
 	}
@@ -2914,6 +3077,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeAlertSoundSearchField
 			ConfigSection.CHIMERA_DROP -> chimeraDropSoundSearchField
 			ConfigSection.FIRE_FREEZE -> fireFreezeAlertSoundSearchField
+			ConfigSection.SLAYER -> slayerAnnouncerSoundSearchField
 			else -> lostFightSoundSearchField
 		}
 	}
@@ -2923,6 +3087,7 @@ class XclipsenConfigScreen(
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownAlertSoundId
 			ConfigSection.CHIMERA_DROP -> workingCopy.chimeraBookDropEffectsSoundId
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeRefreezeAlertSoundId
+			ConfigSection.SLAYER -> workingCopy.slayerSpawnAnnouncerSoundId
 			else -> workingCopy.hideonleafLostFightAlertSoundId
 		}
 	}
@@ -2980,6 +3145,8 @@ class XclipsenConfigScreen(
 		FIRE_FREEZE_LINE_WIDTH,
 		FIRE_FREEZE_ALERT_VOLUME,
 		FIRE_FREEZE_ALERT_PITCH,
+		SLAYER_ANNOUNCER_VOLUME,
+		SLAYER_ANNOUNCER_PITCH,
 	}
 
 	private enum class ConfigSection(
@@ -2989,10 +3156,12 @@ class XclipsenConfigScreen(
 	) {
 		SETUP("Setup", "Global backend and API settings used by all modules."),
 		IRC_BRIDGE("IRC Bridge", "IRC message formats and bridge-specific toggles.", toggleable = true),
+		CHAT("Chat", "Client-side chat cleanup and message hiders.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
 		PURPLE_TERRACOTTA("Purple Terracotta", "Highlights purple terracotta blocks through walls.", toggleable = true),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
 		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
+		SLAYER("Slayer", "Slayer helpers including Autopet-based boss spawn announcements.", toggleable = true),
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
 		CORPSE_ESP("Corpse ESP", "Highlights Glacite Mineshaft corpses by armor-stand helmet ID.", toggleable = true),
 		MOB_MODEL("Mob Model", "Replaces the player model client-side with any living mob model and syncs it through the backend.", toggleable = true),
@@ -3004,6 +3173,7 @@ class XclipsenConfigScreen(
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		FIRE_FREEZE("Fire Freeze", "SkyHanni-style Fire Freeze timers, circle, mob boxes, and refreeze alert.", toggleable = true),
 		MINESHAFT_AUTOWARP("Mineshaft AutoWarp", "Auto-requests lead and party-warps when configured corpse counts are found.", toggleable = true),
+		DEPLOYBLE("Deployble", "Alerts when your deployable items are about to expire.", toggleable = true),
 		AUTO_CROESUS("AutoCroesus", "Dungeon chest autoclaimer module with its original /ac command set.", toggleable = true),
 		EXPERIMENTS("Experimentation", "Shizo-style auto experiments plus SkyHanni keep-items-visible for Superpairs.", toggleable = true),
 		DOOR("Door", "Turns the disappearing blocks behind Mort into local barrier blocks using relative offsets.", toggleable = true),
@@ -3032,6 +3202,7 @@ class XclipsenConfigScreen(
 		MOB_MODEL_ENTITY_TYPE(ConfigSection.MOB_MODEL),
 		MOB_MODEL_VARIANT(ConfigSection.MOB_MODEL),
 		PICKAXE_ALERT_TEXT(ConfigSection.PICKAXE_COOLDOWN),
+		SLAYER_ANNOUNCER_TEXT(ConfigSection.SLAYER),
 		MINESHAFT_AUTOWARP_RULE(ConfigSection.MINESHAFT_AUTOWARP),
 		MINESHAFT_AUTOWARP_DELAY(ConfigSection.MINESHAFT_AUTOWARP),
 		MINESHAFT_AUTOWARP_WINDOW(ConfigSection.MINESHAFT_AUTOWARP),
@@ -3063,10 +3234,13 @@ class XclipsenConfigScreen(
 		private const val POPUP_HEIGHT = 250
 		private const val SETUP_POPUP_HEIGHT = 220
 		private const val IRC_POPUP_HEIGHT = 140
+		private const val CHAT_POPUP_HEIGHT = 145
 		private const val HIDEONLEAF_POPUP_HEIGHT = 500
 		private const val PURPLE_TERRACOTTA_POPUP_HEIGHT = 230
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
 		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
+		private const val SLAYER_POPUP_HEIGHT = 255
+		private const val SLAYER_POPUP_WITH_DROPDOWN_HEIGHT = 380
 		private const val PEST_ESP_POPUP_HEIGHT = 230
 		private const val CORPSE_ESP_POPUP_HEIGHT = 410
 		private const val MOB_MODEL_POPUP_HEIGHT = 325

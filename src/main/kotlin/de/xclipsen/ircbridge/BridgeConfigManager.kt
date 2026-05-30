@@ -97,6 +97,9 @@ class BridgeConfigManager(
 		value.pickaxeAbilityCooldownAlertSoundId = SoundCatalog.normalizeSoundId(value.pickaxeAbilityCooldownAlertSoundId)
 		value.pickaxeAbilityCooldownAlertSoundVolume = value.pickaxeAbilityCooldownAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.pickaxeAbilityCooldownAlertSoundPitch = value.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f)
+		value.chimeraBookDropEffectsSoundId = SoundCatalog.normalizeSoundId(value.chimeraBookDropEffectsSoundId)
+		value.chimeraBookDropEffectsSoundVolume = value.chimeraBookDropEffectsSoundVolume.coerceIn(0.0f, 2.0f)
+		value.chimeraBookDropEffectsSoundPitch = value.chimeraBookDropEffectsSoundPitch.coerceIn(0.1f, 2.0f)
 		value.pickaxeAbilityCooldownAlertText = normalizedTemplate(value.pickaxeAbilityCooldownAlertText, PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT)
 		value.chimeraBookDropEffectsSoundId = SoundCatalog.normalizeSoundId(value.chimeraBookDropEffectsSoundId)
 		value.chimeraBookDropEffectsSoundVolume = value.chimeraBookDropEffectsSoundVolume.coerceIn(0.0f, 2.0f)
@@ -109,6 +112,10 @@ class BridgeConfigManager(
 		value.mineshaftAutoWarpCorpseRule = normalizedTemplate(value.mineshaftAutoWarpCorpseRule, "")
 		value.mineshaftAutoWarpDelayMs = value.mineshaftAutoWarpDelayMs.coerceIn(500L, 30_000L)
 		value.mineshaftAutoWarpWindowMs = value.mineshaftAutoWarpWindowMs.coerceIn(5_000L, 60_000L)
+		value.slayerSpawnAnnouncerText = normalizedTemplate(value.slayerSpawnAnnouncerText, SlayerFeature.DEFAULT_ANNOUNCER_TEXT)
+		value.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(value.slayerSpawnAnnouncerSoundId)
+		value.slayerSpawnAnnouncerSoundVolume = value.slayerSpawnAnnouncerSoundVolume.coerceIn(0.0f, 2.0f)
+		value.slayerSpawnAnnouncerSoundPitch = value.slayerSpawnAnnouncerSoundPitch.coerceIn(0.1f, 2.0f)
 		return value
 	}
 
