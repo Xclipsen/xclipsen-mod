@@ -1,9 +1,12 @@
 package de.xclipsen.ircbridge
 
+import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.registry.Registries
+import net.minecraft.sound.SoundCategory
 import net.minecraft.sound.SoundEvent
 import net.minecraft.sound.SoundEvents
 import net.minecraft.util.Identifier
+import net.minecraft.util.math.random.Random
 import java.util.Locale
 
 object SoundCatalog {
@@ -26,6 +29,19 @@ object SoundCatalog {
 		val id = Identifier.tryParse(normalizeSoundId(value)) ?: Identifier.of("minecraft", "block.note_block.pling")
 		val event: SoundEvent? = Registries.SOUND_EVENT.get(id)
 		return event ?: SoundEvents.BLOCK_NOTE_BLOCK_PLING.value()
+	}
+
+	fun masterSound(value: String?, pitch: Float, volume: Float): PositionedSoundInstance {
+		return PositionedSoundInstance(
+			soundEvent(value),
+			SoundCategory.MASTER,
+			volume,
+			pitch,
+			Random.create(),
+			0.0,
+			0.0,
+			0.0,
+		)
 	}
 
 	fun displayName(value: String?): String {

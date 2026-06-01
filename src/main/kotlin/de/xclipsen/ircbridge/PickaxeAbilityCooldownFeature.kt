@@ -2,7 +2,6 @@ package de.xclipsen.ircbridge
 
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.font.TextRenderer
-import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.client.gui.DrawContext
 import java.util.Locale
 import kotlin.math.ceil
@@ -184,10 +183,9 @@ object PickaxeAbilityCooldownFeature {
 	}
 
 	private fun playAlertSound(config: BridgeConfig) {
-		val sound = SoundCatalog.soundEvent(config.pickaxeAbilityCooldownAlertSoundId)
 		MinecraftClient.getInstance().soundManager.play(
-			PositionedSoundInstance.master(
-				sound,
+			SoundCatalog.masterSound(
+				config.pickaxeAbilityCooldownAlertSoundId,
 				config.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f),
 				config.pickaxeAbilityCooldownAlertSoundVolume.coerceIn(0.0f, 2.0f),
 			),

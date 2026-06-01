@@ -1,6 +1,7 @@
 package de.xclipsen.ircbridge.mixin
 
 import de.xclipsen.ircbridge.CorpseEspFeature
+import de.xclipsen.ircbridge.BlazeSlayerFeature
 import de.xclipsen.ircbridge.M5Feature
 import de.xclipsen.ircbridge.ShulkerGlowFeature
 import net.minecraft.entity.Entity
@@ -14,7 +15,7 @@ abstract class EntityGlowMixin {
 	@Inject(method = ["isGlowing"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlow(cir: CallbackInfoReturnable<Boolean>) {
 		val entity = this as Entity
-		if (ShulkerGlowFeature.shouldGlow(entity) || CorpseEspFeature.shouldGlow(entity) || M5Feature.shouldGlow(entity)) {
+		if (ShulkerGlowFeature.shouldGlow(entity) || CorpseEspFeature.shouldGlow(entity) || M5Feature.shouldGlow(entity) || BlazeSlayerFeature.shouldGlow(entity)) {
 			cir.returnValue = true
 		}
 	}
@@ -32,13 +33,17 @@ abstract class EntityGlowMixin {
 		}
 		M5Feature.colorValue(entity)?.let {
 			cir.returnValue = it
+			return
+		}
+		BlazeSlayerFeature.colorValue(entity)?.let {
+			cir.returnValue = it
 		}
 	}
 
 	@Inject(method = ["shouldRender(D)Z"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlowRenderDistance(distance: Double, cir: CallbackInfoReturnable<Boolean>) {
 		val entity = this as Entity
-		if (ShulkerGlowFeature.shouldGlow(entity) || CorpseEspFeature.shouldGlow(entity) || M5Feature.shouldGlow(entity)) {
+		if (ShulkerGlowFeature.shouldGlow(entity) || CorpseEspFeature.shouldGlow(entity) || M5Feature.shouldGlow(entity) || BlazeSlayerFeature.shouldGlow(entity)) {
 			cir.returnValue = true
 		}
 	}

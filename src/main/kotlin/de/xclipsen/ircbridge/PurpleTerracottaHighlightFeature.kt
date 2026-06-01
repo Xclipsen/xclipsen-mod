@@ -4,7 +4,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
 import net.minecraft.block.BlockState
 import net.minecraft.block.Blocks
 import net.minecraft.client.MinecraftClient
-import net.minecraft.client.render.VertexRendering
 import net.minecraft.client.render.VertexConsumerProvider
 import net.minecraft.client.world.ClientWorld
 import net.minecraft.util.math.Box
@@ -157,8 +156,8 @@ object PurpleTerracottaHighlightFeature {
 			pos.y.toDouble() + 1.0 + BOX_EXPANSION,
 			pos.z.toDouble() + 1.0 + BOX_EXPANSION,
 		)
-		VertexRendering.drawFilledBox(
-			matrices,
+		XclipsenWorldRenderUtils.drawFilledBox(
+			matrices.peek(),
 			fillConsumer,
 			box.minX.toFloat(),
 			box.minY.toFloat(),

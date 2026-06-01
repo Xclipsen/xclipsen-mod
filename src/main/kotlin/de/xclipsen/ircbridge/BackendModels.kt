@@ -71,6 +71,13 @@ class BridgeConfig {
 	@JvmField var shardTrackerEnabled: Boolean = true
 	@JvmField var purpleTerracottaHighlightModuleEnabled: Boolean = false
 	@JvmField var purpleTerracottaHighlightColorHex: String = "#B06CFF"
+	@JvmField var wormholeFinderModuleEnabled: Boolean = false
+	@JvmField var wormholeDepartureAlertEnabled: Boolean = true
+	@JvmField var wormholeDepartureAlertSoundId: String = "minecraft:entity.enderman.teleport"
+	@JvmField var wormholeDepartureAlertSoundVolume: Float = 2.0f
+	@JvmField var wormholeDepartureAlertSoundPitch: Float = 0.7f
+	@JvmField var autoSprintModuleEnabled: Boolean = false
+	@JvmField var autoSprintDisableWhenFullySubmerged: Boolean = true
 	@JvmField var timeChangerEnabled: Boolean = false
 	@JvmField var timeChangerMode: Int = 0
 	@JvmField var auctionHouseModuleEnabled: Boolean = false
@@ -150,6 +157,8 @@ class BridgeConfig {
 	@JvmField var deploybleModuleEnabled: Boolean = false
 	@JvmField var slayerModuleEnabled: Boolean = false
 	@JvmField var slayerSpawnAnnouncerEnabled: Boolean = true
+	@JvmField var slayerBlazePhaseDisplayEnabled: Boolean = true
+	@JvmField var slayerBlazeColoredMobsEnabled: Boolean = false
 	@JvmField var slayerSpawnAnnouncerText: String = SlayerFeature.DEFAULT_ANNOUNCER_TEXT
 	@JvmField var slayerSpawnAnnouncerSoundId: String = SoundCatalog.defaultSoundId
 	@JvmField var slayerSpawnAnnouncerSoundVolume: Float = 1.0f
@@ -184,6 +193,13 @@ class BridgeConfig {
 		it.shardTrackerEnabled = shardTrackerEnabled
 		it.purpleTerracottaHighlightModuleEnabled = purpleTerracottaHighlightModuleEnabled
 		it.purpleTerracottaHighlightColorHex = purpleTerracottaHighlightColorHex
+		it.wormholeFinderModuleEnabled = wormholeFinderModuleEnabled
+		it.wormholeDepartureAlertEnabled = wormholeDepartureAlertEnabled
+		it.wormholeDepartureAlertSoundId = wormholeDepartureAlertSoundId
+		it.wormholeDepartureAlertSoundVolume = wormholeDepartureAlertSoundVolume
+		it.wormholeDepartureAlertSoundPitch = wormholeDepartureAlertSoundPitch
+		it.autoSprintModuleEnabled = autoSprintModuleEnabled
+		it.autoSprintDisableWhenFullySubmerged = autoSprintDisableWhenFullySubmerged
 		it.timeChangerEnabled = timeChangerEnabled
 		it.timeChangerMode = timeChangerMode
 		it.auctionHouseModuleEnabled = auctionHouseModuleEnabled
@@ -263,6 +279,8 @@ class BridgeConfig {
 		it.deploybleModuleEnabled = deploybleModuleEnabled
 		it.slayerModuleEnabled = slayerModuleEnabled
 		it.slayerSpawnAnnouncerEnabled = slayerSpawnAnnouncerEnabled
+		it.slayerBlazePhaseDisplayEnabled = slayerBlazePhaseDisplayEnabled
+		it.slayerBlazeColoredMobsEnabled = slayerBlazeColoredMobsEnabled
 		it.slayerSpawnAnnouncerText = slayerSpawnAnnouncerText
 		it.slayerSpawnAnnouncerSoundId = slayerSpawnAnnouncerSoundId
 		it.slayerSpawnAnnouncerSoundVolume = slayerSpawnAnnouncerSoundVolume

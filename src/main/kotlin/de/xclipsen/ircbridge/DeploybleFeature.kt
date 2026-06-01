@@ -4,7 +4,6 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.fabricmc.fabric.api.event.player.UseItemCallback
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.entity.Entity
 import net.minecraft.entity.decoration.ArmorStandEntity
 import net.minecraft.entity.projectile.FireworkRocketEntity
@@ -345,7 +344,7 @@ object DeploybleFeature {
 
   val client = MinecraftClient.getInstance()
   client.player?.sendMessage(Text.literal("Your $itemDisplayName expires soon."), false)
-  client.soundManager.play(PositionedSoundInstance.master(SoundCatalog.soundEvent(SoundCatalog.defaultSoundId), 1.0f, 1.0f))
+  client.soundManager.play(SoundCatalog.masterSound(SoundCatalog.defaultSoundId, 1.0f, 1.0f))
  }
 
  private fun resetFlare() {

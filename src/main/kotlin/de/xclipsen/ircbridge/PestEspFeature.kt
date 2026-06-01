@@ -4,7 +4,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.render.VertexConsumer
 import net.minecraft.client.render.VertexConsumerProvider
-import net.minecraft.client.render.VertexRendering
 import net.minecraft.client.render.XclipsenRenderLayers
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
@@ -86,8 +85,8 @@ object PestEspFeature {
 		blue: Float,
 	) {
 		val box = pest.boundingBox.expand(BOX_EXPANSION_XZ, BOX_EXPANSION_Y, BOX_EXPANSION_XZ)
-		VertexRendering.drawFilledBox(
-			matrices,
+		XclipsenWorldRenderUtils.drawFilledBox(
+			matrices.peek(),
 			fillConsumer,
 			box.minX.toFloat(),
 			box.minY.toFloat(),
@@ -100,7 +99,7 @@ object PestEspFeature {
 			blue,
 			BOX_FILL_ALPHA,
 		)
-		VertexRendering.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA)
+		XclipsenWorldRenderUtils.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA)
 	}
 
 	private fun drawLine(

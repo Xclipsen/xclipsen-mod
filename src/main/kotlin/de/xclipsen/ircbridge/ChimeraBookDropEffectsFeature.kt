@@ -1,7 +1,6 @@
 package de.xclipsen.ircbridge
 
 import net.minecraft.client.MinecraftClient
-import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.component.DataComponentTypes
 import net.minecraft.item.ItemStack
 import net.minecraft.item.Items
@@ -92,8 +91,8 @@ object ChimeraBookDropEffectsFeature {
 		client.particleManager.addEmitter(player, ParticleTypes.SCRAPE, 30)
 		client.gameRenderer.showFloatingItem(stack)
 		client.soundManager.play(
-			PositionedSoundInstance.master(
-				SoundCatalog.soundEvent(config.chimeraBookDropEffectsSoundId),
+			SoundCatalog.masterSound(
+				config.chimeraBookDropEffectsSoundId,
 				config.chimeraBookDropEffectsSoundPitch.coerceIn(0.1f, 2.0f),
 				config.chimeraBookDropEffectsSoundVolume.coerceIn(0.0f, 2.0f),
 			),

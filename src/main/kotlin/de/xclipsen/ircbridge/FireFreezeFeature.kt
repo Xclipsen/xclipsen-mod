@@ -7,9 +7,7 @@ import net.minecraft.client.render.entity.state.LivingEntityRenderState
 import net.minecraft.client.render.entity.state.EntityRenderState
 import net.minecraft.client.render.VertexConsumer
 import net.minecraft.client.render.VertexConsumerProvider
-import net.minecraft.client.render.VertexRendering
 import net.minecraft.client.render.XclipsenRenderLayers
-import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.entity.Entity
 import net.minecraft.entity.EntityType
 import net.minecraft.entity.LivingEntity
@@ -286,8 +284,8 @@ object FireFreezeFeature {
 		val green = (color shr 8 and 0xFF) / 255.0f
 		val blue = (color and 0xFF) / 255.0f
 		val box = entity.boundingBox.expand(0.1)
-		VertexRendering.drawFilledBox(
-			matrices,
+		XclipsenWorldRenderUtils.drawFilledBox(
+			matrices.peek(),
 			fillConsumer,
 			box.minX.toFloat(),
 			box.minY.toFloat(),
@@ -300,7 +298,7 @@ object FireFreezeFeature {
 			blue,
 			BOX_FILL_ALPHA,
 		)
-		VertexRendering.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA)
+		XclipsenWorldRenderUtils.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA)
 	}
 
 	private fun drawCircle(
@@ -366,10 +364,9 @@ object FireFreezeFeature {
 	}
 
 	private fun playAlertSound(config: BridgeConfig) {
-		val sound = SoundCatalog.soundEvent(config.fireFreezeRefreezeAlertSoundId)
 		MinecraftClient.getInstance().soundManager.play(
-			PositionedSoundInstance.master(
-				sound,
+			SoundCatalog.masterSound(
+				config.fireFreezeRefreezeAlertSoundId,
 				config.fireFreezeRefreezeAlertSoundPitch.coerceIn(0.1f, 2.0f),
 				config.fireFreezeRefreezeAlertSoundVolume.coerceIn(0.0f, 2.0f),
 			),

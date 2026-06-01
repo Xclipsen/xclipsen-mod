@@ -18,6 +18,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,12 +26,17 @@ import java.util.concurrent.CompletableFuture;
 
 public class PriceFetcher {
     private static final HttpClient HTTP = HttpClient.newHttpClient();
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20L);
+    private static final String BAZAAR_URL = "https://api.hypixel.net/skyblock/bazaar";
+    private static final String ITEMS_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
+    private static final String LOWEST_BIN_URL = "https://api.eliteskyblock.com/resources/auctions/neu";
 
     private static CompletableFuture<HttpResponse<String>> fetchUrl(String url) {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
+            .timeout(REQUEST_TIMEOUT)
             .header("Accept", "application/json, text/plain;q=0.9, */*;q=0.8")
-            .header("User-Agent", "xclipsen-mod/0.5.7")
+            .header("User-Agent", "xclipsen-mod/0.5.19")
             .build();
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString());
     }
@@ -77,9 +83,9 @@ public class PriceFetcher {
     }
 
     public static CompletableFuture<Void> updatePrices() {
-        CompletableFuture<HttpResponse<String>> bzFuture = PriceFetcher.fetchUrl("https://api.hypixel.net/skyblock/bazaar");
-        CompletableFuture<HttpResponse<String>> itemsFuture = PriceFetcher.fetchUrl("https://api.hypixel.net/v2/resources/skyblock/items");
-        CompletableFuture<HttpResponse<String>> binFuture = PriceFetcher.fetchUrl("https://moulberry.codes/lowestbin.json");
+        CompletableFuture<HttpResponse<String>> bzFuture = PriceFetcher.fetchUrl(BAZAAR_URL);
+        CompletableFuture<HttpResponse<String>> itemsFuture = PriceFetcher.fetchUrl(ITEMS_URL);
+        CompletableFuture<HttpResponse<String>> binFuture = PriceFetcher.fetchUrl(LOWEST_BIN_URL);
         return CompletableFuture.allOf(bzFuture, itemsFuture, binFuture).thenAccept(v -> {
             JsonObject resp;
             try {
@@ -126,7 +132,7 @@ public class PriceFetcher {
                 throw new RuntimeException("[Error 304] Failed to process Items data: " + e.getMessage(), e);
             }
             try {
-                resp = PriceFetcher.parseJsonObject((HttpResponse<String>)binFuture.join(), "Lowest BIN API");
+                resp = PriceFetcher.parseJsonObject((HttpResponse<String>)binFuture.join(), "EliteSkyblock Lowest BIN API");
                 HashMap<String, Double> newBins = new HashMap<String, Double>();
                 for (Map.Entry e : resp.entrySet()) {
                     newBins.put((String)e.getKey(), ((JsonElement)e.getValue()).getAsDouble());
@@ -134,9 +140,6 @@ public class PriceFetcher {
                 AcDataStore.updateBinValues(newBins);
             }
             catch (Exception e) {
-                if (!AcDataStore.binValues.isEmpty()) {
-                    return;
-                }
                 throw new RuntimeException("[Error 305] Failed to process BIN data: " + e.getMessage(), e);
             }
         });

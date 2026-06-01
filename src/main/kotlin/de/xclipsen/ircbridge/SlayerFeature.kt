@@ -3,7 +3,6 @@ package de.xclipsen.ircbridge
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.font.TextRenderer
 import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.text.HoverEvent
 import net.minecraft.text.Text
 import kotlin.math.max
@@ -67,8 +66,8 @@ object SlayerFeature {
 		}
 
 		MinecraftClient.getInstance().soundManager.play(
-			PositionedSoundInstance.master(
-				SoundCatalog.soundEvent(config.slayerSpawnAnnouncerSoundId),
+			SoundCatalog.masterSound(
+				config.slayerSpawnAnnouncerSoundId,
 				config.slayerSpawnAnnouncerSoundPitch.coerceIn(0.1f, 2.0f),
 				config.slayerSpawnAnnouncerSoundVolume.coerceIn(0.0f, 2.0f),
 			),

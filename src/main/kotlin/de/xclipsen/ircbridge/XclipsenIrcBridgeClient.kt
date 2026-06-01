@@ -18,7 +18,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.screen.ChatScreen
 import net.minecraft.client.gui.screen.Screen
-import net.minecraft.client.sound.PositionedSoundInstance
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import org.slf4j.Logger
@@ -72,6 +71,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			MobModelFeature.onDisconnect()
 			MortDoorBarrierFeature.onWorldChange()
 			PurpleTerracottaHighlightFeature.onWorldChange()
+			WormholeFinderFeature.onWorldChange()
 			PickaxeAbilityCooldownFeature.onWorldChange()
 			FireFreezeFeature.onWorldChange()
 			MineshaftAutoWarpFeature.onDisconnect()
@@ -99,10 +99,12 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> MortDoorBarrierFeature.onRender(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PurpleTerracottaHighlightFeature.render(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> WormholeFinderFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PestEspFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> CorpseEspFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> M5Feature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> FireFreezeFeature.render(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> BlazeSlayerFeature.render(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
@@ -248,8 +250,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		AuctionHouseUnderbidFeature.onTick(client)
 		MortDoorBarrierFeature.onTick(client)
 		PurpleTerracottaHighlightFeature.onTick(client)
+		WormholeFinderFeature.onTick(client)
+		AutoSprintFeature.onTick(client)
 		M5Feature.onTick(client)
 		PickaxeAbilityCooldownFeature.onTick(client)
+		BlazeSlayerFeature.onTick(client)
 		FireFreezeFeature.onTick(client)
 		MineshaftAutoWarpFeature.onTick(client)
 		CorpseEspFeature.onTick(client)
@@ -481,6 +486,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		MineshaftAutoWarpFeature.onIncomingMessage(message)
 		DeploybleFeature.onIncomingMessage(message)
 		SlayerFeature.onIncomingMessage(message)
+		WormholeFinderFeature.onIncomingMessage(message)
 		handleHideonleafLostFightAlert(message)
 		HideonleafShardTracker.processChat(message)
 		handleIncomingCoopChat(message)
@@ -524,10 +530,9 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	fun playHideonleafLostFightSound(config: BridgeConfig = this.config) {
-		val sound = SoundCatalog.soundEvent(config.hideonleafLostFightAlertSoundId)
 		MinecraftClient.getInstance().soundManager.play(
-			PositionedSoundInstance.master(
-				sound,
+			SoundCatalog.masterSound(
+				config.hideonleafLostFightAlertSoundId,
 				config.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f),
 				config.hideonleafLostFightAlertSoundVolume.coerceIn(0.0f, 2.0f),
 			),

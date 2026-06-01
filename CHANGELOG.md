@@ -1,10 +1,19 @@
 # Changelog
 
-## v0.5.19
+## v0.5.20
 
+- Ported the client target from Minecraft `1.21.10` to `1.21.11` and removed the 1.21.10 deploy targets.
+- Updated Yarn/Fabric targets to `1.21.11`, refreshed chat mixins, and replaced removed 1.21.10 render/sound helpers.
+- Fixed mob-model replacements rendering with sideways/invalid pose states on `1.21.11`, including fish-like models rolling over on land.
+- Added the new `1.21.11` living mob model options: `camel_husk`, `nautilus`, `parched`, and `zombie_nautilus`.
 - Added a new `Chat` module with an `Implosion Hider` for Hypixel Implosion damage messages.
 - Added `Slayer` boss-spawn announcements with configurable text, sound, and HUD alert.
 - Added `Deployble` tracking for deployable timers with HUD alerts before expiry.
+- Switched Auction House Lowest BIN refresh to the same EliteSkyblock NEU endpoint used by SkyHanni, replacing the failing Moulberry lowestbin service.
+
+## v0.5.19
+
+- Added fire freeze and mob model options.
 
 ## v0.5.17
 

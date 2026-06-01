@@ -5,10 +5,12 @@ import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.AbstractClientPlayerEntity
 import net.minecraft.client.render.command.OrderedRenderCommandQueue
-import net.minecraft.client.render.entity.state.PlayerEntityRenderState
 import net.minecraft.client.render.entity.state.AllayEntityRenderState
+import net.minecraft.client.render.entity.state.LivingEntityRenderState
+import net.minecraft.client.render.entity.state.PlayerEntityRenderState
 import net.minecraft.client.render.state.CameraRenderState
 import net.minecraft.client.util.math.MatrixStack
+import net.minecraft.entity.EntityPose
 import net.minecraft.entity.EntityType
 import net.minecraft.entity.EquipmentSlot
 import net.minecraft.entity.LivingEntity
@@ -33,6 +35,23 @@ object MobModelFeature {
 	private val queuedReplacementBypasses = ConcurrentHashMap<Int, Int>()
 	private val renderEntityCache = mutableMapOf<String, LivingEntity>()
 	private val babySetterCache = ConcurrentHashMap<Class<*>, Method?>()
+	// Fish-like renderers intentionally roll onto their side on land; player replacements should stay upright.
+	private val aquaticModelIds = setOf(
+		"minecraft:axolotl",
+		"minecraft:cod",
+		"minecraft:dolphin",
+		"minecraft:elder_guardian",
+		"minecraft:glow_squid",
+		"minecraft:guardian",
+		"minecraft:nautilus",
+		"minecraft:pufferfish",
+		"minecraft:salmon",
+		"minecraft:squid",
+		"minecraft:tadpole",
+		"minecraft:tropical_fish",
+		"minecraft:turtle",
+		"minecraft:zombie_nautilus",
+	)
 
 	private const val FETCH_INTERVAL_MS = 5_000L
 	private const val UPLOAD_INTERVAL_MS = 15_000L
@@ -162,7 +181,7 @@ object MobModelFeature {
 			val tickProgress = client.renderTickCounter.getTickProgress(false)
 			val renderState = client.entityRenderDispatcher.getAndUpdateRenderState(renderEntity, tickProgress)
 			val renderer = client.entityRenderDispatcher.getRenderer(renderState)
-			adjustRenderState(renderState, renderEntity, selection)
+			adjustRenderState(renderState, state, renderEntity, selection)
 			val displayName = renderState.displayName
 			val nameLabelPos = renderState.nameLabelPos
 			matrices.push()
@@ -328,7 +347,7 @@ object MobModelFeature {
 		renderEntity.lastBodyYaw = player.lastBodyYaw
 		renderEntity.headYaw = player.headYaw
 		renderEntity.lastHeadYaw = player.lastHeadYaw
-		renderEntity.setPose(player.pose)
+		renderEntity.setPose(EntityPose.STANDING)
 		renderEntity.setSneaking(player.isSneaking)
 		renderEntity.setSprinting(player.isSprinting)
 		renderEntity.setInvisible(player.isInvisible)
@@ -384,9 +403,24 @@ object MobModelFeature {
 
 	private fun adjustRenderState(
 		renderState: Any,
+		playerState: PlayerEntityRenderState,
 		renderEntity: LivingEntity,
 		selection: BackendMobModelState,
 	) {
+		if (renderState is LivingEntityRenderState) {
+			renderState.bodyYaw = playerState.bodyYaw
+			renderState.relativeHeadYaw = playerState.relativeHeadYaw
+			renderState.pitch = playerState.pitch
+			renderState.pose = EntityPose.STANDING
+			renderState.sleepingDirection = null
+			renderState.deathTime = 0.0f
+			renderState.usingRiptide = false
+			renderState.flipUpsideDown = false
+			if (selection.entityType in aquaticModelIds) {
+				renderState.touchingWater = true
+			}
+		}
+
 		if (renderState is AllayEntityRenderState) {
 			val isHoldingItem = selection.showHeldItems && (
 				!renderEntity.getStackInHand(Hand.MAIN_HAND).isEmpty || !renderEntity.getStackInHand(Hand.OFF_HAND).isEmpty
