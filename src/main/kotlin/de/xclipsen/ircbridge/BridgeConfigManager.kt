@@ -68,7 +68,10 @@ class BridgeConfigManager(
 
 	private fun normalized(config: BridgeConfig?): BridgeConfig {
 		val value = config ?: BridgeConfig()
-		value.backendBaseUrl = normalizeBackendBaseUrl(value.backendBaseUrl)
+		value.backendBaseUrl = MOD_BACKEND_BASE_URL
+		value.minigameBackendBaseUrl = MOD_BACKEND_BASE_URL
+		value.devBackendBaseUrl = normalizeServerBaseUrl(value.devBackendBaseUrl, DEFAULT_DEV_BACKEND_BASE_URL)
+		value.ircServerBaseUrl = normalizeServerBaseUrl(value.ircServerBaseUrl, "http://127.0.0.1:8765")
 		value.backendAuthToken = safeString(value.backendAuthToken, "change-me")
 		value.linkedDiscordDisplayName = normalizedTemplate(value.linkedDiscordDisplayName, "")
 		value.ircCommandFormat = normalizedTemplate(value.ircCommandFormat, "[IRC] <%player%> %message%")
@@ -97,6 +100,10 @@ class BridgeConfigManager(
 		value.mobModelScale = value.mobModelScale.coerceIn(0.25f, 4.0f)
 		value.customCrosshairPattern = CustomCrosshairFeature.normalizePattern(value.customCrosshairPattern)
 		value.silentDisconnectLastStatus = normalizeSilentDisconnectStatus(value.silentDisconnectLastStatus)
+		value.dungeonAutoKickFloor = normalizeDungeonAutoKickFloor(value.dungeonAutoKickFloor)
+		value.dungeonAutoKickMaxPbSeconds = value.dungeonAutoKickMaxPbSeconds.coerceIn(60, 900)
+		value.dungeonAutoKickMinSecretsThousands = value.dungeonAutoKickMinSecretsThousands.coerceIn(0, 200)
+		value.dungeonAutoKickMinMagicalPower = value.dungeonAutoKickMinMagicalPower.coerceIn(0, 2_500)
 		value.pickaxeAbilityCooldownAlertSoundId = SoundCatalog.normalizeSoundId(value.pickaxeAbilityCooldownAlertSoundId)
 		value.pickaxeAbilityCooldownAlertSoundVolume = value.pickaxeAbilityCooldownAlertSoundVolume.coerceIn(0.0f, 2.0f)
 		value.pickaxeAbilityCooldownAlertSoundPitch = value.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f)
@@ -115,6 +122,8 @@ class BridgeConfigManager(
 		value.mineshaftAutoWarpCorpseRule = normalizedTemplate(value.mineshaftAutoWarpCorpseRule, "")
 		value.mineshaftAutoWarpDelayMs = value.mineshaftAutoWarpDelayMs.coerceIn(500L, 30_000L)
 		value.mineshaftAutoWarpWindowMs = value.mineshaftAutoWarpWindowMs.coerceIn(5_000L, 60_000L)
+		value.slayerBlazeAutoDaggerEnabled = normalizedBoolean(value.slayerBlazeAutoDaggerEnabled)
+		value.slayerBlazeAutoDaggerDelayMaxTicks = value.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(2, 5)
 		value.slayerSpawnAnnouncerText = normalizedTemplate(value.slayerSpawnAnnouncerText, SlayerFeature.DEFAULT_ANNOUNCER_TEXT)
 		value.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(value.slayerSpawnAnnouncerSoundId)
 		value.slayerSpawnAnnouncerSoundVolume = value.slayerSpawnAnnouncerSoundVolume.coerceIn(0.0f, 2.0f)
@@ -123,6 +132,8 @@ class BridgeConfigManager(
 	}
 
 	private fun safeString(value: String?, fallback: String): String = value ?: fallback
+
+	private fun normalizedBoolean(value: Boolean): Boolean = value
 
 	private fun normalizedTemplate(value: String?, fallback: String): String {
 		val candidate = safeString(value, fallback)
@@ -136,8 +147,7 @@ class BridgeConfigManager(
 		return if (candidate.length > 256) candidate.substring(0, 256) else candidate
 	}
 
-	private fun normalizeBackendBaseUrl(value: String?): String {
-		val fallback = "http://127.0.0.1:8765"
+	private fun normalizeServerBaseUrl(value: String?, fallback: String): String {
 		val candidate = safeString(value, fallback).trim()
 		if (candidate.isBlank()) {
 			return fallback
@@ -209,10 +219,26 @@ class BridgeConfigManager(
 		return if (SILENT_DISCONNECT_STATUSES.contains(candidate)) candidate else "online"
 	}
 
+	private fun normalizeDungeonAutoKickFloor(value: String?): String {
+		val candidate = safeString(value, "7")
+			.trim()
+			.removePrefix("F")
+			.removePrefix("f")
+			.removePrefix("M")
+			.removePrefix("m")
+		return if (DUNGEON_AUTOKICK_FLOORS.contains(candidate)) candidate else "7"
+	}
+
 	companion object {
+		const val MOD_BACKEND_BASE_URL = "https://api.xclipsen.de"
+		const val DEFAULT_DEV_BACKEND_BASE_URL = "http://127.0.0.1:8765"
 		private val GSON: Gson = GsonBuilder().setPrettyPrinting().create()
 		private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 		private val ENTITY_TYPE_PATTERN = Regex("[a-z0-9_.-]+:[a-z0-9_/.-]+")
 		private val SILENT_DISCONNECT_STATUSES = setOf("online", "busy", "away", "offline")
+		private val DUNGEON_AUTOKICK_FLOORS = setOf("1", "2", "3", "4", "5", "6", "7")
 	}
 }
+
+fun activeModBackendBaseUrl(config: BridgeConfig): String =
+	if (config.devModeEnabled) config.devBackendBaseUrl else BridgeConfigManager.MOD_BACKEND_BASE_URL

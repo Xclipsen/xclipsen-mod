@@ -298,7 +298,7 @@ object FireFreezeFeature {
 			blue,
 			BOX_FILL_ALPHA,
 		)
-		XclipsenWorldRenderUtils.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA)
+		XclipsenWorldRenderUtils.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA, 2.0f)
 	}
 
 	private fun drawCircle(
@@ -315,7 +315,7 @@ object FireFreezeFeature {
 		val ringCount = ceil(lineWidth.toDouble()).toInt().coerceIn(1, 8)
 		val startOffset = -((ringCount - 1) * CIRCLE_THICKNESS_STEP) / 2.0
 		for (ring in 0 until ringCount) {
-			drawCircleRing(consumer, entry, center, radius + startOffset + (ring * CIRCLE_THICKNESS_STEP), red, green, blue)
+			drawCircleRing(consumer, entry, center, radius + startOffset + (ring * CIRCLE_THICKNESS_STEP), red, green, blue, lineWidth)
 		}
 	}
 
@@ -327,12 +327,13 @@ object FireFreezeFeature {
 		red: Int,
 		green: Int,
 		blue: Int,
+		lineWidth: Float,
 	) {
 		var previous = center.add(radius, 0.0, 0.0)
 		for (index in 1..CIRCLE_SEGMENTS) {
 			val angle = (index.toDouble() / CIRCLE_SEGMENTS) * PI * 2.0
 			val next = center.add(cos(angle) * radius, 0.0, sin(angle) * radius)
-			drawLineSegment(consumer, entry, previous, next, red, green, blue)
+			drawLineSegment(consumer, entry, previous, next, red, green, blue, lineWidth)
 			previous = next
 		}
 	}
@@ -345,9 +346,10 @@ object FireFreezeFeature {
 		red: Int,
 		green: Int,
 		blue: Int,
+		lineWidth: Float,
 	) {
-		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat()).color(red, green, blue, 230).normal(entry, 0.0f, 1.0f, 0.0f)
-		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat()).color(red, green, blue, 230).normal(entry, 0.0f, 1.0f, 0.0f)
+		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat()).color(red, green, blue, 230).normal(entry, 0.0f, 1.0f, 0.0f).lineWidth(lineWidth)
+		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat()).color(red, green, blue, 230).normal(entry, 0.0f, 1.0f, 0.0f).lineWidth(lineWidth)
 	}
 
 	private fun refreezeColor(remainingMs: Long): Int {

@@ -36,6 +36,7 @@ object XclipsenWorldRenderUtils {
 		green: Float,
 		blue: Float,
 		alpha: Float,
+		lineWidth: Float = 2.0f,
 	) {
 		val minX = box.minX.toFloat()
 		val minY = box.minY.toFloat()
@@ -43,18 +44,18 @@ object XclipsenWorldRenderUtils {
 		val maxX = box.maxX.toFloat()
 		val maxY = box.maxY.toFloat()
 		val maxZ = box.maxZ.toFloat()
-		line(consumer, entry, minX, minY, minZ, maxX, minY, minZ, red, green, blue, alpha)
-		line(consumer, entry, maxX, minY, minZ, maxX, minY, maxZ, red, green, blue, alpha)
-		line(consumer, entry, maxX, minY, maxZ, minX, minY, maxZ, red, green, blue, alpha)
-		line(consumer, entry, minX, minY, maxZ, minX, minY, minZ, red, green, blue, alpha)
-		line(consumer, entry, minX, maxY, minZ, maxX, maxY, minZ, red, green, blue, alpha)
-		line(consumer, entry, maxX, maxY, minZ, maxX, maxY, maxZ, red, green, blue, alpha)
-		line(consumer, entry, maxX, maxY, maxZ, minX, maxY, maxZ, red, green, blue, alpha)
-		line(consumer, entry, minX, maxY, maxZ, minX, maxY, minZ, red, green, blue, alpha)
-		line(consumer, entry, minX, minY, minZ, minX, maxY, minZ, red, green, blue, alpha)
-		line(consumer, entry, maxX, minY, minZ, maxX, maxY, minZ, red, green, blue, alpha)
-		line(consumer, entry, maxX, minY, maxZ, maxX, maxY, maxZ, red, green, blue, alpha)
-		line(consumer, entry, minX, minY, maxZ, minX, maxY, maxZ, red, green, blue, alpha)
+		line(consumer, entry, minX, minY, minZ, maxX, minY, minZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, maxX, minY, minZ, maxX, minY, maxZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, maxX, minY, maxZ, minX, minY, maxZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, minX, minY, maxZ, minX, minY, minZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, minX, maxY, minZ, maxX, maxY, minZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, maxX, maxY, minZ, maxX, maxY, maxZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, maxX, maxY, maxZ, minX, maxY, maxZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, minX, maxY, maxZ, minX, maxY, minZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, minX, minY, minZ, minX, maxY, minZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, maxX, minY, minZ, maxX, maxY, minZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, maxX, minY, maxZ, maxX, maxY, maxZ, red, green, blue, alpha, lineWidth)
+		line(consumer, entry, minX, minY, maxZ, minX, maxY, maxZ, red, green, blue, alpha, lineWidth)
 	}
 
 	private fun face(
@@ -86,6 +87,7 @@ object XclipsenWorldRenderUtils {
 		green: Float,
 		blue: Float,
 		alpha: Float,
+		lineWidth: Float,
 	) {
 		val dx = endX - startX
 		val dy = endY - startY
@@ -94,7 +96,7 @@ object XclipsenWorldRenderUtils {
 		val normalX = dx / length
 		val normalY = dy / length
 		val normalZ = dz / length
-		consumer.vertex(entry, startX, startY, startZ).color(red, green, blue, alpha).normal(entry, normalX, normalY, normalZ)
-		consumer.vertex(entry, endX, endY, endZ).color(red, green, blue, alpha).normal(entry, normalX, normalY, normalZ)
+		consumer.vertex(entry, startX, startY, startZ).color(red, green, blue, alpha).normal(entry, normalX, normalY, normalZ).lineWidth(lineWidth)
+		consumer.vertex(entry, endX, endY, endZ).color(red, green, blue, alpha).normal(entry, normalX, normalY, normalZ).lineWidth(lineWidth)
 	}
 }

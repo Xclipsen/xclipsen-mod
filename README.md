@@ -1,8 +1,8 @@
 # Xclipsen Mod
 
-Fabric-Clientmod fuer Minecraft `1.21.11`.
+Fabric-Clientmod fuer Minecraft `26.1.2`.
 
-Aktuelle Version: `0.5.20`
+Aktuelle Version: `0.5.21`
 
 ## Kurzuebersicht
 
@@ -15,17 +15,22 @@ Aktuelle Version: `0.5.20`
 - `Shard Tracker`: Hideonleaf-Shards und Drops tracken, Session/Total-HUD anzeigen, Profit pro Stunde berechnen und Bazaar-Preise vom Backend aktualisieren.
 - `HUD Editor`: HUD-Elemente verschieben, skalieren und zuruecksetzen ueber `/xclipsen hud` oder `/irc hud`.
 - `Time Changer`: clientseitige Zeit-Presets wie Day, Noon, Sunset, Night, Midnight, Sunrise und Real Time.
+- `Minigames`: echte lokal erzeugte Vanilla-Chest- und Sign-Screens mit Tic-Tac-Toe gegen KI und autoritativem Backend-Multiplayer, ohne Inventar- oder Sign-Pakete an den Minecraft-Server.
 
 ## Commands
 
 - `/xclipsen` - Settings oeffnen.
 - `/xclipsen hud` - HUD-Editor oeffnen.
+- `/xclipsen dev [on|off|status]` - Lokales Mod-Backend umschalten oder Status anzeigen.
 - `/irc <nachricht>` oder `/i <nachricht>` - Nachricht ans Backend senden.
 - `/irc on|off|status|reload` - Bridge lokal steuern und Status anzeigen.
 - `/link CODE` - Minecraft-Account mit dem Backend-Linkcode verbinden.
 - `/shulkerglow on|off|toggle` - Shulker Glow schnell umschalten.
 - `/shardtracker` oder `/st` - Shard-Tracker-Status anzeigen.
 - `/shardtracker reset|resetall|toggle|on|off` - Shard-Tracker steuern.
+- `/game` - Minigame-Menue oder laufendes Match oeffnen.
+- `/game leave` - Laufendes Match bewusst verlassen und fuer beide Spieler abbrechen.
+- `/game accept <spieler>` und `/game deny <spieler>` - Spieleinladungen annehmen oder ablehnen.
 
 ## Einrichtung
 
@@ -33,23 +38,31 @@ Aktuelle Version: `0.5.20`
 2. Die erzeugte Jar aus `build/libs/` in den `mods/`-Ordner des Clients legen.
 3. Minecraft mit Fabric starten.
 4. `/xclipsen` oeffnen und die gewuenschten Module aktivieren.
-5. Optional `config/xclipsen-mod.json` bearbeiten oder `/irc reload` zum Neuladen ausfuehren.
+5. Optional `config/Xclipsen/config.json` bearbeiten oder `/irc reload` zum Neuladen ausfuehren.
 
-## Backend-Modus
+## Backend- und IRC-Modus
 
-Dieses Repo enthaelt nur noch den Fabric-Clientmod. Das Backend laeuft in deinem bestehenden Discord-Bot-Projekt `Xclipsen Bot`.
+Der Fabric-Clientmod nutzt zwei getrennte Server:
 
-1. Mod-Config in `config/xclipsen-mod.json`:
+- Mod-Feature-Backend: standardmaessig `https://api.xclipsen.de`, per Dev-Modus lokal umschaltbar
+- IRC-Server: im IRC-Bridge-Modul konfigurierbar, z. B. dein Xclipsen-Bot-Bridge-Server
+
+1. Mod-Config in `config/Xclipsen/config.json`:
    - `ircBridgeEnabled = true`
-   - `backendBaseUrl = "http://DEIN-SERVER:8765"`
-   - `backendAuthToken = "dein-shared-secret"`
+   - `ircServerBaseUrl = "http://DEIN-BOT-SERVER:8765"`
+   - `backendAuthToken = "dein-irc-shared-secret"` (wird ausschließlich für den IRC-Server verwendet)
 2. Im Bot-Projekt `.env` setzen:
    - `IRC_BRIDGE_ENABLED=true`
    - `IRC_BRIDGE_HOST=0.0.0.0`
    - `IRC_BRIDGE_PORT=8765`
    - `IRC_BRIDGE_AUTH_TOKEN=dein-shared-secret`
    - `IRC_BRIDGE_CHANNEL_ID=dein-discord-kanal`
-3. Den bestehenden Bot starten. Der Bot ist dann gleichzeitig auch das Backend.
+3. Den bestehenden Bot starten. Der Bot stellt nur den IRC-Server bereit.
+4. Das standalone Backend aus `xclipsen-mod-backend` separat starten und `api.xclipsen.de` darauf zeigen lassen.
+
+Mit `/xclipsen dev` kann zwischen dem Produktionsbackend und dem lokalen Mod-Backend unter
+`http://127.0.0.1:8765` umgeschaltet werden. Der Zustand wird in `config/Xclipsen/config.json`
+gespeichert und gilt fuer alle Mod-Features inklusive Minigames, nicht aber fuer IRC oder Update-Checks.
 
 ## Discord-Bot
 

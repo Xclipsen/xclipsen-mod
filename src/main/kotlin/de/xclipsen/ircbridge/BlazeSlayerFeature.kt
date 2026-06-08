@@ -5,6 +5,8 @@ import net.minecraft.client.font.TextRenderer
 import net.minecraft.client.font.TextRenderer.TextLayerType
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.render.VertexConsumerProvider
+import net.minecraft.component.DataComponentTypes
+import net.minecraft.component.type.NbtComponent
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.decoration.ArmorStandEntity
@@ -13,63 +15,122 @@ import net.minecraft.entity.mob.GuardianEntity
 import net.minecraft.entity.mob.WitherSkeletonEntity
 import net.minecraft.entity.mob.ZombifiedPiglinEntity
 import net.minecraft.entity.player.PlayerEntity
+import net.minecraft.item.Item
+import net.minecraft.item.ItemStack
+import net.minecraft.item.Items
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket
+import net.minecraft.text.Text
+import net.minecraft.util.Hand
 import net.minecraft.util.math.Vec3d
 import org.joml.Matrix4f
 import java.util.Locale
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.math.roundToLong
+import kotlin.random.Random
 
 object BlazeSlayerFeature {
+	private var featureTickCounter = 0
 	private var tickCounter = 0
 	private var trackedBosses: Map<UUID, BlazeBossInfo> = emptyMap()
 	private var trackedShields: Map<UUID, HellionShieldInfo> = emptyMap()
+	private var ownBlazeBossUuid: UUID? = null
+	private var ownBlazeBossLastPosition: Vec3d? = null
+	private var ownBlazeBossLastSeenTick = 0
+	private var autoTickCounter = 0
+	private var autoActionCooldownTicks = 0
+	private var autoFightActive = false
+	private var autoFightEmptyTicks = 0
+	private var autoLastShield: HellionShield? = null
+	private var autoSeenOpeningAshen = false
+	private var autoTerminatorShotDone = false
+	private var autoInMobPhase = false
+	private var autoMobPhaseCount = 0
+	private var autoFirstMobRagHandled = false
+	private var autoPendingAttunement: DaggerAttunement? = null
+	private var autoPendingAttunementUntilTick = 0
+	private var autoActionDelayMaxTicks = AUTO_ACTION_DELAY_MIN_TICKS
+	private var autoLastObservedSelectedSlot: Int? = null
+	private var autoManualOverrideUntilTick = 0
+	private var autoLastBossUuid: UUID? = null
+	private var autoBossGroundY: Double? = null
+	private var autoBossAirMobPhaseQueued = false
+	private var autoRagnarockCastWaitUntilTick = 0
+	private var autoRagnarockCastFallbackUntilTick = 0
+	private var autoRagnarockCastSeen = false
+	private var autoRagnarockCastSeenTick = 0
+	private val autoQueuedActions = ArrayDeque<AutoAction>()
+	private val autoWarnLastTicks = mutableMapOf<String, Int>()
 
 	fun onTick(client: MinecraftClient) {
 		val config = XclipsenIrcBridgeClient.instance?.config()
 		val world = client.world
+		val player = client.player
 		if (config?.slayerModuleEnabled != true ||
-			(!config.slayerBlazePhaseDisplayEnabled && !config.slayerBlazeColoredMobsEnabled) ||
+			(!config.slayerBlazePhaseDisplayEnabled && !config.slayerBlazeColoredMobsEnabled && !config.slayerBlazeAutoDaggerEnabled) ||
 			world == null ||
-			client.player == null ||
+			player == null ||
 			!LocationTracker.isOnHypixelSkyBlock
 		) {
 			clear()
+			clearAutoState()
 			return
 		}
 
-		if (++tickCounter < SCAN_INTERVAL_TICKS) {
-			return
+		featureTickCounter++
+		autoTickCounter++
+		if (autoActionCooldownTicks > 0) {
+			autoActionCooldownTicks--
 		}
-		tickCounter = 0
 
-		val armorStands = world.entities.filterIsInstance<ArmorStandEntity>()
-		val candidates = mutableListOf<BlazeBossInfo>()
+		if (++tickCounter >= SCAN_INTERVAL_TICKS) {
+			tickCounter = 0
 
-		for (entity in world.entities.filterIsInstance<LivingEntity>()) {
-			if (!isRelevantLivingEntity(entity)) {
-				continue
+			val armorStands = world.entities.filterIsInstance<ArmorStandEntity>()
+			val candidates = mutableListOf<BlazeBossInfo>()
+
+			for (entity in world.entities.filterIsInstance<LivingEntity>()) {
+				if (!isRelevantLivingEntity(entity)) {
+					continue
+				}
+
+				val boss = resolveBossInfo(entity, armorStands) ?: continue
+				candidates += boss
 			}
 
-			val boss = resolveBossInfo(entity, armorStands) ?: continue
-			candidates += boss
+			if (candidates.isEmpty()) {
+				expireOwnBlazeBossMemory()
+				trackedBosses = emptyMap()
+				trackedShields = emptyMap()
+			} else {
+				val ownedCandidates = filterOwnBlazeCandidates(candidates, player)
+				if (ownedCandidates.isEmpty()) {
+					trackedBosses = emptyMap()
+					trackedShields = emptyMap()
+				} else {
+					val visibleCandidates = applyDemonHealthVisibility(ownedCandidates)
+					val shields = if (config.slayerBlazeColoredMobsEnabled) {
+						resolveHellionShieldsForBosses(visibleCandidates)
+					} else {
+						emptyMap()
+					}
+					trackedBosses = visibleCandidates.associateBy { it.entity.uuid }
+					trackedShields = shields
+				}
+			}
 		}
 
-		if (candidates.isEmpty()) {
-			trackedBosses = emptyMap()
-			trackedShields = emptyMap()
-			return
-		}
-
-		val visibleCandidates = applyDemonHealthVisibility(candidates)
-		val shields = if (config.slayerBlazeColoredMobsEnabled) {
-			resolveHellionShieldsNearBosses(world.entities.filterIsInstance<LivingEntity>(), armorStands, visibleCandidates)
+		if (config.slayerBlazeAutoDaggerEnabled) {
+			autoActionDelayMaxTicks = config.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(
+				AUTO_ACTION_DELAY_MIN_TICKS,
+				AUTO_ACTION_DELAY_MAX_TICKS,
+			)
+			handleAutoDagger(client, player)
 		} else {
-			emptyMap()
+			clearAutoState()
 		}
-		trackedBosses = visibleCandidates.associateBy { it.entity.uuid }
-		trackedShields = shields
 	}
 
 	fun render(context: WorldRenderContext) {
@@ -148,6 +209,533 @@ object BlazeSlayerFeature {
 
 	fun colorValue(entity: Entity): Int? = trackedShields[entity.uuid]?.color
 
+	fun onIncomingGameMessage(message: Text, overlay: Boolean) {
+		if (!overlay || autoRagnarockCastWaitUntilTick <= 0) {
+			return
+		}
+
+		val clean = cleanName(message.string) ?: return
+		if (AUTO_RAGNAROCK_FINISHED_ACTIONBAR_PATTERN.containsMatchIn(clean)) {
+			autoRagnarockCastSeen = true
+			autoRagnarockCastSeenTick = autoTickCounter
+		}
+	}
+
+	private fun handleAutoDagger(client: MinecraftClient, player: PlayerEntity) {
+		if (client.currentScreen != null || client.world == null || client.interactionManager == null) {
+			autoQueuedActions.clear()
+			clearRagnarockCastWait()
+			acceptCurrentHotbarSelection(player)
+			return
+		}
+
+		val snapshot = resolveAutoSnapshot(player)
+		if (!snapshot.hasTarget) {
+			if (shouldKeepRagnarockQueueWithoutTarget()) {
+				if (autoFightActive && detectManualHotbarSelection(player)) {
+					return
+				}
+				if (autoActionCooldownTicks <= 0 && autoQueuedActions.isNotEmpty()) {
+					runNextAutoAction(client, player)
+				}
+				return
+			}
+
+			autoQueuedActions.clear()
+			clearRagnarockCastWait()
+			acceptCurrentHotbarSelection(player)
+			autoFightEmptyTicks++
+			if (autoFightEmptyTicks >= AUTO_FIGHT_RESET_TICKS) {
+				clearAutoState()
+			}
+			return
+		}
+
+		autoFightEmptyTicks = 0
+		if (!autoFightActive) {
+			autoFightActive = true
+			resetAutoFightProgress()
+		}
+
+		if (detectManualHotbarSelection(player) || autoTickCounter < autoManualOverrideUntilTick) {
+			return
+		}
+
+		if (autoActionCooldownTicks > 0) {
+			return
+		}
+
+		if (detectFirstMobPhaseAirStart(snapshot) && queueFirstMobRagnarock(player)) {
+			runNextAutoAction(client, player)
+			return
+		}
+
+		if (autoQueuedActions.isNotEmpty()) {
+			runNextAutoAction(client, player)
+			return
+		}
+
+		if (snapshot.inMobPhase) {
+			handleAutoMobPhase(player, snapshot)
+		} else {
+			handleAutoBossPhase(player, snapshot.bossShield)
+		}
+
+		if (autoActionCooldownTicks <= 0 && autoQueuedActions.isNotEmpty()) {
+			runNextAutoAction(client, player)
+		}
+	}
+
+	private fun resolveAutoSnapshot(player: PlayerEntity): AutoSnapshot {
+		val relevant = trackedBosses.values.filter { info ->
+			info.entity.isAlive &&
+				!info.entity.isRemoved &&
+				info.entity.squaredDistanceTo(player) <= AUTO_TARGET_DISTANCE_SQUARED
+		}
+		val boss = relevant
+			.asSequence()
+			.filter { info -> info.kind == InfernoKind.DEMONLORD }
+			.minByOrNull { info -> info.entity.squaredDistanceTo(player) }
+		val quazii = relevant
+			.asSequence()
+			.filter { info -> info.kind == InfernoKind.QUAZII && info.phaseHealth > 0L }
+			.minByOrNull { info -> info.entity.squaredDistanceTo(player) }
+		val typhoeus = relevant
+			.asSequence()
+			.filter { info -> info.kind == InfernoKind.TYPHOEUS && info.phaseHealth > 0L }
+			.minByOrNull { info -> info.entity.squaredDistanceTo(player) }
+		return AutoSnapshot(
+			boss = boss,
+			bossShield = boss?.hellionShield?.shield,
+			quazii = quazii,
+			typhoeus = typhoeus,
+		)
+	}
+
+	private fun detectFirstMobPhaseAirStart(snapshot: AutoSnapshot): Boolean {
+		val boss = snapshot.boss ?: return false
+		if (autoFirstMobRagHandled || autoMobPhaseCount > 0 || autoBossAirMobPhaseQueued) {
+			return false
+		}
+
+		val bossUuid = boss.entity.uuid
+		if (autoLastBossUuid != bossUuid) {
+			autoLastBossUuid = bossUuid
+			autoBossGroundY = boss.entity.y
+			autoBossAirMobPhaseQueued = false
+			return false
+		}
+
+		val groundY = autoBossGroundY?.let { minOf(it, boss.entity.y) } ?: boss.entity.y
+		autoBossGroundY = groundY
+		if (snapshot.inMobPhase) {
+			return false
+		}
+
+		if (boss.entity.y - groundY < AUTO_BOSS_AIR_MOB_Y_DELTA) {
+			return false
+		}
+
+		autoBossAirMobPhaseQueued = true
+		return true
+	}
+
+	private fun handleAutoBossPhase(player: PlayerEntity, shield: HellionShield?) {
+		autoInMobPhase = false
+		if (shield == null) {
+			return
+		}
+
+		if (shield == HellionShield.ASHEN && !autoTerminatorShotDone) {
+			autoSeenOpeningAshen = true
+		}
+
+		if (shield == HellionShield.SPIRIT &&
+			autoLastShield == HellionShield.ASHEN &&
+			autoSeenOpeningAshen &&
+			!autoTerminatorShotDone
+		) {
+			autoTerminatorShotDone = true
+			autoLastShield = shield
+			queueTerminatorIntoSpirit(player)
+			return
+		}
+
+		autoLastShield = shield
+		when (shield) {
+			HellionShield.ASHEN -> queueDaggerSelection(player, DaggerFamily.ASHEN, DaggerAttunement.ASHEN)
+			HellionShield.SPIRIT -> queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
+			HellionShield.AURIC -> queueDaggerSelection(player, DaggerFamily.ASHEN, DaggerAttunement.AURIC)
+			HellionShield.CRYSTAL -> queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.CRYSTAL)
+		}
+	}
+
+	private fun queueTerminatorIntoSpirit(player: PlayerEntity) {
+		val terminatorSlot = findHotbarSlot(player, TERMINATOR_IDS)
+		if (terminatorSlot == null) {
+			queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
+			return
+		}
+
+		queueSelectSlot(player, terminatorSlot)
+		autoQueuedActions += AutoAction.RightClick(RightClickKind.TERMINATOR)
+		queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
+	}
+
+	private fun handleAutoMobPhase(player: PlayerEntity, snapshot: AutoSnapshot) {
+		if (!autoInMobPhase) {
+			autoInMobPhase = true
+			autoMobPhaseCount++
+			if (autoMobPhaseCount == 1 && queueFirstMobRagnarock(player)) {
+				return
+			}
+		}
+
+		val desiredMob = if (autoMobPhaseCount <= 1) {
+			when {
+				snapshot.quazii != null -> snapshot.quazii
+				snapshot.typhoeus != null -> snapshot.typhoeus
+				else -> null
+			}
+		} else {
+			when {
+				snapshot.typhoeus != null -> snapshot.typhoeus
+				snapshot.quazii != null -> snapshot.quazii
+				else -> null
+			}
+		}
+
+		if (desiredMob != null) {
+			val target = resolveMobDaggerTarget(desiredMob)
+			queueDaggerSelection(player, target.family, target.attunement)
+		}
+	}
+
+	private fun queueFirstMobRagnarock(player: PlayerEntity): Boolean {
+		if (autoFirstMobRagHandled) {
+			return false
+		}
+
+		val ragnarockSlot = findHotbarSlot(player, RAGNAROCK_IDS) ?: return false
+		autoFirstMobRagHandled = true
+		queueSelectSlot(player, ragnarockSlot)
+		autoQueuedActions += AutoAction.RightClick(RightClickKind.RAGNAROCK)
+		autoQueuedActions += AutoAction.WaitForRagnarockCast
+		return true
+	}
+
+	private fun resolveMobDaggerTarget(info: BlazeBossInfo): DaggerTarget {
+		info.hellionShield?.shield?.let { shield ->
+			return daggerTargetForShield(shield)
+		}
+
+		return when (info.kind) {
+			InfernoKind.QUAZII -> DaggerTarget(DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
+			InfernoKind.TYPHOEUS -> DaggerTarget(DaggerFamily.ASHEN, DaggerAttunement.ASHEN)
+			InfernoKind.DEMONLORD -> DaggerTarget(DaggerFamily.ASHEN, DaggerAttunement.ASHEN)
+		}
+	}
+
+	private fun daggerTargetForShield(shield: HellionShield): DaggerTarget {
+		return when (shield) {
+			HellionShield.ASHEN -> DaggerTarget(DaggerFamily.ASHEN, DaggerAttunement.ASHEN)
+			HellionShield.AURIC -> DaggerTarget(DaggerFamily.ASHEN, DaggerAttunement.AURIC)
+			HellionShield.SPIRIT -> DaggerTarget(DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
+			HellionShield.CRYSTAL -> DaggerTarget(DaggerFamily.SPIRIT, DaggerAttunement.CRYSTAL)
+		}
+	}
+
+	private fun queueDaggerSelection(player: PlayerEntity, family: DaggerFamily, attunement: DaggerAttunement?) {
+		val slot = findHotbarSlot(player, family.ids)
+		if (slot == null) {
+			warnMissingDagger(player, family)
+			return
+		}
+
+		queueSelectSlot(player, slot)
+		if (attunement == null) {
+			return
+		}
+
+		val stack = player.inventory.getStack(slot)
+		if (stack.isOf(attunement.materialItem)) {
+			if (autoPendingAttunement == attunement) {
+				autoPendingAttunement = null
+			}
+			return
+		}
+		if (autoPendingAttunement == attunement && autoTickCounter < autoPendingAttunementUntilTick) {
+			return
+		}
+		autoQueuedActions += AutoAction.RightClick(RightClickKind.DAGGER_ATTUNE, attunement)
+	}
+
+	private fun queueSelectSlot(player: PlayerEntity, slot: Int) {
+		if (slot !in HOTBAR_SLOT_RANGE || queuedSelectedSlot(player) == slot) {
+			return
+		}
+		autoQueuedActions += AutoAction.SelectSlot(slot)
+	}
+
+	private fun queuedSelectedSlot(player: PlayerEntity): Int {
+		var selectedSlot = player.inventory.getSelectedSlot()
+		for (action in autoQueuedActions) {
+			if (action is AutoAction.SelectSlot) {
+				selectedSlot = action.slot
+			}
+		}
+		return selectedSlot
+	}
+
+	private fun runNextAutoAction(client: MinecraftClient, player: PlayerEntity) {
+		val action = autoQueuedActions.firstOrNull() ?: return
+		when (action) {
+			is AutoAction.SelectSlot -> {
+				autoQueuedActions.removeFirst()
+				if (selectHotbarSlot(client, player, action.slot)) {
+					autoActionCooldownTicks = randomAutoActionDelayTicks()
+				}
+			}
+			is AutoAction.RightClick -> {
+				autoQueuedActions.removeFirst()
+				if (isRightClickAllowed(player, action)) {
+					client.interactionManager?.interactItem(player, Hand.MAIN_HAND)
+					if (action.kind == RightClickKind.DAGGER_ATTUNE && action.attunement != null) {
+						autoPendingAttunement = action.attunement
+						autoPendingAttunementUntilTick = autoTickCounter + AUTO_ATTUNE_RETRY_TICKS
+					}
+					if (action.kind == RightClickKind.RAGNAROCK) {
+						beginRagnarockCastWait()
+					}
+					autoActionCooldownTicks = randomAutoActionDelayTicks()
+				}
+			}
+			is AutoAction.Wait -> {
+				autoQueuedActions.removeFirst()
+				autoActionCooldownTicks = action.ticks.coerceAtLeast(1)
+			}
+			AutoAction.WaitForRagnarockCast -> {
+				if (isRagnarockCastWaitComplete()) {
+					autoQueuedActions.removeFirst()
+				} else {
+					autoActionCooldownTicks = 1
+				}
+			}
+		}
+	}
+
+	private fun shouldKeepRagnarockQueueWithoutTarget(): Boolean {
+		return (autoBossAirMobPhaseQueued && autoQueuedActions.isNotEmpty()) ||
+			autoRagnarockCastWaitUntilTick > 0 ||
+			autoQueuedActions.firstOrNull() == AutoAction.WaitForRagnarockCast
+	}
+
+	private fun beginRagnarockCastWait() {
+		autoRagnarockCastWaitUntilTick = autoTickCounter + AUTO_RAGNAROCK_MIN_WAIT_TICKS
+		autoRagnarockCastFallbackUntilTick = autoTickCounter + AUTO_RAGNAROCK_SIGNAL_FALLBACK_TICKS
+		autoRagnarockCastSeen = false
+		autoRagnarockCastSeenTick = 0
+	}
+
+	private fun isRagnarockCastWaitComplete(): Boolean {
+		if (autoRagnarockCastWaitUntilTick <= 0) {
+			return true
+		}
+		if (autoTickCounter < autoRagnarockCastWaitUntilTick) {
+			return false
+		}
+		if (autoRagnarockCastSeen && autoTickCounter < autoRagnarockCastSeenTick + AUTO_RAGNAROCK_POST_CAST_SETTLE_TICKS) {
+			return false
+		}
+		if (!autoRagnarockCastSeen && autoTickCounter < autoRagnarockCastFallbackUntilTick) {
+			return false
+		}
+
+		clearRagnarockCastWait()
+		return true
+	}
+
+	private fun clearRagnarockCastWait() {
+		autoRagnarockCastWaitUntilTick = 0
+		autoRagnarockCastFallbackUntilTick = 0
+		autoRagnarockCastSeen = false
+		autoRagnarockCastSeenTick = 0
+	}
+
+	private fun selectHotbarSlot(client: MinecraftClient, player: PlayerEntity, slot: Int): Boolean {
+		if (slot !in HOTBAR_SLOT_RANGE || player.inventory.getSelectedSlot() == slot) {
+			return false
+		}
+		player.inventory.setSelectedSlot(slot)
+		client.networkHandler?.sendPacket(UpdateSelectedSlotC2SPacket(slot))
+		autoLastObservedSelectedSlot = slot
+		return true
+	}
+
+	private fun detectManualHotbarSelection(player: PlayerEntity): Boolean {
+		val selectedSlot = player.inventory.getSelectedSlot()
+		val lastObserved = autoLastObservedSelectedSlot
+		if (lastObserved == null) {
+			autoLastObservedSelectedSlot = selectedSlot
+			return false
+		}
+		if (selectedSlot == lastObserved) {
+			return false
+		}
+
+		autoLastObservedSelectedSlot = selectedSlot
+		autoQueuedActions.clear()
+		autoPendingAttunement = null
+		autoPendingAttunementUntilTick = 0
+		clearRagnarockCastWait()
+		autoActionCooldownTicks = max(autoActionCooldownTicks, AUTO_MANUAL_SWAP_PAUSE_TICKS)
+		autoManualOverrideUntilTick = autoTickCounter + AUTO_MANUAL_SWAP_PAUSE_TICKS
+		return true
+	}
+
+	private fun acceptCurrentHotbarSelection(player: PlayerEntity) {
+		autoLastObservedSelectedSlot = player.inventory.getSelectedSlot()
+	}
+
+	private fun randomAutoActionDelayTicks(): Int {
+		val maxTicks = autoActionDelayMaxTicks.coerceIn(AUTO_ACTION_DELAY_MIN_TICKS, AUTO_ACTION_DELAY_MAX_TICKS)
+		return if (maxTicks <= AUTO_ACTION_DELAY_MIN_TICKS) {
+			AUTO_ACTION_DELAY_MIN_TICKS
+		} else {
+			Random.nextInt(AUTO_ACTION_DELAY_MIN_TICKS, maxTicks + 1)
+		}
+	}
+
+	private fun isRightClickAllowed(player: PlayerEntity, action: AutoAction.RightClick): Boolean {
+		val stack = player.mainHandStack
+		val id = skyBlockItemId(stack) ?: return false
+		return when (action.kind) {
+			RightClickKind.TERMINATOR -> id in TERMINATOR_IDS
+			RightClickKind.RAGNAROCK -> id in RAGNAROCK_IDS
+			RightClickKind.DAGGER_ATTUNE -> {
+				val attunement = action.attunement ?: return false
+				id in attunement.family.ids && !stack.isOf(attunement.materialItem)
+			}
+		}
+	}
+
+	private fun findHotbarSlot(player: PlayerEntity, ids: List<String>): Int? {
+		for (id in ids) {
+			for (slot in HOTBAR_SLOT_RANGE) {
+				if (skyBlockItemId(player.inventory.getStack(slot)) == id) {
+					return slot
+				}
+			}
+		}
+		return null
+	}
+
+	private fun skyBlockItemId(stack: ItemStack): String? {
+		if (stack.isEmpty) {
+			return null
+		}
+		val customData = stack.get(DataComponentTypes.CUSTOM_DATA) as? NbtComponent ?: return null
+		return customData.copyNbt()
+			.getString("id")
+			.getOrNull()
+			?.trim()
+			?.uppercase(Locale.ROOT)
+			?.takeIf { it.isNotEmpty() }
+	}
+
+	private fun warnMissingDagger(player: PlayerEntity, family: DaggerFamily) {
+		val key = "missing:${family.name}"
+		val lastTick = autoWarnLastTicks[key]
+		if (lastTick != null && autoTickCounter - lastTick < AUTO_WARNING_THROTTLE_TICKS) {
+			return
+		}
+		autoWarnLastTicks[key] = autoTickCounter
+		player.sendMessage(
+			Text.literal("[Xclipsen] Auto Dagger missing ${family.displayName} in hotbar."),
+			false,
+		)
+	}
+
+	private fun filterOwnBlazeCandidates(candidates: List<BlazeBossInfo>, player: PlayerEntity): List<BlazeBossInfo> {
+		val playerName = MinecraftClient.getInstance().session.username.takeIf { it.isNotBlank() }
+			?: cleanName(player.name.string)
+			?: return emptyList()
+		val ownDemonlord = candidates
+			.asSequence()
+			.filter { info -> info.kind == InfernoKind.DEMONLORD && isSpawnedByPlayer(info.spawnedByPlayer, playerName) }
+			.minByOrNull { info -> info.entity.squaredDistanceTo(player) }
+
+		if (ownDemonlord != null) {
+			ownBlazeBossUuid = ownDemonlord.entity.uuid
+			ownBlazeBossLastPosition = entityPosition(ownDemonlord.entity)
+			ownBlazeBossLastSeenTick = featureTickCounter
+		} else {
+			expireOwnBlazeBossMemory()
+		}
+
+		val ownBossPositions = candidates
+			.asSequence()
+			.filter { info ->
+				info.kind == InfernoKind.DEMONLORD &&
+					(isSpawnedByPlayer(info.spawnedByPlayer, playerName) ||
+						(info.entity.uuid == ownBlazeBossUuid && isOwnBlazeBossMemoryFresh()))
+			}
+			.map { info -> entityPosition(info.entity) }
+			.toMutableList()
+		if (ownBossPositions.isEmpty() && isOwnBlazeBossMemoryFresh()) {
+			ownBlazeBossLastPosition?.let { ownBossPositions += it }
+		}
+
+		return candidates.filter { info ->
+			when {
+				isSpawnedByPlayer(info.spawnedByPlayer, playerName) -> true
+				info.kind == InfernoKind.DEMONLORD -> info.entity.uuid == ownBlazeBossUuid && isOwnBlazeBossMemoryFresh()
+				else -> ownBossPositions.any { position ->
+					squaredDistanceTo(info.entity, position) <= DEMON_BOSS_DISTANCE_SQUARED
+				}
+			}
+		}
+	}
+
+	private fun isSpawnedByPlayer(spawnedBy: String?, playerName: String): Boolean {
+		return spawnedBy != null && spawnedBy.equals(playerName, ignoreCase = true)
+	}
+
+	private fun resolveSpawnedByPlayer(names: List<String>): String? {
+		for (name in names) {
+			val match = SPAWNED_BY_PATTERN.find(name) ?: continue
+			return match.groupValues[1].trim().takeIf { it.isNotEmpty() }
+		}
+		return null
+	}
+
+	private fun isOwnBlazeBossMemoryFresh(): Boolean {
+		return ownBlazeBossLastSeenTick > 0 &&
+			featureTickCounter - ownBlazeBossLastSeenTick <= OWN_BLAZE_BOSS_MEMORY_TICKS
+	}
+
+	private fun expireOwnBlazeBossMemory() {
+		if (ownBlazeBossLastSeenTick == 0 || isOwnBlazeBossMemoryFresh()) {
+			return
+		}
+		clearOwnBlazeBossMemory()
+	}
+
+	private fun clearOwnBlazeBossMemory() {
+		ownBlazeBossUuid = null
+		ownBlazeBossLastPosition = null
+		ownBlazeBossLastSeenTick = 0
+	}
+
+	private fun entityPosition(entity: LivingEntity): Vec3d = Vec3d(entity.x, entity.y, entity.z)
+
+	private fun squaredDistanceTo(entity: LivingEntity, position: Vec3d): Double {
+		val dx = entity.x - position.x
+		val dy = entity.y - position.y
+		val dz = entity.z - position.z
+		return dx * dx + dy * dy + dz * dz
+	}
+
 	private fun applyDemonHealthVisibility(candidates: List<BlazeBossInfo>): List<BlazeBossInfo> {
 		val demons = candidates.filter { info ->
 			(info.kind == InfernoKind.QUAZII || info.kind == InfernoKind.TYPHOEUS) &&
@@ -181,25 +769,10 @@ object BlazeSlayerFeature {
 		return if (isSecondDemonPhase) InfernoKind.TYPHOEUS else InfernoKind.QUAZII
 	}
 
-	private fun resolveHellionShieldsNearBosses(
-		entities: List<LivingEntity>,
-		armorStands: List<ArmorStandEntity>,
-		bosses: List<BlazeBossInfo>,
-	): Map<UUID, HellionShieldInfo> {
+	private fun resolveHellionShieldsForBosses(bosses: List<BlazeBossInfo>): Map<UUID, HellionShieldInfo> {
 		val result = mutableMapOf<UUID, HellionShieldInfo>()
-		val bossesByUuid = bosses.associateBy { it.entity.uuid }
-		for (entity in entities) {
-			if (!isRelevantLivingEntity(entity) ||
-				bosses.none { boss -> entity.squaredDistanceTo(boss.entity) <= SHIELD_TRACK_DISTANCE_SQUARED }
-			) {
-				continue
-			}
-			val bossInfo = bossesByUuid[entity.uuid]
-			if (bossInfo != null) {
-				bossInfo.hellionShield?.let { result[entity.uuid] = it }
-				continue
-			}
-			resolveHellionShield(entity, armorStands)?.let { result[entity.uuid] = it }
+		for (boss in bosses) {
+			boss.hellionShield?.let { result[boss.entity.uuid] = it }
 		}
 		return result
 	}
@@ -212,6 +785,7 @@ object BlazeSlayerFeature {
 		val names = resolveDisplayNames(entity, armorStands)
 		val kind = resolveInfernoKind(entity, names) ?: return null
 		val hellionShield = resolveBossHellionShield(entity, armorStands, kind)
+		val spawnedByPlayer = resolveSpawnedByPlayer(names)
 		val twilightActive = names.any { it.contains(TWILIGHT_ARROW_POISON_MARKER) }
 
 		val rawHealth = resolveVisibleHealth(names)?.takeIf { it > 0L } ?: entity.health.roundToLong().coerceAtLeast(1L)
@@ -221,12 +795,13 @@ object BlazeSlayerFeature {
 			val totalHealth = rawHealth.coerceIn(0L, rawMaxHealth)
 			return BlazeBossInfo(
 				entity = entity,
-					tier = tier,
-					displayName = kind.displayName,
-					kind = kind,
-					showPhase = false,
-					showHealth = true,
-					phase = 0,
+				tier = tier,
+				displayName = kind.displayName,
+				kind = kind,
+				spawnedByPlayer = spawnedByPlayer,
+				showPhase = false,
+				showHealth = true,
+				phase = 0,
 				phaseCount = 0,
 				phaseHealth = totalHealth,
 				phaseMaxHealth = rawMaxHealth,
@@ -281,6 +856,7 @@ object BlazeSlayerFeature {
 			tier = tier,
 			displayName = "Inferno Demonlord ${romanTier(tier)}",
 			kind = kind,
+			spawnedByPlayer = spawnedByPlayer,
 			showPhase = true,
 			showHealth = true,
 			phase = phase,
@@ -440,7 +1016,7 @@ object BlazeSlayerFeature {
 		for (shield in HellionShield.entries) {
 			val line = names.firstOrNull { it.contains(shield.displayName, ignoreCase = true) } ?: continue
 			val number = HELLION_NUMBER_PATTERN.find(line)?.groupValues?.getOrNull(1)?.toIntOrNull()
-			return HellionShieldInfo(shield.displayName, shield.color, number ?: 0)
+			return HellionShieldInfo(shield, number ?: 0)
 		}
 		return null
 	}
@@ -614,9 +1190,39 @@ object BlazeSlayerFeature {
 	}
 
 	private fun clear() {
+		featureTickCounter = 0
 		tickCounter = 0
 		trackedBosses = emptyMap()
 		trackedShields = emptyMap()
+		clearOwnBlazeBossMemory()
+	}
+
+	private fun clearAutoState() {
+		autoTickCounter = 0
+		autoFightActive = false
+		autoFightEmptyTicks = 0
+		autoWarnLastTicks.clear()
+		resetAutoFightProgress()
+	}
+
+	private fun resetAutoFightProgress() {
+		autoActionCooldownTicks = 0
+		autoLastShield = null
+		autoSeenOpeningAshen = false
+		autoTerminatorShotDone = false
+		autoInMobPhase = false
+		autoMobPhaseCount = 0
+		autoFirstMobRagHandled = false
+		autoPendingAttunement = null
+		autoPendingAttunementUntilTick = 0
+		autoActionDelayMaxTicks = AUTO_ACTION_DELAY_MIN_TICKS
+		autoLastObservedSelectedSlot = null
+		autoManualOverrideUntilTick = 0
+		autoLastBossUuid = null
+		autoBossGroundY = null
+		autoBossAirMobPhaseQueued = false
+		clearRagnarockCastWait()
+		autoQueuedActions.clear()
 	}
 
 	private data class BlazeBossInfo(
@@ -624,6 +1230,7 @@ object BlazeSlayerFeature {
 		val tier: Int,
 		val displayName: String,
 		val kind: InfernoKind,
+		val spawnedByPlayer: String?,
 		val showPhase: Boolean,
 		val showHealth: Boolean,
 		val phase: Int,
@@ -636,14 +1243,45 @@ object BlazeSlayerFeature {
 		val twilightActive: Boolean,
 	)
 
+	private data class AutoSnapshot(
+		val boss: BlazeBossInfo?,
+		val bossShield: HellionShield?,
+		val quazii: BlazeBossInfo?,
+		val typhoeus: BlazeBossInfo?,
+	) {
+		val quaziiAlive: Boolean = quazii != null
+		val typhoeusAlive: Boolean = typhoeus != null
+		val inMobPhase: Boolean = quaziiAlive || typhoeusAlive
+		val hasTarget: Boolean = boss != null || inMobPhase
+	}
+
+	private data class DaggerTarget(
+		val family: DaggerFamily,
+		val attunement: DaggerAttunement,
+	)
+
 	private data class TextSegment(val text: String, val color: Int)
 
 	private data class HellionShieldInfo(
-		val displayName: String,
-		val color: Int,
+		val shield: HellionShield,
 		val number: Int,
 	) {
+		val displayName: String get() = shield.displayName
+		val color: Int get() = shield.color
 		fun labelWithNumber(): String = if (number > 0) "$displayName $number" else displayName
+	}
+
+	private sealed interface AutoAction {
+		data class SelectSlot(val slot: Int) : AutoAction
+		data class RightClick(val kind: RightClickKind, val attunement: DaggerAttunement? = null) : AutoAction
+		data class Wait(val ticks: Int) : AutoAction
+		data object WaitForRagnarockCast : AutoAction
+	}
+
+	private enum class RightClickKind {
+		TERMINATOR,
+		RAGNAROCK,
+		DAGGER_ATTUNE,
 	}
 
 	private enum class HellionShield(val displayName: String, val color: Int) {
@@ -653,15 +1291,43 @@ object BlazeSlayerFeature {
 		CRYSTAL("CRYSTAL", 0xFF55FFFF.toInt()),
 	}
 
+	private enum class DaggerFamily(val displayName: String, val ids: List<String>) {
+		ASHEN("Ashen/Auric dagger", listOf("HEARTFIRE_DAGGER", "BURSTFIRE_DAGGER", "FIREDUST_DAGGER")),
+		SPIRIT("Spirit/Crystal dagger", listOf("HEARTMAW_DAGGER", "BURSTMAW_DAGGER", "MAWDUST_DAGGER")),
+	}
+
+	private enum class DaggerAttunement(val family: DaggerFamily, val materialItem: Item) {
+		ASHEN(DaggerFamily.ASHEN, Items.STONE_SWORD),
+		SPIRIT(DaggerFamily.SPIRIT, Items.IRON_SWORD),
+		AURIC(DaggerFamily.ASHEN, Items.GOLDEN_SWORD),
+		CRYSTAL(DaggerFamily.SPIRIT, Items.DIAMOND_SWORD),
+	}
+
 	private enum class InfernoKind(val displayName: String) {
 		DEMONLORD("Inferno Demonlord"),
 		QUAZII("Inferno Quazii"),
 		TYPHOEUS("Inferno Typhoeus"),
 	}
 
+	private val HOTBAR_SLOT_RANGE = 0..8
+	private val TERMINATOR_IDS = listOf("TERMINATOR")
+	private val RAGNAROCK_IDS = listOf("RAGNAROCK_AXE")
+	private val AUTO_RAGNAROCK_FINISHED_ACTIONBAR_PATTERN = Regex("(?i)(?:^|\\s)CASTING\\s*$")
+	private val SPAWNED_BY_PATTERN = Regex("(?i)\\bSpawned by:\\s*(?:\\[[^\\]]+\\]\\s*)?([A-Za-z0-9_]{1,16})\\b")
 	private const val SCAN_INTERVAL_TICKS = 5
+	private const val AUTO_ACTION_DELAY_MIN_TICKS = 2
+	private const val AUTO_ACTION_DELAY_MAX_TICKS = 5
+	private const val AUTO_MANUAL_SWAP_PAUSE_TICKS = 12
+	private const val AUTO_BOSS_AIR_MOB_Y_DELTA = 2.0
+	private const val AUTO_RAGNAROCK_MIN_WAIT_TICKS = 60
+	private const val AUTO_RAGNAROCK_SIGNAL_FALLBACK_TICKS = 100
+	private const val AUTO_RAGNAROCK_POST_CAST_SETTLE_TICKS = 5
+	private const val AUTO_ATTUNE_RETRY_TICKS = 8
+	private const val AUTO_WARNING_THROTTLE_TICKS = 120
+	private const val AUTO_FIGHT_RESET_TICKS = 80
+	private const val AUTO_TARGET_DISTANCE_SQUARED = 2500.0
+	private const val OWN_BLAZE_BOSS_MEMORY_TICKS = 400
 	private const val NAME_SEARCH_DISTANCE_SQUARED = 25.0
-	private const val SHIELD_TRACK_DISTANCE_SQUARED = 144.0
 	private const val DEMON_PAIR_DISTANCE_SQUARED = 256.0
 	private const val DEMON_BOSS_DISTANCE_SQUARED = 400.0
 	private const val SECOND_DEMON_PHASE = 3

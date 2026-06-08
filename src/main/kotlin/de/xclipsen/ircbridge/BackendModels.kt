@@ -44,7 +44,11 @@ class BackendStatusSnapshot(
 )
 
 class BridgeConfig {
-	@JvmField var backendBaseUrl: String = "http://127.0.0.1:8765"
+	@JvmField var backendBaseUrl: String = "https://api.xclipsen.de"
+	@JvmField var minigameBackendBaseUrl: String = "https://api.xclipsen.de"
+	@JvmField var devModeEnabled: Boolean = false
+	@JvmField var devBackendBaseUrl: String = "http://127.0.0.1:8765"
+	@JvmField var ircServerBaseUrl: String = "http://127.0.0.1:8765"
 	@JvmField var backendAuthToken: String = "change-me"
 	@JvmField var backendPollIntervalMs: Long = 2000L
 	@JvmField var checkForUpdatesEnabled: Boolean = true
@@ -131,6 +135,18 @@ class BridgeConfig {
 	@JvmField var m5TracerEnabled: Boolean = true
 	@JvmField var m5IceSprayTimerEnabled: Boolean = true
 	@JvmField var m5RagAxeAlertEnabled: Boolean = true
+	@JvmField var dungeonAutoKickModuleEnabled: Boolean = false
+	@JvmField var dungeonAutoKickStatsDisplayEnabled: Boolean = true
+	@JvmField var dungeonAutoKickSendKickLineEnabled: Boolean = true
+	@JvmField var dungeonAutoKickAutoKickEnabled: Boolean = true
+	@JvmField var dungeonAutoKickFloor: String = "7"
+	@JvmField var dungeonAutoKickMasterMode: Boolean = true
+	@JvmField var dungeonAutoKickMaxPbSeconds: Int = 400
+	@JvmField var dungeonAutoKickMinSecretsThousands: Int = 0
+	@JvmField var dungeonAutoKickMinMagicalPower: Int = 1300
+	@JvmField var dungeonAutoKickApiOffKickEnabled: Boolean = false
+	@JvmField var dungeonAutoKickInformKickedEnabled: Boolean = true
+	@JvmField var dungeonAutoKickCacheEnabled: Boolean = true
 	@JvmField var pickaxeAbilityCooldownModuleEnabled: Boolean = false
 	@JvmField var pickaxeAbilityCooldownShowReady: Boolean = true
 	@JvmField var pickaxeAbilityCooldownAlertEnabled: Boolean = false
@@ -159,6 +175,8 @@ class BridgeConfig {
 	@JvmField var slayerSpawnAnnouncerEnabled: Boolean = true
 	@JvmField var slayerBlazePhaseDisplayEnabled: Boolean = true
 	@JvmField var slayerBlazeColoredMobsEnabled: Boolean = false
+	@JvmField var slayerBlazeAutoDaggerEnabled: Boolean = false
+	@JvmField var slayerBlazeAutoDaggerDelayMaxTicks: Int = 2
 	@JvmField var slayerSpawnAnnouncerText: String = SlayerFeature.DEFAULT_ANNOUNCER_TEXT
 	@JvmField var slayerSpawnAnnouncerSoundId: String = SoundCatalog.defaultSoundId
 	@JvmField var slayerSpawnAnnouncerSoundVolume: Float = 1.0f
@@ -167,6 +185,10 @@ class BridgeConfig {
 
 	fun copy(): BridgeConfig = BridgeConfig().also {
 		it.backendBaseUrl = backendBaseUrl
+		it.minigameBackendBaseUrl = minigameBackendBaseUrl
+		it.devModeEnabled = devModeEnabled
+		it.devBackendBaseUrl = devBackendBaseUrl
+		it.ircServerBaseUrl = ircServerBaseUrl
 		it.backendAuthToken = backendAuthToken
 		it.backendPollIntervalMs = backendPollIntervalMs
 		it.checkForUpdatesEnabled = checkForUpdatesEnabled
@@ -253,6 +275,18 @@ class BridgeConfig {
 		it.m5TracerEnabled = m5TracerEnabled
 		it.m5IceSprayTimerEnabled = m5IceSprayTimerEnabled
 		it.m5RagAxeAlertEnabled = m5RagAxeAlertEnabled
+		it.dungeonAutoKickModuleEnabled = dungeonAutoKickModuleEnabled
+		it.dungeonAutoKickStatsDisplayEnabled = dungeonAutoKickStatsDisplayEnabled
+		it.dungeonAutoKickSendKickLineEnabled = dungeonAutoKickSendKickLineEnabled
+		it.dungeonAutoKickAutoKickEnabled = dungeonAutoKickAutoKickEnabled
+		it.dungeonAutoKickFloor = dungeonAutoKickFloor
+		it.dungeonAutoKickMasterMode = dungeonAutoKickMasterMode
+		it.dungeonAutoKickMaxPbSeconds = dungeonAutoKickMaxPbSeconds
+		it.dungeonAutoKickMinSecretsThousands = dungeonAutoKickMinSecretsThousands
+		it.dungeonAutoKickMinMagicalPower = dungeonAutoKickMinMagicalPower
+		it.dungeonAutoKickApiOffKickEnabled = dungeonAutoKickApiOffKickEnabled
+		it.dungeonAutoKickInformKickedEnabled = dungeonAutoKickInformKickedEnabled
+		it.dungeonAutoKickCacheEnabled = dungeonAutoKickCacheEnabled
 		it.pickaxeAbilityCooldownModuleEnabled = pickaxeAbilityCooldownModuleEnabled
 		it.pickaxeAbilityCooldownShowReady = pickaxeAbilityCooldownShowReady
 		it.pickaxeAbilityCooldownAlertEnabled = pickaxeAbilityCooldownAlertEnabled
@@ -281,6 +315,8 @@ class BridgeConfig {
 		it.slayerSpawnAnnouncerEnabled = slayerSpawnAnnouncerEnabled
 		it.slayerBlazePhaseDisplayEnabled = slayerBlazePhaseDisplayEnabled
 		it.slayerBlazeColoredMobsEnabled = slayerBlazeColoredMobsEnabled
+		it.slayerBlazeAutoDaggerEnabled = slayerBlazeAutoDaggerEnabled
+		it.slayerBlazeAutoDaggerDelayMaxTicks = slayerBlazeAutoDaggerDelayMaxTicks
 		it.slayerSpawnAnnouncerText = slayerSpawnAnnouncerText
 		it.slayerSpawnAnnouncerSoundId = slayerSpawnAnnouncerSoundId
 		it.slayerSpawnAnnouncerSoundVolume = slayerSpawnAnnouncerSoundVolume
@@ -352,6 +388,40 @@ class ItemPrice {
 	@JvmField var sellPrice: Double = 0.0
 	/** Unix-ms timestamp when the Bot last fetched this from Hypixel. */
 	@JvmField var lastUpdated: Long = 0L
+}
+
+class BackendDungeonStatsResponse {
+	@JvmField var ok: Boolean = false
+	@JvmField var username: String = ""
+	@JvmField var uuid: String = ""
+	@JvmField var profileName: String = ""
+	@JvmField var selected: Boolean = false
+	@JvmField var stats: BackendDungeonStats = BackendDungeonStats()
+	@JvmField var cachedAt: Long = 0L
+	@JvmField var code: String = ""
+	@JvmField var error: String = ""
+}
+
+class BackendDungeonStats {
+	@JvmField var catacombsLevel: Double = 0.0
+	@JvmField var secrets: Long = 0L
+	@JvmField var bloodMobKills: Long = 0L
+	@JvmField var adjustedSecrets: Long = 0L
+	@JvmField var averageSecrets: Double = 0.0
+	@JvmField var magicalPower: Int = 0
+	@JvmField var inventoryApi: Boolean = false
+	@JvmField var classes: MutableMap<String, Double> = mutableMapOf()
+	@JvmField var floors: BackendDungeonFloors = BackendDungeonFloors()
+}
+
+class BackendDungeonFloors {
+	@JvmField var normal: MutableMap<String, BackendDungeonFloorStats> = mutableMapOf()
+	@JvmField var master: MutableMap<String, BackendDungeonFloorStats> = mutableMapOf()
+}
+
+class BackendDungeonFloorStats {
+	@JvmField var sPlusPbMs: Long = 0L
+	@JvmField var completions: Int = 0
 }
 
 object TextFormatter {

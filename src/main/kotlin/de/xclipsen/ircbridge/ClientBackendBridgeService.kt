@@ -84,10 +84,10 @@ class ClientBackendBridgeService(
 		announcedConnected = false
 		backlogInitialized = false
 
-		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+		if (config.ircServerBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
 			state = "disabled"
-			lastError = "Backend URL or auth token missing."
-			logger.warn("Client backend bridge disabled because backend URL or auth token is missing.")
+			lastError = "IRC server URL or auth token missing."
+			logger.warn("Client backend bridge disabled because IRC server URL or auth token is missing.")
 			return
 		}
 
@@ -99,7 +99,7 @@ class ClientBackendBridgeService(
 		state = "starting"
 		scheduler?.execute(::bootstrapLastSeenMessageId)
 		scheduler?.scheduleAtFixedRate(::pollMessages, interval, interval, TimeUnit.MILLISECONDS)
-		logger.info("Client backend bridge started with endpoint {}", config.backendBaseUrl)
+		logger.info("Client backend bridge started with IRC endpoint {}", config.ircServerBaseUrl)
 	}
 
 	@Synchronized
@@ -168,8 +168,8 @@ class ClientBackendBridgeService(
 		}
 
 		return try {
-			val request = requestBuilder(
-				backendUrl("/api/link/status?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
+			val request = modBackendRequestBuilder(
+				modBackendUrl("/api/link/status?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
 			).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
@@ -199,10 +199,10 @@ class ClientBackendBridgeService(
 	 * Must NOT be called on the main thread — blocks until the HTTP response arrives.
 	 */
 	fun fetchSkyblockPrices(): BackendPricePayload? {
-		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) return null
+		if (activeModBackendBaseUrl(config).isBlank()) return null
 
 		return try {
-			val request = requestBuilder(backendUrl("/api/skyblock/prices")).GET().build()
+			val request = modBackendRequestBuilder(modBackendUrl("/api/skyblock/prices")).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			if (response.statusCode() != 200) {
 				logger.debug("Price fetch returned HTTP {}", response.statusCode())
@@ -219,8 +219,43 @@ class ClientBackendBridgeService(
 		}
 	}
 
+	fun fetchDungeonStats(playerName: String): BackendDungeonStatsResponse? {
+		if (activeModBackendBaseUrl(config).isBlank()) {
+			return null
+		}
+
+		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
+		if (safePlayerName.isBlank()) {
+			return null
+		}
+
+		return try {
+			val request = modBackendRequestBuilder(
+				modBackendUrl("/api/skyblock/dungeons/player?username=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
+			).GET().build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = response.statusCode()
+			val payload = GSON.fromJson(response.body(), BackendDungeonStatsResponse::class.java) ?: BackendDungeonStatsResponse()
+			if (response.statusCode() in 200..299) {
+				payload
+			} else {
+				payload.apply {
+					if (error.isBlank()) {
+						error = "Dungeon stats returned HTTP ${response.statusCode()}"
+					}
+				}
+			}
+		} catch (exception: IOException) {
+			logger.debug("Dungeon stats fetch failed: {}", exception.message)
+			null
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
 	fun uploadMobModelState(playerName: String, snapshot: BackendMobModelState): Boolean {
-		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+		if (activeModBackendBaseUrl(config).isBlank()) {
 			return false
 		}
 
@@ -240,7 +275,7 @@ class ClientBackendBridgeService(
 		}
 
 		return try {
-			val request = requestBuilder(backendUrl("/api/mob-model"))
+			val request = modBackendRequestBuilder(modBackendUrl("/api/mob-model"))
 				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
@@ -256,7 +291,7 @@ class ClientBackendBridgeService(
 	}
 
 	fun fetchMobModelStates(playerName: String): BackendMobModelStatesResponse? {
-		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+		if (activeModBackendBaseUrl(config).isBlank()) {
 			return null
 		}
 
@@ -266,8 +301,8 @@ class ClientBackendBridgeService(
 		}
 
 		return try {
-			val request = requestBuilder(
-				backendUrl("/api/mob-models?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
+			val request = modBackendRequestBuilder(
+				modBackendUrl("/api/mob-models?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
 			).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
@@ -286,7 +321,7 @@ class ClientBackendBridgeService(
 	}
 
 	fun uploadHideonleafStats(playerName: String, snapshot: BackendHideonleafStatsUpload): Boolean {
-		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+		if (activeModBackendBaseUrl(config).isBlank()) {
 			return false
 		}
 
@@ -313,7 +348,7 @@ class ClientBackendBridgeService(
 		}
 
 		return try {
-			val request = requestBuilder(backendUrl("/api/hideonleaf"))
+			val request = modBackendRequestBuilder(modBackendUrl("/api/hideonleaf"))
 				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
@@ -329,7 +364,7 @@ class ClientBackendBridgeService(
 	}
 
 	fun fetchHideonleafStats(playerName: String): BackendHideonleafStatsUpload? {
-		if (config.backendBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+		if (activeModBackendBaseUrl(config).isBlank()) {
 			return null
 		}
 
@@ -339,8 +374,8 @@ class ClientBackendBridgeService(
 		}
 
 		return try {
-			val request = requestBuilder(
-				backendUrl("/api/hideonleaf/status?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
+			val request = modBackendRequestBuilder(
+				modBackendUrl("/api/hideonleaf/status?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
 			).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
@@ -365,7 +400,7 @@ class ClientBackendBridgeService(
 		}
 
 		return try {
-			val request = requestBuilder(backendUrl("/api/link/complete"))
+			val request = modBackendRequestBuilder(modBackendUrl("/api/link/complete"))
 				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
@@ -403,12 +438,12 @@ class ClientBackendBridgeService(
 
 		try {
 			lastPollAt = System.currentTimeMillis()
-			val query = backendUrl(
+			val query = ircServerUrl(
 				"/api/messages?after=" +
 					URLEncoder.encode(lastSeenMessageId.toString(), StandardCharsets.UTF_8) +
 					"&playerName=" + URLEncoder.encode(playerName, StandardCharsets.UTF_8),
 			)
-			val request = requestBuilder(query).GET().build()
+			val request = ircRequestBuilder(query).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
 
@@ -501,7 +536,7 @@ class ClientBackendBridgeService(
 
 	private fun postOutgoing(outgoing: BackendOutgoingMessage) {
 		try {
-			val request = requestBuilder(backendUrl("/api/messages"))
+			val request = ircRequestBuilder(ircServerUrl("/api/messages"))
 				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
@@ -534,15 +569,15 @@ class ClientBackendBridgeService(
 	}
 
 	fun testConnection(configOverride: BridgeConfig): BackendStatusSnapshot {
-		if (configOverride.backendBaseUrl.isBlank() || configOverride.backendAuthToken.isBlank()) {
+		if (configOverride.ircServerBaseUrl.isBlank() || configOverride.backendAuthToken.isBlank()) {
 			state = "disabled"
-			lastError = "Backend URL or auth token missing."
+			lastError = "IRC server URL or auth token missing."
 			return status()
 		}
 
 		return try {
 			lastPollAt = System.currentTimeMillis()
-			val request = requestBuilder(backendUrl("/health", configOverride), configOverride).GET().build()
+			val request = ircRequestBuilder(ircServerUrl("/health", configOverride), configOverride).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
 
@@ -574,13 +609,18 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	private fun requestBuilder(url: String, configOverride: BridgeConfig = config): HttpRequest.Builder =
+	private fun modBackendRequestBuilder(url: String): HttpRequest.Builder =
 		HttpRequest.newBuilder(URI.create(url))
 			.timeout(Duration.ofSeconds(10))
-			.header("Authorization", "Bearer ${configOverride.backendAuthToken}")
 			.header("Content-Type", "application/json")
 
-	private fun backendUrl(path: String, configOverride: BridgeConfig = config): String = configOverride.backendBaseUrl + path
+	private fun ircRequestBuilder(url: String, configOverride: BridgeConfig = config): HttpRequest.Builder =
+		modBackendRequestBuilder(url)
+			.header("Authorization", "Bearer ${configOverride.backendAuthToken}")
+
+	private fun modBackendUrl(path: String, configOverride: BridgeConfig = config): String = activeModBackendBaseUrl(configOverride) + path
+
+	private fun ircServerUrl(path: String, configOverride: BridgeConfig = config): String = configOverride.ircServerBaseUrl + path
 
 	private fun announceConnected(client: MinecraftClient?) {
 		if (announcedConnected || client?.player == null || client.inGameHud == null) {

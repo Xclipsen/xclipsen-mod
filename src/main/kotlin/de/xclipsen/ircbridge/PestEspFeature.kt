@@ -99,7 +99,7 @@ object PestEspFeature {
 			blue,
 			BOX_FILL_ALPHA,
 		)
-		XclipsenWorldRenderUtils.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA)
+		XclipsenWorldRenderUtils.drawBox(entry, lineConsumer, box, red, green, blue, BOX_OUTLINE_ALPHA, OUTLINE_WIDTH.toFloat())
 	}
 
 	private fun drawLine(
@@ -126,9 +126,11 @@ object PestEspFeature {
 		lineConsumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
 			.color(red, green, blue, LINE_ALPHA)
 			.normal(entry, normalX, normalY, normalZ)
+			.lineWidth(OUTLINE_WIDTH.toFloat())
 		lineConsumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
 			.color(red, green, blue, LINE_ALPHA)
 			.normal(entry, normalX, normalY, normalZ)
+			.lineWidth(OUTLINE_WIDTH.toFloat())
 	}
 
 	private fun crosshairStart(cameraPos: Vec3d, player: PlayerEntity): Vec3d {

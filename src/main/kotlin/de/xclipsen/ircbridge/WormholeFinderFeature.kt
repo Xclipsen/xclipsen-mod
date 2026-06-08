@@ -178,15 +178,15 @@ object WormholeFinderFeature {
 		val tracerConsumer = consumers.getBuffer(tracerLayer)
 
 		if (active != null) {
-			drawWaterSurfaceRing(shadowRingConsumer, entry, active.waterSurfaceCenter, RING_SHADOW_COLOR, 210)
-			drawWaterSurfaceRing(ringConsumer, entry, active.waterSurfaceCenter, DEFAULT_COLOR, CIRCLE_LINE_ALPHA)
+			drawWaterSurfaceRing(shadowRingConsumer, entry, active.waterSurfaceCenter, RING_SHADOW_COLOR, 210, RING_SHADOW_LINE_WIDTH.toFloat())
+			drawWaterSurfaceRing(ringConsumer, entry, active.waterSurfaceCenter, DEFAULT_COLOR, CIRCLE_LINE_ALPHA, RING_LINE_WIDTH.toFloat())
 		}
 		if (target != null) {
-			drawTracer(shadowTracerConsumer, entry, cameraPos, target.middleBlockCenter, RING_SHADOW_COLOR, 225)
-			drawTracer(tracerConsumer, entry, cameraPos, target.middleBlockCenter, DEFAULT_COLOR, TRACER_LINE_ALPHA)
+			drawTracer(shadowTracerConsumer, entry, cameraPos, target.middleBlockCenter, RING_SHADOW_COLOR, 225, TRACER_SHADOW_LINE_WIDTH.toFloat())
+			drawTracer(tracerConsumer, entry, cameraPos, target.middleBlockCenter, DEFAULT_COLOR, TRACER_LINE_ALPHA, TRACER_LINE_WIDTH.toFloat())
 			if (target != active) {
-				drawWaterSurfaceRing(shadowRingConsumer, entry, target.waterSurfaceCenter, RING_SHADOW_COLOR, 190)
-				drawWaterSurfaceRing(ringConsumer, entry, target.waterSurfaceCenter, DEFAULT_COLOR, 220)
+				drawWaterSurfaceRing(shadowRingConsumer, entry, target.waterSurfaceCenter, RING_SHADOW_COLOR, 190, RING_SHADOW_LINE_WIDTH.toFloat())
+				drawWaterSurfaceRing(ringConsumer, entry, target.waterSurfaceCenter, DEFAULT_COLOR, 220, RING_LINE_WIDTH.toFloat())
 			}
 		}
 
@@ -291,11 +291,12 @@ object WormholeFinderFeature {
 		center: Vec3d,
 		color: Int,
 		alpha: Int,
+		lineWidth: Float,
 	) {
 		val red = color shr 16 and 0xFF
 		val green = color shr 8 and 0xFF
 		val blue = color and 0xFF
-		drawCircleRing(lineConsumer, entry, center, RING_RADIUS, red, green, blue, alpha)
+		drawCircleRing(lineConsumer, entry, center, RING_RADIUS, red, green, blue, alpha, lineWidth)
 	}
 
 	private fun drawCircleRing(
@@ -307,12 +308,13 @@ object WormholeFinderFeature {
 		green: Int,
 		blue: Int,
 		alpha: Int,
+		lineWidth: Float,
 	) {
 		var previous = center.add(radius, 0.0, 0.0)
 		for (index in 1..CIRCLE_SEGMENTS) {
 			val angle = (index.toDouble() / CIRCLE_SEGMENTS) * PI * 2.0
 			val next = center.add(cos(angle) * radius, 0.0, sin(angle) * radius)
-			drawLineSegment(consumer, entry, previous, next, red, green, blue, alpha)
+			drawLineSegment(consumer, entry, previous, next, red, green, blue, alpha, lineWidth)
 			previous = next
 		}
 	}
@@ -326,13 +328,16 @@ object WormholeFinderFeature {
 		green: Int,
 		blue: Int,
 		alpha: Int,
+		lineWidth: Float,
 	) {
 		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
 			.color(red, green, blue, alpha)
 			.normal(entry, 0.0f, 1.0f, 0.0f)
+			.lineWidth(lineWidth)
 		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
 			.color(red, green, blue, alpha)
 			.normal(entry, 0.0f, 1.0f, 0.0f)
+			.lineWidth(lineWidth)
 	}
 
 	private fun drawTracer(
@@ -342,6 +347,7 @@ object WormholeFinderFeature {
 		target: Vec3d,
 		color: Int,
 		alpha: Int,
+		lineWidth: Float,
 	) {
 		val start = crosshairStart(cameraPos)
 		val delta = target.subtract(start)
@@ -359,9 +365,11 @@ object WormholeFinderFeature {
 		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
 			.color(red, green, blue, alpha)
 			.normal(entry, normalX, normalY, normalZ)
+			.lineWidth(lineWidth)
 		consumer.vertex(entry, target.x.toFloat(), target.y.toFloat(), target.z.toFloat())
 			.color(red, green, blue, alpha)
 			.normal(entry, normalX, normalY, normalZ)
+			.lineWidth(lineWidth)
 	}
 
 	private fun crosshairStart(cameraPos: Vec3d): Vec3d {

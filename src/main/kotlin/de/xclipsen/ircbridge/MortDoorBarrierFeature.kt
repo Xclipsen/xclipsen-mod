@@ -291,8 +291,21 @@ object MortDoorBarrierFeature {
 
 		fun line(x1: Double, y1: Double, z1: Double, x2: Double, y2: Double, z2: Double) {
 			val consumer = consumers.getBuffer(layer)
-			consumer.vertex(entry, x1.toFloat(), y1.toFloat(), z1.toFloat()).color(r, g, b, DEBUG_ALPHA)
-			consumer.vertex(entry, x2.toFloat(), y2.toFloat(), z2.toFloat()).color(r, g, b, DEBUG_ALPHA)
+			val dx = x2 - x1
+			val dy = y2 - y1
+			val dz = z2 - z1
+			val length = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz).coerceAtLeast(0.0001)
+			val normalX = (dx / length).toFloat()
+			val normalY = (dy / length).toFloat()
+			val normalZ = (dz / length).toFloat()
+			consumer.vertex(entry, x1.toFloat(), y1.toFloat(), z1.toFloat())
+				.color(r, g, b, DEBUG_ALPHA)
+				.normal(entry, normalX, normalY, normalZ)
+				.lineWidth(DEBUG_LINE_WIDTH.toFloat())
+			consumer.vertex(entry, x2.toFloat(), y2.toFloat(), z2.toFloat())
+				.color(r, g, b, DEBUG_ALPHA)
+				.normal(entry, normalX, normalY, normalZ)
+				.lineWidth(DEBUG_LINE_WIDTH.toFloat())
 			(consumers as? VertexConsumerProvider.Immediate)?.draw(layer)
 		}
 

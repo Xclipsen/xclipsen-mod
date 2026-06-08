@@ -358,9 +358,11 @@ object M5Feature {
 		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
 			.color(red, green, blue, 230)
 			.normal(entry, normalX, normalY, normalZ)
+			.lineWidth(width)
 		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
 			.color(red, green, blue, 230)
 			.normal(entry, normalX, normalY, normalZ)
+			.lineWidth(width)
 		(context.consumers() as? VertexConsumerProvider.Immediate)?.draw(renderLayer)
 		matrices.pop()
 	}

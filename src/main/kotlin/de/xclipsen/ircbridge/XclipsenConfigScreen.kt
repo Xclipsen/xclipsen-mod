@@ -30,6 +30,8 @@ class XclipsenConfigScreen(
 	private var mobModelScrollOffset = 0
 	private var mobModelVariantDropdownOpen = false
 	private var mobModelVariantScrollOffset = 0
+	private var dungeonAutoKickFloorDropdownOpen = false
+	private var dungeonAutoKickFloorScrollOffset = 0
 	private var draggingSlider: SliderDragTarget? = null
 	private var pickaxeAlertExpanded = false
 	private var slayerBlazeExpanded = true
@@ -40,7 +42,7 @@ class XclipsenConfigScreen(
 		get() = openColorField != null
 
 	private lateinit var searchField: TextFieldWidget
-	private lateinit var backendBaseUrlField: TextFieldWidget
+	private lateinit var ircServerBaseUrlField: TextFieldWidget
 	private lateinit var backendAuthTokenField: TextFieldWidget
 	private lateinit var backendPollIntervalField: TextFieldWidget
 	private lateinit var ircFormatField: TextFieldWidget
@@ -64,6 +66,9 @@ class XclipsenConfigScreen(
 	private lateinit var mineshaftAutoWarpRuleField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpDelayField: TextFieldWidget
 	private lateinit var mineshaftAutoWarpWindowField: TextFieldWidget
+	private lateinit var dungeonAutoKickMaxPbField: TextFieldWidget
+	private lateinit var dungeonAutoKickMinSecretsField: TextFieldWidget
+	private lateinit var dungeonAutoKickMinMpField: TextFieldWidget
 	private lateinit var lostFightSoundSearchField: TextFieldWidget
 	private lateinit var pickaxeAlertSoundSearchField: TextFieldWidget
 	private lateinit var fireFreezeAlertSoundSearchField: TextFieldWidget
@@ -74,7 +79,7 @@ class XclipsenConfigScreen(
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.CHAT, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE, ConfigSection.SLAYER)),
 		ConfigPanel("MISC", listOf(ConfigSection.CHIMERA_DROP, ConfigSection.DEPLOYBLE, ConfigSection.WORMHOLE_FINDER, ConfigSection.AUTO_SPRINT, ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.FIRE_FREEZE, ConfigSection.MINESHAFT_AUTOWARP)),
-		ConfigPanel("DUNGEON", listOf(ConfigSection.M5, ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
+		ConfigPanel("DUNGEON", listOf(ConfigSection.M5, ConfigSection.DUNGEON_AUTOKICK, ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
 		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
 	)
@@ -86,7 +91,7 @@ class XclipsenConfigScreen(
 		searchField = addField(0, 0, 150, "", "Search...")
 		searchField.setTextShadow(false)
 
-		backendBaseUrlField = registerField(ConfigField.BACKEND_URL, workingCopy.backendBaseUrl, "http://127.0.0.1:8765")
+		ircServerBaseUrlField = registerField(ConfigField.IRC_SERVER_URL, workingCopy.ircServerBaseUrl, "http://127.0.0.1:8765")
 		backendAuthTokenField = registerField(ConfigField.AUTH_TOKEN, workingCopy.backendAuthToken, "shared secret")
 		backendPollIntervalField = registerField(ConfigField.POLL_INTERVAL, workingCopy.backendPollIntervalMs.toString(), "minimum 500")
 		ircFormatField = registerField(ConfigField.IRC_FORMAT, workingCopy.ircCommandFormat, "[IRC] <%player%> %message%")
@@ -110,6 +115,9 @@ class XclipsenConfigScreen(
 		mineshaftAutoWarpRuleField = registerField(ConfigField.MINESHAFT_AUTOWARP_RULE, workingCopy.mineshaftAutoWarpCorpseRule, "lapis 2; vanguard 1")
 		mineshaftAutoWarpDelayField = registerField(ConfigField.MINESHAFT_AUTOWARP_DELAY, workingCopy.mineshaftAutoWarpDelayMs.toString(), "3500")
 		mineshaftAutoWarpWindowField = registerField(ConfigField.MINESHAFT_AUTOWARP_WINDOW, workingCopy.mineshaftAutoWarpWindowMs.toString(), "55000")
+		dungeonAutoKickMaxPbField = registerField(ConfigField.DUNGEON_AUTOKICK_MAX_PB, workingCopy.dungeonAutoKickMaxPbSeconds.toString(), "400")
+		dungeonAutoKickMinSecretsField = registerField(ConfigField.DUNGEON_AUTOKICK_MIN_SECRETS, workingCopy.dungeonAutoKickMinSecretsThousands.toString(), "0")
+		dungeonAutoKickMinMpField = registerField(ConfigField.DUNGEON_AUTOKICK_MIN_MP, workingCopy.dungeonAutoKickMinMagicalPower.toString(), "1300")
 		lostFightSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		pickaxeAlertSoundSearchField = addField(0, 0, 150, "", "Search sound...")
 		fireFreezeAlertSoundSearchField = addField(0, 0, 150, "", "Search sound...")
@@ -178,6 +186,7 @@ class XclipsenConfigScreen(
 				soundDropdownOpen = false
 				mobModelDropdownOpen = false
 				mobModelVariantDropdownOpen = false
+				dungeonAutoKickFloorDropdownOpen = false
 				draggingColorPicker = null
 				draggingSlider = null
 			} else if (button == RIGHT_MOUSE_BUTTON) {
@@ -186,6 +195,7 @@ class XclipsenConfigScreen(
 				soundDropdownOpen = false
 				mobModelDropdownOpen = false
 				mobModelVariantDropdownOpen = false
+				dungeonAutoKickFloorDropdownOpen = false
 				draggingColorPicker = null
 				draggingSlider = null
 			}
@@ -265,6 +275,15 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (openedSection == ConfigSection.DUNGEON_AUTOKICK && dungeonAutoKickFloorDropdownOpen) {
+			val list = dungeonAutoKickFloorListBounds(settingsBounds())
+			if (list.contains(mouseX.toInt(), mouseY.toInt())) {
+				val maxScroll = (DUNGEON_AUTOKICK_FLOOR_OPTIONS.size - DUNGEON_AUTOKICK_FLOOR_VISIBLE_ROWS).coerceAtLeast(0)
+				dungeonAutoKickFloorScrollOffset = (dungeonAutoKickFloorScrollOffset - verticalAmount.toInt()).coerceIn(0, maxScroll)
+				return true
+			}
+		}
+
 		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
 	}
 
@@ -291,6 +310,7 @@ class XclipsenConfigScreen(
 			ConfigSection.SILENT_DISCONNECT -> workingCopy.silentDisconnectModuleEnabled = !workingCopy.silentDisconnectModuleEnabled
 			ConfigSection.CHIMERA_DROP -> workingCopy.chimeraBookDropEffectsModuleEnabled = !workingCopy.chimeraBookDropEffectsModuleEnabled
 			ConfigSection.M5 -> workingCopy.m5ModuleEnabled = !workingCopy.m5ModuleEnabled
+			ConfigSection.DUNGEON_AUTOKICK -> workingCopy.dungeonAutoKickModuleEnabled = !workingCopy.dungeonAutoKickModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled = !workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeModuleEnabled = !workingCopy.fireFreezeModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled = !workingCopy.mineshaftAutoWarpModuleEnabled
@@ -320,6 +340,8 @@ class XclipsenConfigScreen(
 		mobModelScrollOffset = 0
 		mobModelVariantDropdownOpen = false
 		mobModelVariantScrollOffset = 0
+		dungeonAutoKickFloorDropdownOpen = false
+		dungeonAutoKickFloorScrollOffset = 0
 		layoutWidgets()
 	}
 
@@ -361,7 +383,8 @@ class XclipsenConfigScreen(
 
 	private fun readWorkingCopyFromFields(updateStatus: Boolean): BridgeConfig? {
 		val candidate = copyOf(workingCopy)
-		candidate.backendBaseUrl = backendBaseUrlField.text.trim()
+		candidate.backendBaseUrl = BridgeConfigManager.MOD_BACKEND_BASE_URL
+		candidate.ircServerBaseUrl = ircServerBaseUrlField.text.trim()
 		candidate.backendAuthToken = backendAuthTokenField.text.trim()
 		candidate.checkForUpdatesEnabled = workingCopy.checkForUpdatesEnabled
 		candidate.autoUpdateEnabled = workingCopy.autoUpdateEnabled
@@ -395,6 +418,8 @@ class XclipsenConfigScreen(
 		candidate.slayerSpawnAnnouncerEnabled = workingCopy.slayerSpawnAnnouncerEnabled
 		candidate.slayerBlazePhaseDisplayEnabled = workingCopy.slayerBlazePhaseDisplayEnabled
 		candidate.slayerBlazeColoredMobsEnabled = workingCopy.slayerBlazeColoredMobsEnabled
+		candidate.slayerBlazeAutoDaggerEnabled = workingCopy.slayerBlazeAutoDaggerEnabled
+		candidate.slayerBlazeAutoDaggerDelayMaxTicks = workingCopy.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(2, 5)
 		candidate.slayerSpawnAnnouncerText = slayerAnnouncerTextField.text.trim()
 		candidate.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(workingCopy.slayerSpawnAnnouncerSoundId)
 		candidate.slayerSpawnAnnouncerSoundVolume = workingCopy.slayerSpawnAnnouncerSoundVolume
@@ -412,6 +437,15 @@ class XclipsenConfigScreen(
 		candidate.dungeonDoorMode = workingCopy.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		candidate.dungeonRedVignetteModuleEnabled = workingCopy.dungeonRedVignetteModuleEnabled
 		candidate.dungeonRedVignetteEnabled = workingCopy.dungeonRedVignetteEnabled
+		candidate.dungeonAutoKickModuleEnabled = workingCopy.dungeonAutoKickModuleEnabled
+		candidate.dungeonAutoKickStatsDisplayEnabled = workingCopy.dungeonAutoKickStatsDisplayEnabled
+		candidate.dungeonAutoKickSendKickLineEnabled = workingCopy.dungeonAutoKickSendKickLineEnabled
+		candidate.dungeonAutoKickAutoKickEnabled = workingCopy.dungeonAutoKickAutoKickEnabled
+		candidate.dungeonAutoKickFloor = workingCopy.dungeonAutoKickFloor
+		candidate.dungeonAutoKickMasterMode = workingCopy.dungeonAutoKickMasterMode
+		candidate.dungeonAutoKickApiOffKickEnabled = workingCopy.dungeonAutoKickApiOffKickEnabled
+		candidate.dungeonAutoKickInformKickedEnabled = workingCopy.dungeonAutoKickInformKickedEnabled
+		candidate.dungeonAutoKickCacheEnabled = workingCopy.dungeonAutoKickCacheEnabled
 		candidate.pestEspModuleEnabled = workingCopy.pestEspModuleEnabled
 		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
 		candidate.corpseEspModuleEnabled = workingCopy.corpseEspModuleEnabled
@@ -590,6 +624,33 @@ class XclipsenConfigScreen(
 			return null
 		}
 
+		candidate.dungeonAutoKickMaxPbSeconds = parseDurationSeconds(dungeonAutoKickMaxPbField.text) ?: run {
+			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick PB must be seconds or m:ss.")
+			return null
+		}
+		if (candidate.dungeonAutoKickMaxPbSeconds !in 60..900) {
+			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick PB must be between 60 and 900 seconds.")
+			return null
+		}
+
+		candidate.dungeonAutoKickMinSecretsThousands = dungeonAutoKickMinSecretsField.text.trim().toIntOrNull() ?: run {
+			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick secrets must be a number.")
+			return null
+		}
+		if (candidate.dungeonAutoKickMinSecretsThousands !in 0..200) {
+			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick secrets must be between 0 and 200k.")
+			return null
+		}
+
+		candidate.dungeonAutoKickMinMagicalPower = dungeonAutoKickMinMpField.text.trim().toIntOrNull() ?: run {
+			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick MP must be a number.")
+			return null
+		}
+		if (candidate.dungeonAutoKickMinMagicalPower !in 0..2500) {
+			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick MP must be between 0 and 2500.")
+			return null
+		}
+
 		val autoCroesusCandidate = copyOf(workingAutoCroesusConfig)
 		try {
 			autoCroesusCandidate.minClickDelay = autoCroesusClickDelayField.text.trim().toInt()
@@ -744,6 +805,7 @@ class XclipsenConfigScreen(
 			ConfigSection.SILENT_DISCONNECT -> workingCopy.silentDisconnectModuleEnabled
 			ConfigSection.CHIMERA_DROP -> workingCopy.chimeraBookDropEffectsModuleEnabled
 			ConfigSection.M5 -> workingCopy.m5ModuleEnabled
+			ConfigSection.DUNGEON_AUTOKICK -> workingCopy.dungeonAutoKickModuleEnabled
 			ConfigSection.PICKAXE_COOLDOWN -> workingCopy.pickaxeAbilityCooldownModuleEnabled
 			ConfigSection.FIRE_FREEZE -> workingCopy.fireFreezeModuleEnabled
 			ConfigSection.MINESHAFT_AUTOWARP -> workingCopy.mineshaftAutoWarpModuleEnabled
@@ -786,6 +848,7 @@ class XclipsenConfigScreen(
 			ConfigSection.SILENT_DISCONNECT -> drawSilentDisconnectSettings(context, menu, mouseX, mouseY)
 			ConfigSection.CHIMERA_DROP -> drawChimeraDropSettings(context, menu, mouseX, mouseY)
 			ConfigSection.M5 -> drawM5Settings(context, menu, mouseX, mouseY)
+			ConfigSection.DUNGEON_AUTOKICK -> drawDungeonAutoKickSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PICKAXE_COOLDOWN -> drawPickaxeCooldownSettings(context, menu, mouseX, mouseY)
 			ConfigSection.FIRE_FREEZE -> drawFireFreezeSettings(context, menu, mouseX, mouseY)
 			ConfigSection.MINESHAFT_AUTOWARP -> drawMineshaftAutoWarpSettings(context, menu, mouseX, mouseY)
@@ -804,15 +867,16 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawSetupSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
-		drawTextInputSetting(context, menu, 0, "Backend URL", backendBaseUrlField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 1, "Backend Auth Token", backendAuthTokenField, mouseX, mouseY)
-		drawTextInputSetting(context, menu, 2, "Poll Interval (ms)", backendPollIntervalField, mouseX, mouseY)
-		drawButtonSetting(context, setupTestConnectionBounds(menu), "Test Connection", mouseX, mouseY)
+		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Mod API", BridgeConfigManager.MOD_BACKEND_BASE_URL, mouseX, mouseY)
 	}
 
 	private fun drawIrcBridgeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
-		drawTextInputSetting(context, menu, 0, "IRC Format", ircFormatField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 0, "IRC Server URL", ircServerBaseUrlField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 1, "IRC Auth Token", backendAuthTokenField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 2, "Poll Interval (ms)", backendPollIntervalField, mouseX, mouseY)
+		drawTextInputSetting(context, menu, 3, "IRC Format", ircFormatField, mouseX, mouseY)
 		drawToggleSetting(context, coopRelayToggleBounds(menu), "Co-op Relay", workingCopy.coopChatRelayEnabled, mouseX, mouseY)
+		drawButtonSetting(context, ircTestConnectionBounds(menu), "Test IRC Server", mouseX, mouseY)
 	}
 
 	private fun drawChatSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -909,6 +973,8 @@ class XclipsenConfigScreen(
 		if (slayerBlazeExpanded) {
 			drawToggleSetting(context, slayerBlazePhaseDisplayBounds(menu), "Phase Display", workingCopy.slayerBlazePhaseDisplayEnabled, mouseX, mouseY)
 			drawToggleSetting(context, slayerBlazeColoredMobsBounds(menu), "Colored Mobs", workingCopy.slayerBlazeColoredMobsEnabled, mouseX, mouseY)
+			drawToggleSetting(context, slayerBlazeAutoDaggerBounds(menu), "Auto Dagger", workingCopy.slayerBlazeAutoDaggerEnabled, mouseX, mouseY)
+			drawOptionSetting(context, slayerBlazeAutoDaggerDelayBounds(menu), "Delay", autoDaggerDelayDisplay(workingCopy.slayerBlazeAutoDaggerDelayMaxTicks), mouseX, mouseY)
 		}
 
 		drawDisclosureSetting(context, slayerMiscHeaderBounds(menu), "Misc", slayerMiscExpanded, mouseX, mouseY)
@@ -923,6 +989,11 @@ class XclipsenConfigScreen(
 			drawSliderSetting(context, slayerAnnouncerPitchBounds(menu), "Pitch", workingCopy.slayerSpawnAnnouncerSoundPitch, 0.1f, 2.0f, mouseX, mouseY)
 			drawButtonSetting(context, slayerAnnouncerPreviewBounds(menu), "Preview Announcer", mouseX, mouseY)
 		}
+	}
+
+	private fun autoDaggerDelayDisplay(maxTicks: Int): String {
+		val normalized = maxTicks.coerceIn(2, 5)
+		return if (normalized <= 2) "2 ticks" else "2-$normalized ticks"
 	}
 
 	private fun drawPestEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -978,6 +1049,23 @@ class XclipsenConfigScreen(
 		drawToggleSetting(context, m5IceSprayBounds(menu), "Ice Spray Timer", workingCopy.m5IceSprayTimerEnabled, mouseX, mouseY)
 		drawToggleSetting(context, m5RagAxeBounds(menu), "Rag Axe Alert", workingCopy.m5RagAxeAlertEnabled, mouseX, mouseY)
 		drawInfoSetting(context, m5StatusBounds(menu), "Current State", M5Feature.statusLine(), mouseX, mouseY)
+	}
+
+	private fun drawDungeonAutoKickSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, dungeonAutoKickStatsDisplayBounds(menu), "Stats Display", workingCopy.dungeonAutoKickStatsDisplayEnabled, mouseX, mouseY)
+		drawToggleSetting(context, dungeonAutoKickAutoKickBounds(menu), "Auto Kick", workingCopy.dungeonAutoKickAutoKickEnabled, mouseX, mouseY)
+		drawOptionSetting(context, dungeonAutoKickFloorBounds(menu), "Floor", "${if (workingCopy.dungeonAutoKickMasterMode) "M" else "F"}${workingCopy.dungeonAutoKickFloor}", mouseX, mouseY)
+		if (dungeonAutoKickFloorDropdownOpen) {
+			drawDungeonAutoKickFloorDropdown(context, menu, mouseX, mouseY)
+		}
+		drawTextInputSetting(context, dungeonAutoKickMaxPbBounds(menu), "Max S+ PB (s)", dungeonAutoKickMaxPbField, mouseX, mouseY)
+		drawTextInputSetting(context, dungeonAutoKickMinSecretsBounds(menu), "Min Secrets (k)", dungeonAutoKickMinSecretsField, mouseX, mouseY)
+		drawTextInputSetting(context, dungeonAutoKickMinMpBounds(menu), "Min MP", dungeonAutoKickMinMpField, mouseX, mouseY)
+		drawToggleSetting(context, dungeonAutoKickApiOffBounds(menu), "Kick API Off", workingCopy.dungeonAutoKickApiOffKickEnabled, mouseX, mouseY)
+		drawToggleSetting(context, dungeonAutoKickInformBounds(menu), "Inform Kicked", workingCopy.dungeonAutoKickInformKickedEnabled, mouseX, mouseY)
+		drawToggleSetting(context, dungeonAutoKickCacheBounds(menu), "Kick Cache", workingCopy.dungeonAutoKickCacheEnabled, mouseX, mouseY)
+		drawOptionSetting(context, dungeonAutoKickClearCacheBounds(menu), "Clear Cache", "Click", mouseX, mouseY)
+		drawInfoSetting(context, dungeonAutoKickStatusBounds(menu), "Current State", DungeonAutoKickFeature.statusLine(), mouseX, mouseY)
 	}
 
 	private fun drawPickaxeCooldownSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -1284,6 +1372,30 @@ class XclipsenConfigScreen(
 		context.disableScissor()
 	}
 
+	private fun drawDungeonAutoKickFloorDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		val list = dungeonAutoKickFloorListBounds(menu)
+		context.fill(list.left - 4, list.top - 4, list.right + 4, list.bottom + 4, INPUT_BACKGROUND)
+		val maxScroll = (DUNGEON_AUTOKICK_FLOOR_OPTIONS.size - DUNGEON_AUTOKICK_FLOOR_VISIBLE_ROWS).coerceAtLeast(0)
+		dungeonAutoKickFloorScrollOffset = dungeonAutoKickFloorScrollOffset.coerceIn(0, maxScroll)
+		val current = "${if (workingCopy.dungeonAutoKickMasterMode) "M" else "F"}${workingCopy.dungeonAutoKickFloor}"
+
+		context.enableScissor(list.left, list.top, list.right, list.bottom)
+		DUNGEON_AUTOKICK_FLOOR_OPTIONS.drop(dungeonAutoKickFloorScrollOffset).take(DUNGEON_AUTOKICK_FLOOR_VISIBLE_ROWS).forEachIndexed { index, option ->
+			val row = Bounds(list.left, list.top + (index * SOUND_ROW_HEIGHT), list.right, list.top + ((index + 1) * SOUND_ROW_HEIGHT))
+			val hovered = row.contains(mouseX, mouseY)
+			val selected = option == current
+			if (hovered) {
+				context.fill(row.left, row.top, row.right, row.bottom, HOVER)
+			}
+			if (selected) {
+				context.fill(row.left, row.top, row.left + 2, row.bottom, ACCENT)
+			}
+			val textColor = if (selected) ACCENT else if (hovered) TEXT_WHITE else TEXT_MUTED
+			context.drawTextWithShadow(textRenderer, option, row.left + 8, row.top + 3, textColor)
+		}
+		context.disableScissor()
+	}
+
 	private fun drawButtonSetting(context: DrawContext, row: Bounds, label: String, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
@@ -1534,6 +1646,7 @@ class XclipsenConfigScreen(
 			ConfigSection.SILENT_DISCONNECT -> SILENT_DISCONNECT_POPUP_HEIGHT
 			ConfigSection.CHIMERA_DROP -> if (soundDropdownOpen) CHIMERA_DROP_POPUP_WITH_DROPDOWN_HEIGHT else CHIMERA_DROP_POPUP_HEIGHT
 			ConfigSection.M5 -> M5_POPUP_HEIGHT
+			ConfigSection.DUNGEON_AUTOKICK -> if (dungeonAutoKickFloorDropdownOpen) DUNGEON_AUTOKICK_POPUP_WITH_DROPDOWN_HEIGHT else DUNGEON_AUTOKICK_POPUP_HEIGHT
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeCooldownPopupHeight()
 			ConfigSection.FIRE_FREEZE -> if (soundDropdownOpen) FIRE_FREEZE_POPUP_WITH_DROPDOWN_HEIGHT else FIRE_FREEZE_POPUP_HEIGHT
 			ConfigSection.MINESHAFT_AUTOWARP -> MINESHAFT_AUTOWARP_POPUP_HEIGHT
@@ -1581,7 +1694,7 @@ class XclipsenConfigScreen(
 			return true
 		}
 
-		if (section == ConfigSection.SETUP && setupTestConnectionBounds(menu).contains(mouseX, mouseY)) {
+		if (section == ConfigSection.IRC_BRIDGE && ircTestConnectionBounds(menu).contains(mouseX, mouseY)) {
 			testConnection()
 			return true
 		}
@@ -1793,6 +1906,19 @@ class XclipsenConfigScreen(
 			if (slayerBlazeExpanded && slayerBlazeColoredMobsBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				workingCopy.slayerBlazeColoredMobsEnabled = !workingCopy.slayerBlazeColoredMobsEnabled
+				return true
+			}
+
+			if (slayerBlazeExpanded && slayerBlazeAutoDaggerBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerBlazeAutoDaggerEnabled = !workingCopy.slayerBlazeAutoDaggerEnabled
+				return true
+			}
+
+			if (slayerBlazeExpanded && slayerBlazeAutoDaggerDelayBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerBlazeAutoDaggerDelayMaxTicks =
+					if (workingCopy.slayerBlazeAutoDaggerDelayMaxTicks >= 5) 2 else workingCopy.slayerBlazeAutoDaggerDelayMaxTicks + 1
 				return true
 			}
 
@@ -2072,6 +2198,39 @@ class XclipsenConfigScreen(
 			}
 		}
 
+		if (section == ConfigSection.DUNGEON_AUTOKICK) {
+			readWorkingCopyFromFields(updateStatus = false)
+			when {
+				dungeonAutoKickStatsDisplayBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickStatsDisplayEnabled = !workingCopy.dungeonAutoKickStatsDisplayEnabled
+				dungeonAutoKickAutoKickBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickAutoKickEnabled = !workingCopy.dungeonAutoKickAutoKickEnabled
+				dungeonAutoKickFloorBounds(menu).contains(mouseX, mouseY) -> {
+					dungeonAutoKickFloorDropdownOpen = !dungeonAutoKickFloorDropdownOpen
+					dungeonAutoKickFloorScrollOffset = selectedDungeonAutoKickFloorIndex().coerceAtLeast(0)
+						.coerceAtMost((DUNGEON_AUTOKICK_FLOOR_OPTIONS.size - DUNGEON_AUTOKICK_FLOOR_VISIBLE_ROWS).coerceAtLeast(0))
+					layoutWidgets()
+				}
+				dungeonAutoKickFloorDropdownOpen && dungeonAutoKickFloorListBounds(menu).contains(mouseX, mouseY) -> {
+					val index = dungeonAutoKickFloorScrollOffset + ((mouseY - dungeonAutoKickFloorListBounds(menu).top) / SOUND_ROW_HEIGHT)
+					val selected = DUNGEON_AUTOKICK_FLOOR_OPTIONS.getOrNull(index)
+					if (selected != null) {
+						workingCopy.dungeonAutoKickMasterMode = selected.startsWith("M")
+						workingCopy.dungeonAutoKickFloor = selected.substring(1)
+						dungeonAutoKickFloorDropdownOpen = false
+						layoutWidgets()
+					}
+				}
+				dungeonAutoKickApiOffBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickApiOffKickEnabled = !workingCopy.dungeonAutoKickApiOffKickEnabled
+				dungeonAutoKickInformBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickInformKickedEnabled = !workingCopy.dungeonAutoKickInformKickedEnabled
+				dungeonAutoKickCacheBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickCacheEnabled = !workingCopy.dungeonAutoKickCacheEnabled
+				dungeonAutoKickClearCacheBounds(menu).contains(mouseX, mouseY) -> {
+					DungeonAutoKickFeature.clearKickCache()
+					statusMessage = Text.literal("Dungeon AutoKick cache cleared.")
+				}
+				else -> return false
+			}
+			return true
+		}
+
 		if (section == ConfigSection.PICKAXE_COOLDOWN) {
 			if (pickaxeShowReadyBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
@@ -2339,14 +2498,14 @@ class XclipsenConfigScreen(
 	private fun textFieldBounds(section: ConfigSection, field: ConfigField, menu: Bounds): Bounds? {
 		return when (section) {
 			ConfigSection.SETUP -> when (field) {
-				ConfigField.BACKEND_URL -> settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
-				ConfigField.AUTH_TOKEN -> settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT)
-				ConfigField.POLL_INTERVAL -> settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT)
 				else -> null
 			}
 
 			ConfigSection.IRC_BRIDGE -> when (field) {
-				ConfigField.IRC_FORMAT -> settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
+				ConfigField.IRC_SERVER_URL -> settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT)
+				ConfigField.AUTH_TOKEN -> settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT)
+				ConfigField.POLL_INTERVAL -> settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT)
+				ConfigField.IRC_FORMAT -> settingRowBounds(menu, 3, TEXT_INPUT_SETTING_HEIGHT)
 				else -> null
 			}
 
@@ -2376,6 +2535,13 @@ class XclipsenConfigScreen(
 				else -> null
 			}
 
+			ConfigSection.DUNGEON_AUTOKICK -> when (field) {
+				ConfigField.DUNGEON_AUTOKICK_MAX_PB -> dungeonAutoKickMaxPbBounds(menu)
+				ConfigField.DUNGEON_AUTOKICK_MIN_SECRETS -> dungeonAutoKickMinSecretsBounds(menu)
+				ConfigField.DUNGEON_AUTOKICK_MIN_MP -> dungeonAutoKickMinMpBounds(menu)
+				else -> null
+			}
+
 			ConfigSection.PICKAXE_COOLDOWN -> when (field) {
 				ConfigField.PICKAXE_ALERT_TEXT -> if (pickaxeAlertExpanded) pickaxeAlertTextBounds(menu) else null
 				else -> null
@@ -2398,6 +2564,29 @@ class XclipsenConfigScreen(
 			return null
 		}
 		return normalized.toLongOrNull()?.takeIf { it >= 0L }
+	}
+
+	private fun parseDurationSeconds(raw: String): Int? {
+		val normalized = raw.trim()
+			.replace(",", "")
+			.replace("_", "")
+		if (normalized.isBlank()) {
+			return null
+		}
+		if (!normalized.contains(':')) {
+			return normalized.toIntOrNull()?.takeIf { it >= 0 }
+		}
+
+		val parts = normalized.split(":")
+		if (parts.size != 2) {
+			return null
+		}
+		val minutes = parts[0].toIntOrNull() ?: return null
+		val seconds = parts[1].toIntOrNull() ?: return null
+		if (minutes < 0 || seconds !in 0..59) {
+			return null
+		}
+		return minutes * 60 + seconds
 	}
 
 	private fun parseAutoCroesusFloors(raw: String): ArrayList<String>? {
@@ -2935,7 +3124,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun coopRelayToggleBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + (1 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
+		val rowTop = menu.top + 40 + (4 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
 		return Bounds(menu.left + 10, rowTop, menu.left + 10 + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
 
@@ -2946,8 +3135,8 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
-	private fun setupTestConnectionBounds(menu: Bounds): Bounds {
-		val rowTop = menu.top + 40 + (3 * (TEXT_INPUT_SETTING_HEIGHT + SETTING_GAP))
+	private fun ircTestConnectionBounds(menu: Bounds): Bounds {
+		val rowTop = coopRelayToggleBounds(menu).bottom + SETTING_GAP
 		val rowLeft = menu.left + 10
 		return Bounds(rowLeft, rowTop, rowLeft + SETTING_WIDTH, rowTop + SETTING_HEIGHT)
 	}
@@ -3065,6 +3254,74 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
 	}
 
+	private fun dungeonAutoKickRowAfter(previous: Bounds, rowHeight: Int): Bounds {
+		val top = previous.bottom + SETTING_GAP
+		return Bounds(previous.left, top, previous.right, top + rowHeight)
+	}
+
+	private fun dungeonAutoKickStatsDisplayBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickKickLineBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickStatsDisplayBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickAutoKickBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickStatsDisplayBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickFloorBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickAutoKickBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickFloorListBounds(menu: Bounds): Bounds {
+		val top = dungeonAutoKickFloorBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 18, top, menu.right - 18, top + (DUNGEON_AUTOKICK_FLOOR_VISIBLE_ROWS * SOUND_ROW_HEIGHT))
+	}
+
+	private fun dungeonAutoKickAfterFloorBounds(menu: Bounds, rowHeight: Int): Bounds {
+		val previous = if (dungeonAutoKickFloorDropdownOpen) dungeonAutoKickFloorListBounds(menu) else dungeonAutoKickFloorBounds(menu)
+		return dungeonAutoKickRowAfter(previous, rowHeight)
+	}
+
+	private fun dungeonAutoKickMaxPbBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickAfterFloorBounds(menu, TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickMinSecretsBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickMaxPbBounds(menu), TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickMinMpBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickMinSecretsBounds(menu), TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickApiOffBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickMinMpBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickInformBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickApiOffBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickCacheBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickInformBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickClearCacheBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickCacheBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun dungeonAutoKickStatusBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickClearCacheBounds(menu), TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun selectedDungeonAutoKickFloorIndex(): Int {
+		val current = "${if (workingCopy.dungeonAutoKickMasterMode) "M" else "F"}${workingCopy.dungeonAutoKickFloor}"
+		return DUNGEON_AUTOKICK_FLOOR_OPTIONS.indexOf(current)
+	}
+
 	private fun timeChangerModeBounds(menu: Bounds): Bounds {
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
@@ -3090,8 +3347,16 @@ class XclipsenConfigScreen(
 		return slayerRowAfter(slayerBlazePhaseDisplayBounds(menu), SETTING_HEIGHT)
 	}
 
+	private fun slayerBlazeAutoDaggerBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerBlazeColoredMobsBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun slayerBlazeAutoDaggerDelayBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerBlazeAutoDaggerBounds(menu), SETTING_HEIGHT)
+	}
+
 	private fun slayerMiscHeaderBounds(menu: Bounds): Bounds {
-		val previous = if (slayerBlazeExpanded) slayerBlazeColoredMobsBounds(menu) else slayerBlazeHeaderBounds(menu)
+		val previous = if (slayerBlazeExpanded) slayerBlazeAutoDaggerDelayBounds(menu) else slayerBlazeHeaderBounds(menu)
 		return slayerRowAfter(previous, SETTING_HEIGHT)
 	}
 
@@ -3278,8 +3543,8 @@ class XclipsenConfigScreen(
 		val description: String,
 		val toggleable: Boolean = false,
 	) {
-		SETUP("Setup", "Global backend and API settings used by all modules."),
-		IRC_BRIDGE("IRC Bridge", "IRC message formats and bridge-specific toggles.", toggleable = true),
+		SETUP("Setup", "Fixed mod API endpoint and global status."),
+		IRC_BRIDGE("IRC Bridge", "IRC server, auth, polling, and message format.", toggleable = true),
 		CHAT("Chat", "Client-side chat cleanup and message hiders.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
 		PURPLE_TERRACOTTA("Purple Terracotta", "Highlights purple terracotta blocks through walls.", toggleable = true),
@@ -3296,6 +3561,7 @@ class XclipsenConfigScreen(
 		SILENT_DISCONNECT("Silent Disconnect", "Sets your Hypixel status offline on disconnect and restores it on rejoin.", toggleable = true),
 		CHIMERA_DROP("Chimera Drop", "Shows the Totem-style screen effect when a Chimera book drops.", toggleable = true),
 		M5("M5", "Livid finder, Ice Spray timer, and Rag Axe alert for Master Mode Floor 5.", toggleable = true),
+		DUNGEON_AUTOKICK("Dungeon AutoKick", "Odin-style Party Finder stats and requirement-based autokick using the Xclipsen backend.", toggleable = true),
 		PICKAXE_COOLDOWN("Pickaxe Cooldown", "HUD for mining ability cooldowns from the Hypixel tab list.", toggleable = true),
 		FIRE_FREEZE("Fire Freeze", "SkyHanni-style Fire Freeze timers, circle, mob boxes, and refreeze alert.", toggleable = true),
 		MINESHAFT_AUTOWARP("Mineshaft AutoWarp", "Auto-requests lead and party-warps when configured corpse counts are found.", toggleable = true),
@@ -3308,9 +3574,9 @@ class XclipsenConfigScreen(
 	}
 
 	private enum class ConfigField(val section: ConfigSection) {
-		BACKEND_URL(ConfigSection.SETUP),
-		AUTH_TOKEN(ConfigSection.SETUP),
-		POLL_INTERVAL(ConfigSection.SETUP),
+		IRC_SERVER_URL(ConfigSection.IRC_BRIDGE),
+		AUTH_TOKEN(ConfigSection.IRC_BRIDGE),
+		POLL_INTERVAL(ConfigSection.IRC_BRIDGE),
 		IRC_FORMAT(ConfigSection.IRC_BRIDGE),
 		AUTO_EXPERIMENTS_CLICK_DELAY(ConfigSection.EXPERIMENTS),
 		AUTO_EXPERIMENTS_DELAY_VARIETY(ConfigSection.EXPERIMENTS),
@@ -3332,6 +3598,9 @@ class XclipsenConfigScreen(
 		MINESHAFT_AUTOWARP_RULE(ConfigSection.MINESHAFT_AUTOWARP),
 		MINESHAFT_AUTOWARP_DELAY(ConfigSection.MINESHAFT_AUTOWARP),
 		MINESHAFT_AUTOWARP_WINDOW(ConfigSection.MINESHAFT_AUTOWARP),
+		DUNGEON_AUTOKICK_MAX_PB(ConfigSection.DUNGEON_AUTOKICK),
+		DUNGEON_AUTOKICK_MIN_SECRETS(ConfigSection.DUNGEON_AUTOKICK),
+		DUNGEON_AUTOKICK_MIN_MP(ConfigSection.DUNGEON_AUTOKICK),
 	}
 
 	companion object {
@@ -3358,8 +3627,8 @@ class XclipsenConfigScreen(
 		private const val PANEL_ROW_HEIGHT = 16
 		private const val POPUP_WIDTH = 200
 		private const val POPUP_HEIGHT = 250
-		private const val SETUP_POPUP_HEIGHT = 220
-		private const val IRC_POPUP_HEIGHT = 140
+		private const val SETUP_POPUP_HEIGHT = 120
+		private const val IRC_POPUP_HEIGHT = 330
 		private const val CHAT_POPUP_HEIGHT = 145
 		private const val HIDEONLEAF_POPUP_HEIGHT = 500
 		private const val PURPLE_TERRACOTTA_POPUP_HEIGHT = 230
@@ -3375,6 +3644,8 @@ class XclipsenConfigScreen(
 		private const val CHIMERA_DROP_POPUP_HEIGHT = 380
 		private const val CHIMERA_DROP_POPUP_WITH_DROPDOWN_HEIGHT = 480
 		private const val M5_POPUP_HEIGHT = 190
+		private const val DUNGEON_AUTOKICK_POPUP_HEIGHT = 455
+		private const val DUNGEON_AUTOKICK_POPUP_WITH_DROPDOWN_HEIGHT = 535
 		private const val STATUS_POPUP_HEIGHT = 255
 		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT = 320
@@ -3392,7 +3663,9 @@ class XclipsenConfigScreen(
 		private const val SEARCH_WIDTH = 150
 		private const val SOUND_VISIBLE_ROWS = 6
 		private const val MOB_MODEL_VISIBLE_ROWS = 7
+		private const val DUNGEON_AUTOKICK_FLOOR_VISIBLE_ROWS = 5
 		private const val SOUND_ROW_HEIGHT = 15
+		private val DUNGEON_AUTOKICK_FLOOR_OPTIONS = listOf("F1", "F2", "F3", "F4", "F5", "F6", "F7", "M1", "M2", "M3", "M4", "M5", "M6", "M7")
 		private const val SOUND_LIST_TEXT_WIDTH = 145
 		private const val CROSSHAIR_GRID_CELL_SIZE = 18
 		private const val CROSSHAIR_GRID_SETTING_HEIGHT = 150

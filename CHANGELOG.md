@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.21
+
+- Added Minecraft `26.1.2` support branch and release builds alongside `1.21.11`.
+- Added Minigames with Tic-Tac-Toe local UI and backend multiplayer support.
+- Split the fixed mod API endpoint from the configurable IRC bridge server and added a `/xclipsen dev` backend toggle.
+
 ## v0.5.20
 
 - Ported the client target from Minecraft `1.21.10` to `1.21.11` and removed the 1.21.10 deploy targets.
