@@ -58,6 +58,9 @@ class ClientBackendBridgeService(
 	private var lastError = ""
 
 	@Volatile
+	private var lastPollWarningAt = 0L
+
+	@Volatile
 	private var announcedConnected = false
 
 	@Volatile
@@ -81,6 +84,7 @@ class ClientBackendBridgeService(
 		lastPollAt = 0L
 		lastMessageAt = 0L
 		lastError = ""
+		lastPollWarningAt = 0L
 		announcedConnected = false
 		backlogInitialized = false
 
@@ -248,6 +252,57 @@ class ClientBackendBridgeService(
 		} catch (exception: IOException) {
 			logger.debug("Dungeon stats fetch failed: {}", exception.message)
 			null
+		} catch (exception: RuntimeException) {
+			logger.warn("Dungeon stats response could not be parsed", exception)
+			BackendDungeonStatsResponse().apply {
+				ok = false
+				error = "Dungeon stats response was invalid. Make sure the Xclipsen backend is updated."
+			}
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
+	fun fetchDungeonStats(players: Collection<String>): BackendDungeonPlayersResponse? {
+		if (activeModBackendBaseUrl(config).isBlank()) {
+			return null
+		}
+
+		val safePlayers = players
+			.map { sanitizeInline(it, MAX_NAME_LENGTH) }
+			.filter { it.isNotBlank() }
+			.distinctBy { it.lowercase() }
+			.take(MAX_BATCH_DUNGEON_PLAYERS)
+		if (safePlayers.isEmpty()) {
+			return BackendDungeonPlayersResponse().apply { ok = true }
+		}
+
+		return try {
+			val request = modBackendRequestBuilder(
+				modBackendUrl("/api/skyblock/dungeons/players?usernames=" + URLEncoder.encode(safePlayers.joinToString(","), StandardCharsets.UTF_8)),
+			).GET().build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = response.statusCode()
+			val payload = GSON.fromJson(response.body(), BackendDungeonPlayersResponse::class.java) ?: BackendDungeonPlayersResponse()
+			if (response.statusCode() in 200..299) {
+				payload
+			} else {
+				payload.apply {
+					if (error.isBlank()) {
+						error = "Dungeon stats returned HTTP ${response.statusCode()}"
+					}
+				}
+			}
+		} catch (exception: IOException) {
+			logger.debug("Batch dungeon stats fetch failed: {}", exception.message)
+			null
+		} catch (exception: RuntimeException) {
+			logger.warn("Batch dungeon stats response could not be parsed", exception)
+			BackendDungeonPlayersResponse().apply {
+				ok = false
+				error = "Batch dungeon stats response was invalid. Make sure the Xclipsen backend is updated."
+			}
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
 			null
@@ -450,7 +505,11 @@ class ClientBackendBridgeService(
 			if (response.statusCode() != 200) {
 				state = "error"
 				lastError = "Poll returned HTTP ${response.statusCode()}"
-				logger.warn("Backend poll returned HTTP {}", response.statusCode())
+				val now = System.currentTimeMillis()
+				if (now - lastPollWarningAt >= POLL_WARNING_INTERVAL_MS) {
+					lastPollWarningAt = now
+					logger.warn("Backend poll returned HTTP {}", response.statusCode())
+				}
 				return
 			}
 
@@ -577,23 +636,36 @@ class ClientBackendBridgeService(
 
 		return try {
 			lastPollAt = System.currentTimeMillis()
-			val request = ircRequestBuilder(ircServerUrl("/health", configOverride), configOverride).GET().build()
-			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-			lastHttpStatus = response.statusCode()
+			val healthRequest = ircRequestBuilder(ircServerUrl("/health", configOverride), configOverride).GET().build()
+			val healthResponse = httpClient.send(healthRequest, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = healthResponse.statusCode()
 
-			if (response.statusCode() != 200) {
+			if (healthResponse.statusCode() != 200) {
 				state = "error"
-				lastError = "Health returned HTTP ${response.statusCode()}"
+				lastError = "Health returned HTTP ${healthResponse.statusCode()}"
 				status()
 			} else {
-				val payload = GSON.fromJson(response.body(), HealthResponse::class.java)
+				val payload = GSON.fromJson(healthResponse.body(), HealthResponse::class.java)
 				if (payload?.status?.equals("ok", ignoreCase = true) != true) {
 					state = "error"
 					lastError = "Health payload invalid."
 				} else {
-					state = "connected"
-					lastSuccessAt = System.currentTimeMillis()
-					lastError = ""
+					val playerName = currentPlayerName(MinecraftClient.getInstance()).ifBlank { "test" }
+					val query = ircServerUrl(
+						"/api/messages?after=0&playerName=" + URLEncoder.encode(playerName, StandardCharsets.UTF_8),
+						configOverride,
+					)
+					val messagesRequest = ircRequestBuilder(query, configOverride).GET().build()
+					val messagesResponse = httpClient.send(messagesRequest, HttpResponse.BodyHandlers.ofString())
+					lastHttpStatus = messagesResponse.statusCode()
+					if (messagesResponse.statusCode() != 200) {
+						state = "error"
+						lastError = "Messages returned HTTP ${messagesResponse.statusCode()}"
+					} else {
+						state = "connected"
+						lastSuccessAt = System.currentTimeMillis()
+						lastError = ""
+					}
 				}
 				status()
 			}
@@ -795,9 +867,11 @@ class ClientBackendBridgeService(
 		private const val MAX_OUTGOING_MESSAGE_LENGTH = 280
 		private const val MAX_INCOMING_MESSAGE_LENGTH = 2048
 		private const val MAX_NAME_LENGTH = 32
+		private const val MAX_BATCH_DUNGEON_PLAYERS = 45
 		private const val LOCAL_ECHO_TTL_MS = 10_000L
 		private const val MAX_LOCAL_ECHOES = 32
 		private const val MAX_PAUSED_INCOMING_MESSAGES = 100
+		private const val POLL_WARNING_INTERVAL_MS = 30_000L
 
 		private fun safe(value: String?): String = value ?: ""
 

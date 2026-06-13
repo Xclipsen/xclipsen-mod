@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.22
+
+- Added Odin-style Party Finder join stats cards with hoverable cata, secrets, class, floor PB, MP, armor, and missing-item details.
+- Added Devonian-style Party Finder GUI stats, role hints, slot highlights, member counts, and right-click leader copy.
+- Added `/cata` and `/xclipsen cata` dungeon stats commands backed by the Xclipsen API.
+- Added batch dungeon stats fetching and backend support for extended dungeon payloads, armor lore, missing items, tunings, S/S+ PBs, and 1-hour stats caching.
+- Hardened Party Finder and minigame networking against stale sessions, invalid backend payloads, and concurrent GUI refresh crashes.
+
 ## v0.5.21
 
 - Added Minecraft `26.1.2` support branch and release builds alongside `1.21.11`.

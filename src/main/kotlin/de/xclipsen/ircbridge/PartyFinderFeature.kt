@@ -1,0 +1,368 @@
+package de.xclipsen.ircbridge
+
+import com.autocroesus.util.ColorUtil
+import net.minecraft.client.MinecraftClient
+import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.gui.screen.ingame.HandledScreen
+import net.minecraft.component.DataComponentTypes
+import net.minecraft.component.type.LoreComponent
+import net.minecraft.item.ItemStack
+import net.minecraft.item.Items
+import net.minecraft.screen.slot.Slot
+import net.minecraft.screen.slot.SlotActionType
+import net.minecraft.text.Text
+import java.util.EnumSet
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.Executors
+
+object PartyFinderFeature {
+	private val executor = Executors.newSingleThreadExecutor { runnable ->
+		Thread(runnable, "xclipsen-party-finder").apply { isDaemon = true }
+	}
+	@Volatile
+	private var parties: Map<Int, PartyFinderData> = emptyMap()
+	private val statsCache = ConcurrentHashMap<String, BackendDungeonStatsResponse>()
+	private val pendingStats = CopyOnWriteArraySet<String>()
+	private var inPartyFinder = false
+	private var inCatacombsGate = false
+	private var currentRole: String? = null
+
+	fun onTick(client: MinecraftClient) {
+		val screen = client.currentScreen as? HandledScreen<*> ?: return
+		if (!isEnabled() || !isPartyFinderScreen(screen)) {
+			return
+		}
+
+		if (parties.isEmpty()) {
+			scanCurrentScreen(screen)
+		}
+		if (isGuiStatsEnabled()) {
+			applyOverviewLore(screen)
+		}
+	}
+
+	fun onDisconnect() {
+		reset()
+		statsCache.clear()
+		pendingStats.clear()
+	}
+
+	fun onServerContainerOpen(syncId: Int, title: Text) {
+		val titleString = title.string
+		inPartyFinder = titleString == "Party Finder"
+		inCatacombsGate = titleString == "Catacombs Gate"
+		if (!inPartyFinder) {
+			parties = emptyMap()
+		}
+	}
+
+	fun onServerContainerClose(syncId: Int) {
+		reset()
+	}
+
+	fun onServerContainerContent(syncId: Int, revision: Int, stacks: List<ItemStack>) {
+		if (!isEnabled()) {
+			return
+		}
+		if (inCatacombsGate) {
+			parseCurrentRole(stacks.getOrNull(45))
+			inCatacombsGate = false
+			return
+		}
+		if (!inPartyFinder) {
+			return
+		}
+		scanStacks(stacks)
+	}
+
+	fun onServerContainerSlot(syncId: Int, revision: Int, slot: Int, stack: ItemStack) {
+		if (!isEnabled()) {
+			return
+		}
+		if (inCatacombsGate && slot == 45) {
+			parseCurrentRole(stack)
+			inCatacombsGate = false
+			return
+		}
+		if (!inPartyFinder) {
+			return
+		}
+		val screen = MinecraftClient.getInstance().currentScreen as? HandledScreen<*> ?: return
+		if (isPartyFinderScreen(screen)) {
+			scanCurrentScreen(screen)
+		}
+	}
+
+	fun beforeDrawSlot(context: DrawContext, screen: HandledScreen<*>, slot: Slot) {
+		if (!isEnabled() || !isHighlightsEnabled() || !isPartyFinderScreen(screen) || slot.inventory == MinecraftClient.getInstance().player?.inventory) {
+			return
+		}
+		val data = parties[slot.index] ?: return
+		val color = if (data.statuses.isEmpty()) JOINABLE_SLOT_COLOR else BLOCKED_SLOT_COLOR
+		context.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, color)
+	}
+
+	fun afterDrawSlots(context: DrawContext, screen: HandledScreen<*>) {
+		if (!isEnabled() || !isMemberCountEnabled() || !isPartyFinderScreen(screen)) {
+			return
+		}
+		val textRenderer = MinecraftClient.getInstance().textRenderer
+		for (slot in screen.screenHandler.slots) {
+			if (slot.inventory == MinecraftClient.getInstance().player?.inventory) continue
+			val data = parties[slot.index] ?: continue
+			context.drawCenteredTextWithShadow(textRenderer, data.members.size.toString(), slot.x + 14, slot.y + 8, 0xFFFFFF)
+		}
+	}
+
+	fun onSlotClick(screen: HandledScreen<*>, slot: Slot?, button: Int, actionType: SlotActionType): Boolean {
+		if (!isEnabled() || !isRightClickEnabled() || !isPartyFinderScreen(screen)) {
+			return false
+		}
+		if (slot == null || button != 1 || actionType != SlotActionType.PICKUP || slot.inventory == MinecraftClient.getInstance().player?.inventory) {
+			return false
+		}
+		if (slot.index !in PARTY_SLOT_RANGE || !slot.stack.isOf(Items.PLAYER_HEAD)) {
+			return false
+		}
+
+		val leader = LEADER_NAME_PATTERN.matchEntire(ColorUtil.stripColors(slot.stack.name.string))?.groupValues?.getOrNull(1) ?: return false
+		val client = MinecraftClient.getInstance()
+		client.keyboard.setClipboard(leader)
+		client.player?.sendMessage(Text.literal("§bCopied leader name §a$leader"), false)
+		return true
+	}
+
+	private fun scanCurrentScreen(screen: HandledScreen<*>) {
+		scanStacks(screen.screenHandler.slots.map { it.stack })
+	}
+
+	private fun scanStacks(stacks: List<ItemStack>) {
+		val parsed = mutableMapOf<Int, PartyFinderData>()
+		for (index in PARTY_SLOT_RANGE) {
+			val stack = stacks.getOrNull(index) ?: continue
+			val data = parseParty(index, stack) ?: continue
+			parsed[index] = data
+		}
+
+		parties = parsed.toMap()
+		requestMissingStats(parsed.values.flatMap { party -> party.members.map { it.name } })
+	}
+
+	private fun parseParty(index: Int, stack: ItemStack): PartyFinderData? {
+		if (!stack.isOf(Items.PLAYER_HEAD)) {
+			return null
+		}
+		val lore = loreLines(stack)
+		var data: PartyFinderData? = null
+		val rolesInParty = mutableSetOf<String>()
+		for (line in lore) {
+			if (data == null) {
+				val type = TYPE_REGEX.matchEntire(line)?.groupValues ?: continue
+				data = PartyFinderData(slot = index, isMasterMode = type.getOrNull(1) == "Master Mode ")
+				continue
+			}
+			when {
+				LOW_CATA_REGEX.matches(line) -> data.statuses.add(PartyFinderStatus.LOW_CATA)
+				LOW_ROLE_REGEX.matches(line) -> data.statuses.add(PartyFinderStatus.LOW_ROLE)
+				CANNOT_JOIN_REGEX.matches(line) -> data.statuses.add(PartyFinderStatus.CANNOT_JOIN)
+				data.floor < 0 -> {
+					val floor = FLOOR_REGEX.matchEntire(line)?.groupValues?.getOrNull(1) ?: continue
+					data.floor = parseRoman(floor)
+				}
+				else -> {
+					val match = USER_ROLE_REGEX.matchEntire(line)?.groupValues ?: continue
+					val role = match[2]
+					rolesInParty += role
+					data.members += PartyFinderMember(match[1], role, match[3].toIntOrNull() ?: 0)
+				}
+			}
+		}
+		val result = data ?: return null
+		if (result.members.any { it.role == currentRole }) {
+			result.statuses.add(PartyFinderStatus.DUPE_CLASS)
+		}
+		result.missingRoles += ROLES.filter { it !in rolesInParty }
+		return result
+	}
+
+	private fun applyOverviewLore(screen: HandledScreen<*>) {
+		for ((slotIndex, party) in parties) {
+			val slot = screen.screenHandler.slots.getOrNull(slotIndex) ?: continue
+			val stack = slot.stack
+			val lore = stack.get(DataComponentTypes.LORE) ?: continue
+			val newLore = mutableListOf<Text>()
+			var changed = false
+			for (line in lore.lines()) {
+				val text = line.string
+				val memberMatch = USER_ROLE_REGEX.matchEntire(text)?.groupValues
+				when {
+					text.contains("Missing: ") -> {
+						changed = true
+						continue
+					}
+					text.contains("Click to join!") || text.contains("Requires ") -> {
+						if (party.missingRoles.isNotEmpty()) {
+							newLore += missingRolesText(party)
+							changed = true
+						}
+						newLore += line
+					}
+					memberMatch != null && !text.contains("[") && !text.contains("]") -> {
+						val stats = statsCache[memberMatch[1].lowercase(Locale.ROOT)]?.takeIf { it.ok }?.stats
+						if (stats == null) {
+							newLore += line
+						} else {
+							newLore += line.copy().append(memberStatsSuffix(party, stats))
+							changed = true
+						}
+					}
+					else -> newLore += line
+				}
+			}
+			if (changed && newLore.isNotEmpty()) {
+				stack.set(DataComponentTypes.LORE, LoreComponent(newLore))
+			}
+		}
+	}
+
+	private fun requestMissingStats(names: List<String>) {
+		val missing = names
+			.map { it.lowercase(Locale.ROOT) }
+			.filter { it.isNotBlank() && !statsCache.containsKey(it) && pendingStats.add(it) }
+			.distinct()
+		if (missing.isEmpty()) return
+
+		executor.execute {
+			val response = XclipsenIrcBridgeClient.instance?.backendBridge()?.fetchDungeonStats(missing)
+			if (response?.ok == true) {
+				response.players.forEach { (name, stats) ->
+					statsCache[name.lowercase(Locale.ROOT)] = stats
+					if (stats.username.isNotBlank()) {
+						statsCache[stats.username.lowercase(Locale.ROOT)] = stats
+					}
+				}
+			}
+			pendingStats.removeAll(missing.toSet())
+		}
+	}
+
+	private fun memberStatsSuffix(party: PartyFinderData, stats: BackendDungeonStats): Text {
+		val floors = if (party.isMasterMode) stats.floors.master else stats.floors.normal
+		val floorStats = floors[party.floor.toString()]
+		val pb = when {
+			floorStats?.sPlusPbMs?.takeIf { it > 0L } != null -> formatTime(floorStats.sPlusPbMs)
+			floorStats?.sPbMs?.takeIf { it > 0L } != null -> formatTime(floorStats.sPbMs)
+			else -> null
+		}
+		return Text.literal(buildString {
+			append(" §8(§6${formatFixed(stats.catacombsLevel, 0)}§8)")
+			append(" §8[§3${formatShort(stats.secrets)} §7| §b${formatFixed(stats.averageSecrets, 1)}§8]")
+			if (pb == null) append(" §8[§cNO PB§8]") else append(" §8[§a$pb§8]")
+		})
+	}
+
+	private fun missingRolesText(party: PartyFinderData): Text {
+		return Text.literal(buildString {
+			append("§eMissing: ")
+			party.missingRoles.forEachIndexed { index, role ->
+				if (index > 0) append("§7, ")
+				append(if (role == currentRole) "§a$role" else "§7$role")
+			}
+		})
+	}
+
+	private fun parseCurrentRole(stack: ItemStack?) {
+		stack ?: return
+		for (line in loreLines(stack)) {
+			val role = CURRENTLY_SELECTED_REGEX.matchEntire(line)?.groupValues?.getOrNull(1) ?: continue
+			currentRole = role
+			return
+		}
+	}
+
+	private fun loreLines(stack: ItemStack): List<String> {
+		return stack.get(DataComponentTypes.LORE)?.lines()?.map { ColorUtil.stripColors(it.string) } ?: emptyList()
+	}
+
+	private fun isPartyFinderScreen(screen: HandledScreen<*>): Boolean = screen.title.string == "Party Finder"
+
+	private fun isEnabled(): Boolean {
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: return false
+		return config.dungeonAutoKickModuleEnabled && (config.partyFinderGuiStatsEnabled || config.partyFinderHighlightsEnabled || config.partyFinderMemberCountEnabled || config.partyFinderRightClickEnabled)
+	}
+
+	private fun isGuiStatsEnabled(): Boolean = XclipsenIrcBridgeClient.instance?.config()?.partyFinderGuiStatsEnabled == true
+
+	private fun isHighlightsEnabled(): Boolean = XclipsenIrcBridgeClient.instance?.config()?.partyFinderHighlightsEnabled == true
+
+	private fun isMemberCountEnabled(): Boolean = XclipsenIrcBridgeClient.instance?.config()?.partyFinderMemberCountEnabled == true
+
+	private fun isRightClickEnabled(): Boolean = XclipsenIrcBridgeClient.instance?.config()?.partyFinderRightClickEnabled == true
+
+	private fun reset() {
+		parties = emptyMap()
+		inPartyFinder = false
+		inCatacombsGate = false
+	}
+
+	private fun parseRoman(value: String): Int {
+		var result = 0
+		var previous = 0
+		for (char in value.reversed()) {
+			val current = ROMAN_VALUES[char] ?: 0
+			if (current < previous) result -= current else result += current
+			previous = current
+		}
+		return result
+	}
+
+	private fun formatShort(value: Long): String {
+		val abs = kotlin.math.abs(value)
+		return when {
+			abs >= 1_000_000L -> "%.1fM".format(Locale.US, value / 1_000_000.0)
+			abs >= 1_000L -> "%.1fK".format(Locale.US, value / 1_000.0)
+			else -> value.toString()
+		}
+	}
+
+	private fun formatFixed(value: Double, decimals: Int): String = "%.${decimals}f".format(Locale.US, value)
+
+	private fun formatTime(ms: Long): String {
+		val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
+		return "${totalSeconds / 60}:${(totalSeconds % 60).toString().padStart(2, '0')}"
+	}
+
+	private data class PartyFinderMember(val name: String, val role: String, val level: Int)
+
+	private data class PartyFinderData(
+		val slot: Int,
+		var floor: Int = -1,
+		val isMasterMode: Boolean,
+		val members: MutableList<PartyFinderMember> = mutableListOf(),
+		val missingRoles: MutableList<String> = mutableListOf(),
+		val statuses: EnumSet<PartyFinderStatus> = EnumSet.noneOf(PartyFinderStatus::class.java),
+	)
+
+	private enum class PartyFinderStatus {
+		CANNOT_JOIN,
+		DUPE_CLASS,
+		LOW_CATA,
+		LOW_ROLE,
+	}
+
+	private val PARTY_SLOT_RANGE = 0..45
+	private val TYPE_REGEX = "^Dungeon: (Master Mode )?(The Catacombs)$".toRegex()
+	private val FLOOR_REGEX = "^Floor: Floor ([IV]+)$".toRegex()
+	private val USER_ROLE_REGEX = "^ (\\w{1,16}): (Healer|Tank|Mage|Berserk|Archer) \\((\\d+)\\)$".toRegex()
+	private val LOW_CATA_REGEX = "^Requires Catacombs Level \\d+!$".toRegex()
+	private val LOW_ROLE_REGEX = "^Requires a Class at Level \\d+!$".toRegex()
+	private val CANNOT_JOIN_REGEX = "^Complete previous floor first!$".toRegex()
+	private val CURRENTLY_SELECTED_REGEX = "^Currently Selected: (Healer|Tank|Mage|Berserk|Archer)$".toRegex()
+	private val LEADER_NAME_PATTERN = "^(\\w{1,16})'s Party$".toRegex()
+	private val ROLES = listOf("Healer", "Tank", "Mage", "Berserk", "Archer")
+	private val ROMAN_VALUES = mapOf('I' to 1, 'V' to 5, 'X' to 10)
+	private const val JOINABLE_SLOT_COLOR = 0x6600FF00
+	private const val BLOCKED_SLOT_COLOR = 0x66FF0000
+}

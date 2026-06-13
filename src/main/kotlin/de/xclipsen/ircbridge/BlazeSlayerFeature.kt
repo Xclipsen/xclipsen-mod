@@ -48,7 +48,13 @@ object BlazeSlayerFeature {
 	private var autoTerminatorShotDone = false
 	private var autoInMobPhase = false
 	private var autoMobPhaseCount = 0
-	private var autoFirstMobRagHandled = false
+	private var autoFirstMobRagQueued = false
+	private var autoFirstMobRagCast = false
+	private var autoFirstMobTyphoeusSeen = false
+	private var autoFirstMobTyphoeusAliveLastTick = false
+	private var autoFirstMobPredictionQueued = false
+	private var autoLastBossDaggerTarget: DaggerTarget? = null
+	private var autoPendingDaggerPrediction: PendingDaggerPrediction? = null
 	private var autoPendingAttunement: DaggerAttunement? = null
 	private var autoPendingAttunementUntilTick = 0
 	private var autoActionDelayMaxTicks = AUTO_ACTION_DELAY_MIN_TICKS
@@ -61,8 +67,15 @@ object BlazeSlayerFeature {
 	private var autoRagnarockCastFallbackUntilTick = 0
 	private var autoRagnarockCastSeen = false
 	private var autoRagnarockCastSeenTick = 0
+	private var autoPostBossResetQueued = false
+	private var autoPostBossResetRestoreSlot: Int? = null
+	private var autoLastRagnarockRightClickTick = 0
+	private var autoCocoonSuppressionUntilTick = 0
+	private var autoLastCocoonedName: String? = null
+	private var autoLastDebugMobKind: InfernoKind? = null
 	private val autoQueuedActions = ArrayDeque<AutoAction>()
 	private val autoWarnLastTicks = mutableMapOf<String, Int>()
+	private val autoDebugLastTicks = mutableMapOf<String, Int>()
 
 	fun onTick(client: MinecraftClient) {
 		val config = XclipsenIrcBridgeClient.instance?.config()
@@ -221,45 +234,116 @@ object BlazeSlayerFeature {
 		}
 	}
 
+	fun onIncomingChatMessage(message: Text) {
+		val clean = cleanName(message.string) ?: return
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
+		val player = MinecraftClient.getInstance().player
+
+		AUTO_COCOON_CHAT_PATTERN.find(clean)?.let { match ->
+			val mobName = match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() } ?: return@let
+			if (isBlazeSlayerCocoonName(mobName)) {
+				autoCocoonSuppressionUntilTick = autoTickCounter + AUTO_COCOON_SUPPRESSION_TICKS
+				autoLastCocoonedName = mobName
+				clearPostBossReset(player, "cocooned $mobName")
+				debugAutoDagger(player, "cocoon detected: $mobName, suppressing post-boss reset")
+			}
+			return
+		}
+
+		AUTO_RAGNAROCK_COOLDOWN_CHAT_PATTERN.find(clean)?.let { match ->
+			if (autoLastRagnarockRightClickTick > 0 &&
+				autoTickCounter - autoLastRagnarockRightClickTick <= AUTO_RAGNAROCK_COOLDOWN_MATCH_TICKS
+			) {
+				val seconds = match.groupValues.getOrNull(1)?.ifBlank { "?" } ?: "?"
+				debugAutoDagger(player, "ragnarock server cooldown: ${seconds}s")
+			}
+			return
+		}
+
+		if (clean.contains(SLAYER_QUEST_COMPLETE_MARKER, ignoreCase = true)) {
+			if (config.slayerModuleEnabled && config.slayerBlazeAutoDaggerEnabled && config.slayerBlazeAutoDaggerResetAfterBossEnabled) {
+				queuePostBossReset(player)
+			}
+		}
+	}
+
 	private fun handleAutoDagger(client: MinecraftClient, player: PlayerEntity) {
 		if (client.currentScreen != null || client.world == null || client.interactionManager == null) {
-			autoQueuedActions.clear()
+			clearAutoQueue(player, "screen/world unavailable")
+			clearPendingPrediction(player, "screen/world unavailable")
+			clearPostBossReset(player, "screen/world unavailable")
 			clearRagnarockCastWait()
 			acceptCurrentHotbarSelection(player)
 			return
 		}
 
 		val snapshot = resolveAutoSnapshot(player)
+		if (snapshot.hasTarget && !autoFightActive) {
+			autoFightActive = true
+			resetAutoFightProgress()
+			debugAutoDagger(player, "fight started")
+		}
+
+		if (autoFightActive && (detectManualHotbarSelection(player) || autoTickCounter < autoManualOverrideUntilTick)) {
+			return
+		}
+
+		if (autoFightActive) {
+			updateFirstMobPrediction(player, snapshot)
+		}
+
 		if (!snapshot.hasTarget) {
 			if (shouldKeepRagnarockQueueWithoutTarget()) {
-				if (autoFightActive && detectManualHotbarSelection(player)) {
+				if (autoActionCooldownTicks > 0) {
 					return
 				}
-				if (autoActionCooldownTicks <= 0 && autoQueuedActions.isNotEmpty()) {
+				if (autoQueuedActions.isNotEmpty()) {
 					runNextAutoAction(client, player)
 				}
 				return
 			}
+			if (autoPendingDaggerPrediction != null) {
+				if (autoActionCooldownTicks > 0) {
+					return
+				}
+				if (autoQueuedActions.isNotEmpty()) {
+					runNextAutoAction(client, player)
+					return
+				}
+				if (queueReadyPrediction(player, snapshot) && autoQueuedActions.isNotEmpty()) {
+					runNextAutoAction(client, player)
+				}
+				return
+			}
+			if (autoPostBossResetQueued) {
+				if (autoActionCooldownTicks > 0) {
+					return
+				}
+				if (autoQueuedActions.isNotEmpty()) {
+					runNextAutoAction(client, player)
+					return
+				}
+				completePostBossReset(player)
+				return
+			}
+			if (autoTickCounter < autoCocoonSuppressionUntilTick) {
+				debugAutoDagger(player, "no target during cocoon suppression", AUTO_DEBUG_STABLE_REPEAT_THROTTLE_TICKS)
+				autoFightEmptyTicks++
+				return
+			}
 
-			autoQueuedActions.clear()
+			clearAutoQueue(player, "no target")
 			clearRagnarockCastWait()
 			acceptCurrentHotbarSelection(player)
 			autoFightEmptyTicks++
 			if (autoFightEmptyTicks >= AUTO_FIGHT_RESET_TICKS) {
+				debugAutoDagger(player, "fight reset after $autoFightEmptyTicks empty ticks")
 				clearAutoState()
 			}
 			return
 		}
 
 		autoFightEmptyTicks = 0
-		if (!autoFightActive) {
-			autoFightActive = true
-			resetAutoFightProgress()
-		}
-
-		if (detectManualHotbarSelection(player) || autoTickCounter < autoManualOverrideUntilTick) {
-			return
-		}
 
 		if (autoActionCooldownTicks > 0) {
 			return
@@ -278,7 +362,14 @@ object BlazeSlayerFeature {
 		if (snapshot.inMobPhase) {
 			handleAutoMobPhase(player, snapshot)
 		} else {
+			if (snapshot.bossShield != null) {
+				clearPendingPrediction(player, "boss shield visible")
+			}
 			handleAutoBossPhase(player, snapshot.bossShield)
+		}
+
+		if (autoQueuedActions.isEmpty()) {
+			queueReadyPrediction(player, snapshot)
 		}
 
 		if (autoActionCooldownTicks <= 0 && autoQueuedActions.isNotEmpty()) {
@@ -314,7 +405,7 @@ object BlazeSlayerFeature {
 
 	private fun detectFirstMobPhaseAirStart(snapshot: AutoSnapshot): Boolean {
 		val boss = snapshot.boss ?: return false
-		if (autoFirstMobRagHandled || autoMobPhaseCount > 0 || autoBossAirMobPhaseQueued) {
+		if (autoFirstMobRagQueued || autoFirstMobRagCast || autoMobPhaseCount > 0 || autoBossAirMobPhaseQueued) {
 			return false
 		}
 
@@ -340,12 +431,83 @@ object BlazeSlayerFeature {
 		return true
 	}
 
+	private fun updateFirstMobPrediction(player: PlayerEntity, snapshot: AutoSnapshot) {
+		val inFirstMobPhase = autoMobPhaseCount == 1
+		val typhoeusAlive = snapshot.typhoeusAlive
+
+		if (inFirstMobPhase && typhoeusAlive) {
+			autoFirstMobTyphoeusSeen = true
+		}
+
+		val typhoeusJustDisappeared =
+			inFirstMobPhase &&
+				autoFirstMobTyphoeusSeen &&
+				autoFirstMobTyphoeusAliveLastTick &&
+				!typhoeusAlive &&
+				!autoFirstMobPredictionQueued
+
+		if (typhoeusJustDisappeared) {
+			val delayTicks = randomAutoActionDelayTicks()
+			autoFirstMobPredictionQueued = true
+			autoPendingDaggerPrediction = PendingDaggerPrediction(
+				readyTick = autoTickCounter + delayTicks,
+				expireTick = autoTickCounter + AUTO_DAGGER_PREDICTION_EXPIRE_TICKS,
+				fallbackTarget = autoLastBossDaggerTarget,
+			)
+			debugAutoDagger(player, "prediction queued after first Typhoeus disappeared delay=${delayTicks}t")
+		}
+
+		autoFirstMobTyphoeusAliveLastTick = inFirstMobPhase && typhoeusAlive
+	}
+
+	private fun queueReadyPrediction(player: PlayerEntity, snapshot: AutoSnapshot): Boolean {
+		val prediction = autoPendingDaggerPrediction ?: return false
+
+		if (autoTickCounter > prediction.expireTick) {
+			autoPendingDaggerPrediction = null
+			debugAutoDagger(player, "prediction expired")
+			return false
+		}
+
+		if (autoTickCounter < prediction.readyTick) {
+			return true
+		}
+
+		val target = snapshot.bossShield?.let(::daggerTargetForShield)
+			?: prediction.fallbackTarget
+			?: run {
+				debugAutoDagger(player, "prediction skipped: no visible shield or fallback target")
+				return true
+			}
+
+		autoPendingDaggerPrediction = null
+		debugAutoDagger(player, "prediction selecting ${target.attunement}")
+		queueDaggerSelection(player, target.family, target.attunement)
+		return autoQueuedActions.isNotEmpty()
+	}
+
+	private fun clearPendingPrediction(player: PlayerEntity, reason: String) {
+		if (autoPendingDaggerPrediction != null) {
+			autoPendingDaggerPrediction = null
+			debugAutoDagger(player, "prediction cleared: $reason")
+		}
+	}
+
 	private fun handleAutoBossPhase(player: PlayerEntity, shield: HellionShield?) {
+		if (autoInMobPhase) {
+			debugAutoDagger(player, "mob phase exited")
+		}
 		autoInMobPhase = false
+		autoLastDebugMobKind = null
 		if (shield == null) {
 			return
 		}
 
+		val target = daggerTargetForShield(shield)
+		autoLastBossDaggerTarget = target
+		if (shield != autoLastShield) {
+			debugAutoDagger(player, "boss shield $shield selecting ${target.attunement}")
+		}
 		if (shield == HellionShield.ASHEN && !autoTerminatorShotDone) {
 			autoSeenOpeningAshen = true
 		}
@@ -362,21 +524,18 @@ object BlazeSlayerFeature {
 		}
 
 		autoLastShield = shield
-		when (shield) {
-			HellionShield.ASHEN -> queueDaggerSelection(player, DaggerFamily.ASHEN, DaggerAttunement.ASHEN)
-			HellionShield.SPIRIT -> queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
-			HellionShield.AURIC -> queueDaggerSelection(player, DaggerFamily.ASHEN, DaggerAttunement.AURIC)
-			HellionShield.CRYSTAL -> queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.CRYSTAL)
-		}
+		queueDaggerSelection(player, target.family, target.attunement)
 	}
 
 	private fun queueTerminatorIntoSpirit(player: PlayerEntity) {
 		val terminatorSlot = findHotbarSlot(player, TERMINATOR_IDS)
 		if (terminatorSlot == null) {
+			debugAutoDagger(player, "terminator missing, selecting Spirit dagger")
 			queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
 			return
 		}
 
+		debugAutoDagger(player, "terminator queued before Spirit dagger")
 		queueSelectSlot(player, terminatorSlot)
 		autoQueuedActions += AutoAction.RightClick(RightClickKind.TERMINATOR)
 		queueDaggerSelection(player, DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
@@ -386,6 +545,7 @@ object BlazeSlayerFeature {
 		if (!autoInMobPhase) {
 			autoInMobPhase = true
 			autoMobPhaseCount++
+			debugAutoDagger(player, "mob phase entered #$autoMobPhaseCount")
 			if (autoMobPhaseCount == 1 && queueFirstMobRagnarock(player)) {
 				return
 			}
@@ -407,21 +567,98 @@ object BlazeSlayerFeature {
 
 		if (desiredMob != null) {
 			val target = resolveMobDaggerTarget(desiredMob)
+			if (desiredMob.kind != autoLastDebugMobKind) {
+				autoLastDebugMobKind = desiredMob.kind
+				debugAutoDagger(player, "mob target ${desiredMob.kind} selecting ${target.attunement}")
+			}
 			queueDaggerSelection(player, target.family, target.attunement)
 		}
 	}
 
 	private fun queueFirstMobRagnarock(player: PlayerEntity): Boolean {
-		if (autoFirstMobRagHandled) {
+		if (autoFirstMobRagQueued || autoFirstMobRagCast) {
+			debugAutoDagger(player, "ragnarock skipped: already ${if (autoFirstMobRagCast) "cast" else "queued"}")
 			return false
 		}
 
-		val ragnarockSlot = findHotbarSlot(player, RAGNAROCK_IDS) ?: return false
-		autoFirstMobRagHandled = true
+		val ragnarockSlot = findHotbarSlot(player, RAGNAROCK_IDS)
+		if (ragnarockSlot == null) {
+			debugAutoDagger(player, "ragnarock skipped: axe missing from hotbar")
+			return false
+		}
+
+		autoFirstMobRagQueued = true
+		debugAutoDagger(player, "ragnarock queued from slot ${ragnarockSlot + 1}")
 		queueSelectSlot(player, ragnarockSlot)
 		autoQueuedActions += AutoAction.RightClick(RightClickKind.RAGNAROCK)
 		autoQueuedActions += AutoAction.WaitForRagnarockCast
 		return true
+	}
+
+	private fun queuePostBossReset(player: PlayerEntity?) {
+		if (player == null) {
+			return
+		}
+		if (!autoFightActive && autoLastBossDaggerTarget == null && autoMobPhaseCount <= 0) {
+			debugAutoDagger(player, "post-boss dagger reset skipped: no recent blaze fight")
+			return
+		}
+		if (autoTickCounter < autoCocoonSuppressionUntilTick) {
+			debugAutoDagger(player, "post-boss reset suppressed: recent cocoon ${autoLastCocoonedName ?: "unknown"}")
+			return
+		}
+
+		val restoreSlot = player.inventory.getSelectedSlot().takeIf { it in HOTBAR_SLOT_RANGE }
+		clearAutoQueue(player, "post-boss reset setup")
+		clearPendingPrediction(player, "post-boss reset setup")
+		clearRagnarockCastWait()
+		autoPendingAttunement = null
+		autoPendingAttunementUntilTick = 0
+		autoPostBossResetQueued = true
+		autoPostBossResetRestoreSlot = restoreSlot
+		acceptCurrentHotbarSelection(player)
+		debugAutoDagger(player, "post-boss dagger reset queued")
+
+		queuePostBossDaggerReset(player, DaggerFamily.ASHEN, DaggerAttunement.ASHEN)
+		queuePostBossDaggerReset(player, DaggerFamily.SPIRIT, DaggerAttunement.SPIRIT)
+		if (restoreSlot != null) {
+			debugAutoDagger(player, "post-boss restoring slot ${restoreSlot + 1}")
+			queueSelectSlot(player, restoreSlot)
+		}
+	}
+
+	private fun queuePostBossDaggerReset(player: PlayerEntity, family: DaggerFamily, attunement: DaggerAttunement) {
+		val slot = findHotbarSlot(player, family.ids)
+		if (slot == null) {
+			debugAutoDagger(player, "post-boss dagger reset skipped: missing ${family.displayName}")
+			return
+		}
+
+		debugAutoDagger(player, "post-boss resetting $attunement dagger")
+		queueSelectSlot(player, slot)
+		val stack = player.inventory.getStack(slot)
+		if (!stack.isOf(attunement.materialItem)) {
+			autoQueuedActions += AutoAction.RightClick(RightClickKind.DAGGER_ATTUNE, attunement)
+		}
+	}
+
+	private fun completePostBossReset(player: PlayerEntity?) {
+		if (!autoPostBossResetQueued) {
+			return
+		}
+		autoPostBossResetQueued = false
+		autoPostBossResetRestoreSlot = null
+		debugAutoDagger(player, "post-boss dagger reset complete")
+	}
+
+	private fun clearPostBossReset(player: PlayerEntity?, reason: String) {
+		if (!autoPostBossResetQueued && autoPostBossResetRestoreSlot == null) {
+			return
+		}
+		autoPostBossResetQueued = false
+		autoPostBossResetRestoreSlot = null
+		autoQueuedActions.clear()
+		debugAutoDagger(player, "post-boss dagger reset cleared: $reason")
 	}
 
 	private fun resolveMobDaggerTarget(info: BlazeBossInfo): DaggerTarget {
@@ -448,6 +685,7 @@ object BlazeSlayerFeature {
 	private fun queueDaggerSelection(player: PlayerEntity, family: DaggerFamily, attunement: DaggerAttunement?) {
 		val slot = findHotbarSlot(player, family.ids)
 		if (slot == null) {
+			debugAutoDagger(player, "dagger missing: ${family.displayName}")
 			warnMissingDagger(player, family)
 			return
 		}
@@ -462,11 +700,14 @@ object BlazeSlayerFeature {
 			if (autoPendingAttunement == attunement) {
 				autoPendingAttunement = null
 			}
+			debugAutoDagger(player, "dagger already attuned: $attunement", AUTO_DEBUG_STABLE_REPEAT_THROTTLE_TICKS)
 			return
 		}
 		if (autoPendingAttunement == attunement && autoTickCounter < autoPendingAttunementUntilTick) {
+			debugAutoDagger(player, "attunement retry skipped: $attunement pending", AUTO_DEBUG_STABLE_REPEAT_THROTTLE_TICKS)
 			return
 		}
+		debugAutoDagger(player, "attunement queued: $attunement")
 		autoQueuedActions += AutoAction.RightClick(RightClickKind.DAGGER_ATTUNE, attunement)
 	}
 
@@ -493,6 +734,7 @@ object BlazeSlayerFeature {
 			is AutoAction.SelectSlot -> {
 				autoQueuedActions.removeFirst()
 				if (selectHotbarSlot(client, player, action.slot)) {
+					debugAutoDagger(player, "selected hotbar slot ${action.slot + 1}")
 					autoActionCooldownTicks = randomAutoActionDelayTicks()
 				}
 			}
@@ -503,11 +745,26 @@ object BlazeSlayerFeature {
 					if (action.kind == RightClickKind.DAGGER_ATTUNE && action.attunement != null) {
 						autoPendingAttunement = action.attunement
 						autoPendingAttunementUntilTick = autoTickCounter + AUTO_ATTUNE_RETRY_TICKS
+						debugAutoDagger(player, "attunement right-click sent: ${action.attunement}")
 					}
 					if (action.kind == RightClickKind.RAGNAROCK) {
+						autoFirstMobRagCast = true
+						autoFirstMobRagQueued = false
+						autoLastRagnarockRightClickTick = autoTickCounter
+						debugAutoDagger(player, "ragnarock right-click sent")
 						beginRagnarockCastWait()
 					}
+					if (action.kind == RightClickKind.TERMINATOR) {
+						debugAutoDagger(player, "terminator right-click sent")
+					}
 					autoActionCooldownTicks = randomAutoActionDelayTicks()
+				} else {
+					if (action.kind == RightClickKind.RAGNAROCK) {
+						autoFirstMobRagQueued = false
+						debugAutoDagger(player, "ragnarock right-click skipped: current item is not Ragnarok Axe")
+					} else {
+						debugAutoDagger(player, "${action.kind} right-click skipped: held item mismatch")
+					}
 				}
 			}
 			is AutoAction.Wait -> {
@@ -515,9 +772,18 @@ object BlazeSlayerFeature {
 				autoActionCooldownTicks = action.ticks.coerceAtLeast(1)
 			}
 			AutoAction.WaitForRagnarockCast -> {
+				val waitingForRagnarock = autoRagnarockCastWaitUntilTick > 0
+				val sawSignal = autoRagnarockCastSeen
 				if (isRagnarockCastWaitComplete()) {
 					autoQueuedActions.removeFirst()
+					if (waitingForRagnarock) {
+						debugAutoDagger(
+							player,
+							if (sawSignal) "ragnarock wait completed by actionbar signal" else "ragnarock wait completed by fallback timeout",
+						)
+					}
 				} else {
+					debugAutoDagger(player, "waiting for ragnarock cast signal", AUTO_DEBUG_STABLE_REPEAT_THROTTLE_TICKS)
 					autoActionCooldownTicks = 1
 				}
 			}
@@ -535,6 +801,19 @@ object BlazeSlayerFeature {
 		autoRagnarockCastFallbackUntilTick = autoTickCounter + AUTO_RAGNAROCK_SIGNAL_FALLBACK_TICKS
 		autoRagnarockCastSeen = false
 		autoRagnarockCastSeenTick = 0
+	}
+
+	private fun clearAutoQueue(player: PlayerEntity?, reason: String) {
+		if (autoQueuedActions.isNotEmpty()) {
+			debugAutoDagger(player, "queue cleared: $reason")
+		}
+		autoQueuedActions.clear()
+		autoFirstMobRagQueued = false
+		if (autoPostBossResetQueued || autoPostBossResetRestoreSlot != null) {
+			autoPostBossResetQueued = false
+			autoPostBossResetRestoreSlot = null
+			debugAutoDagger(player, "post-boss dagger reset cleared: $reason")
+		}
 	}
 
 	private fun isRagnarockCastWaitComplete(): Boolean {
@@ -584,12 +863,14 @@ object BlazeSlayerFeature {
 		}
 
 		autoLastObservedSelectedSlot = selectedSlot
-		autoQueuedActions.clear()
+		clearAutoQueue(player, "manual hotbar override")
 		autoPendingAttunement = null
 		autoPendingAttunementUntilTick = 0
+		clearPendingPrediction(player, "manual hotbar override")
 		clearRagnarockCastWait()
 		autoActionCooldownTicks = max(autoActionCooldownTicks, AUTO_MANUAL_SWAP_PAUSE_TICKS)
 		autoManualOverrideUntilTick = autoTickCounter + AUTO_MANUAL_SWAP_PAUSE_TICKS
+		debugAutoDagger(player, "manual hotbar override detected")
 		return true
 	}
 
@@ -1068,6 +1349,11 @@ object BlazeSlayerFeature {
 		return clean.takeIf { it.isNotEmpty() }
 	}
 
+	private fun isBlazeSlayerCocoonName(name: String): Boolean {
+		val normalized = name.lowercase(Locale.ROOT)
+		return BLAZE_SLAYER_COCOON_NAME_MARKERS.any { marker -> normalized.contains(marker) }
+	}
+
 	private fun resolveTier(names: List<String>, maxHealth: Double, visibleHealth: Long): Int? {
 		for (name in names) {
 			val match = DEMONLORD_TIER_PATTERN.find(name) ?: continue
@@ -1189,6 +1475,23 @@ object BlazeSlayerFeature {
 		return builder.toString()
 	}
 
+	private fun debugAutoDagger(
+		player: PlayerEntity?,
+		message: String,
+		repeatThrottleTicks: Int = AUTO_DEBUG_REPEAT_THROTTLE_TICKS,
+	) {
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
+		if (!config.slayerBlazeAutoDaggerDebugEnabled) {
+			return
+		}
+		val lastTick = autoDebugLastTicks[message]
+		if (lastTick != null && autoTickCounter - lastTick < repeatThrottleTicks) {
+			return
+		}
+		autoDebugLastTicks[message] = autoTickCounter
+		player?.sendMessage(Text.literal("[AutoDaggerDebug] $message"), false)
+	}
+
 	private fun clear() {
 		featureTickCounter = 0
 		tickCounter = 0
@@ -1212,7 +1515,13 @@ object BlazeSlayerFeature {
 		autoTerminatorShotDone = false
 		autoInMobPhase = false
 		autoMobPhaseCount = 0
-		autoFirstMobRagHandled = false
+		autoFirstMobRagQueued = false
+		autoFirstMobRagCast = false
+		autoFirstMobTyphoeusSeen = false
+		autoFirstMobTyphoeusAliveLastTick = false
+		autoFirstMobPredictionQueued = false
+		autoLastBossDaggerTarget = null
+		autoPendingDaggerPrediction = null
 		autoPendingAttunement = null
 		autoPendingAttunementUntilTick = 0
 		autoActionDelayMaxTicks = AUTO_ACTION_DELAY_MIN_TICKS
@@ -1221,6 +1530,13 @@ object BlazeSlayerFeature {
 		autoLastBossUuid = null
 		autoBossGroundY = null
 		autoBossAirMobPhaseQueued = false
+		autoPostBossResetQueued = false
+		autoPostBossResetRestoreSlot = null
+		autoLastRagnarockRightClickTick = 0
+		autoCocoonSuppressionUntilTick = 0
+		autoLastCocoonedName = null
+		autoLastDebugMobKind = null
+		autoDebugLastTicks.clear()
 		clearRagnarockCastWait()
 		autoQueuedActions.clear()
 	}
@@ -1258,6 +1574,12 @@ object BlazeSlayerFeature {
 	private data class DaggerTarget(
 		val family: DaggerFamily,
 		val attunement: DaggerAttunement,
+	)
+
+	private data class PendingDaggerPrediction(
+		val readyTick: Int,
+		val expireTick: Int,
+		val fallbackTarget: DaggerTarget?,
 	)
 
 	private data class TextSegment(val text: String, val color: Int)
@@ -1313,7 +1635,19 @@ object BlazeSlayerFeature {
 	private val TERMINATOR_IDS = listOf("TERMINATOR")
 	private val RAGNAROCK_IDS = listOf("RAGNAROCK_AXE")
 	private val AUTO_RAGNAROCK_FINISHED_ACTIONBAR_PATTERN = Regex("(?i)(?:^|\\s)CASTING\\s*$")
+	private val AUTO_RAGNAROCK_COOLDOWN_CHAT_PATTERN = Regex("(?i)This ability is on cooldown for\\s+([0-9]+)s")
+	private val AUTO_COCOON_CHAT_PATTERN = Regex("(?i)^CAUGHT!\\s+You\\s+cocooned\\s+(?:a|an)\\s+(.+?)!$")
+	private val BLAZE_SLAYER_COCOON_NAME_MARKERS = listOf(
+		"inferno demonlord",
+		"inferno quazii",
+		"inferno typhoeus",
+		"quazii",
+		"typhoeus",
+		"kindleheart demon",
+		"burningsoul demon",
+	)
 	private val SPAWNED_BY_PATTERN = Regex("(?i)\\bSpawned by:\\s*(?:\\[[^\\]]+\\]\\s*)?([A-Za-z0-9_]{1,16})\\b")
+	private const val SLAYER_QUEST_COMPLETE_MARKER = "SLAYER QUEST COMPLETE!"
 	private const val SCAN_INTERVAL_TICKS = 5
 	private const val AUTO_ACTION_DELAY_MIN_TICKS = 2
 	private const val AUTO_ACTION_DELAY_MAX_TICKS = 5
@@ -1322,9 +1656,14 @@ object BlazeSlayerFeature {
 	private const val AUTO_RAGNAROCK_MIN_WAIT_TICKS = 60
 	private const val AUTO_RAGNAROCK_SIGNAL_FALLBACK_TICKS = 100
 	private const val AUTO_RAGNAROCK_POST_CAST_SETTLE_TICKS = 5
+	private const val AUTO_RAGNAROCK_COOLDOWN_MATCH_TICKS = 40
 	private const val AUTO_ATTUNE_RETRY_TICKS = 8
 	private const val AUTO_WARNING_THROTTLE_TICKS = 120
 	private const val AUTO_FIGHT_RESET_TICKS = 80
+	private const val AUTO_DAGGER_PREDICTION_EXPIRE_TICKS = 20
+	private const val AUTO_COCOON_SUPPRESSION_TICKS = 120
+	private const val AUTO_DEBUG_REPEAT_THROTTLE_TICKS = 10
+	private const val AUTO_DEBUG_STABLE_REPEAT_THROTTLE_TICKS = 80
 	private const val AUTO_TARGET_DISTANCE_SQUARED = 2500.0
 	private const val OWN_BLAZE_BOSS_MEMORY_TICKS = 400
 	private const val NAME_SEARCH_DISTANCE_SQUARED = 25.0

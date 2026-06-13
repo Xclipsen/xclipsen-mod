@@ -15,6 +15,7 @@
     "EntityGlowMixin",
     "FoxEntityInvoker",
     "HandledScreenAccessor",
+    "HandledScreenClickMixin",
     "HandledScreenSlotRenderMixin",
     "HorseEntityInvoker",
     "InGameHudMixin",

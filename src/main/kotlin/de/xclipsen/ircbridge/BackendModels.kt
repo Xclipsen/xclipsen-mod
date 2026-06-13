@@ -147,6 +147,10 @@ class BridgeConfig {
 	@JvmField var dungeonAutoKickApiOffKickEnabled: Boolean = false
 	@JvmField var dungeonAutoKickInformKickedEnabled: Boolean = true
 	@JvmField var dungeonAutoKickCacheEnabled: Boolean = true
+	@JvmField var partyFinderGuiStatsEnabled: Boolean = true
+	@JvmField var partyFinderHighlightsEnabled: Boolean = true
+	@JvmField var partyFinderMemberCountEnabled: Boolean = true
+	@JvmField var partyFinderRightClickEnabled: Boolean = true
 	@JvmField var pickaxeAbilityCooldownModuleEnabled: Boolean = false
 	@JvmField var pickaxeAbilityCooldownShowReady: Boolean = true
 	@JvmField var pickaxeAbilityCooldownAlertEnabled: Boolean = false
@@ -177,6 +181,8 @@ class BridgeConfig {
 	@JvmField var slayerBlazeColoredMobsEnabled: Boolean = false
 	@JvmField var slayerBlazeAutoDaggerEnabled: Boolean = false
 	@JvmField var slayerBlazeAutoDaggerDelayMaxTicks: Int = 2
+	@JvmField var slayerBlazeAutoDaggerResetAfterBossEnabled: Boolean = false
+	@JvmField var slayerBlazeAutoDaggerDebugEnabled: Boolean = false
 	@JvmField var slayerSpawnAnnouncerText: String = SlayerFeature.DEFAULT_ANNOUNCER_TEXT
 	@JvmField var slayerSpawnAnnouncerSoundId: String = SoundCatalog.defaultSoundId
 	@JvmField var slayerSpawnAnnouncerSoundVolume: Float = 1.0f
@@ -287,6 +293,10 @@ class BridgeConfig {
 		it.dungeonAutoKickApiOffKickEnabled = dungeonAutoKickApiOffKickEnabled
 		it.dungeonAutoKickInformKickedEnabled = dungeonAutoKickInformKickedEnabled
 		it.dungeonAutoKickCacheEnabled = dungeonAutoKickCacheEnabled
+		it.partyFinderGuiStatsEnabled = partyFinderGuiStatsEnabled
+		it.partyFinderHighlightsEnabled = partyFinderHighlightsEnabled
+		it.partyFinderMemberCountEnabled = partyFinderMemberCountEnabled
+		it.partyFinderRightClickEnabled = partyFinderRightClickEnabled
 		it.pickaxeAbilityCooldownModuleEnabled = pickaxeAbilityCooldownModuleEnabled
 		it.pickaxeAbilityCooldownShowReady = pickaxeAbilityCooldownShowReady
 		it.pickaxeAbilityCooldownAlertEnabled = pickaxeAbilityCooldownAlertEnabled
@@ -317,6 +327,8 @@ class BridgeConfig {
 		it.slayerBlazeColoredMobsEnabled = slayerBlazeColoredMobsEnabled
 		it.slayerBlazeAutoDaggerEnabled = slayerBlazeAutoDaggerEnabled
 		it.slayerBlazeAutoDaggerDelayMaxTicks = slayerBlazeAutoDaggerDelayMaxTicks
+		it.slayerBlazeAutoDaggerResetAfterBossEnabled = slayerBlazeAutoDaggerResetAfterBossEnabled
+		it.slayerBlazeAutoDaggerDebugEnabled = slayerBlazeAutoDaggerDebugEnabled
 		it.slayerSpawnAnnouncerText = slayerSpawnAnnouncerText
 		it.slayerSpawnAnnouncerSoundId = slayerSpawnAnnouncerSoundId
 		it.slayerSpawnAnnouncerSoundVolume = slayerSpawnAnnouncerSoundVolume
@@ -402,16 +414,35 @@ class BackendDungeonStatsResponse {
 	@JvmField var error: String = ""
 }
 
+class BackendDungeonPlayersResponse {
+	@JvmField var ok: Boolean = false
+	@JvmField var players: MutableMap<String, BackendDungeonStatsResponse> = mutableMapOf()
+	@JvmField var error: String = ""
+}
+
 class BackendDungeonStats {
 	@JvmField var catacombsLevel: Double = 0.0
+	@JvmField var catacombsXp: Double = 0.0
 	@JvmField var secrets: Long = 0L
 	@JvmField var bloodMobKills: Long = 0L
+	@JvmField var watcherKills: Long = 0L
 	@JvmField var adjustedSecrets: Long = 0L
 	@JvmField var averageSecrets: Double = 0.0
+	@JvmField var totalRuns: Int = 0
 	@JvmField var magicalPower: Int = 0
 	@JvmField var inventoryApi: Boolean = false
-	@JvmField var classes: MutableMap<String, Double> = mutableMapOf()
+	@JvmField var classAverage: Double = 0.0
+	@JvmField var totalClassXp: Double = 0.0
+	@JvmField var tunings: MutableList<String> = mutableListOf()
+	@JvmField var classes: MutableMap<String, BackendDungeonClassStats> = mutableMapOf()
 	@JvmField var floors: BackendDungeonFloors = BackendDungeonFloors()
+	@JvmField var armor: MutableList<BackendDungeonArmorPiece> = mutableListOf()
+	@JvmField var missingItems: MutableList<BackendDungeonMissingItem> = mutableListOf()
+}
+
+class BackendDungeonClassStats {
+	@JvmField var level: Double = 0.0
+	@JvmField var xp: Double = 0.0
 }
 
 class BackendDungeonFloors {
@@ -420,8 +451,21 @@ class BackendDungeonFloors {
 }
 
 class BackendDungeonFloorStats {
+	@JvmField var sPbMs: Long = 0L
 	@JvmField var sPlusPbMs: Long = 0L
+	@JvmField var bestTimeMs: Long = 0L
 	@JvmField var completions: Int = 0
+}
+
+class BackendDungeonArmorPiece {
+	@JvmField var slot: String = ""
+	@JvmField var displayName: String = ""
+	@JvmField var lore: MutableList<String> = mutableListOf()
+}
+
+class BackendDungeonMissingItem {
+	@JvmField var name: String = ""
+	@JvmField var shortName: String = ""
 }
 
 object TextFormatter {

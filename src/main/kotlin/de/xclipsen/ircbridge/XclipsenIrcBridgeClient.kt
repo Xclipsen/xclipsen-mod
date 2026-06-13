@@ -88,6 +88,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			FireFreezeFeature.onWorldChange()
 			MineshaftAutoWarpFeature.onDisconnect()
 			DungeonAutoKickFeature.onDisconnect()
+			PartyFinderFeature.onDisconnect()
 			DeploybleFeature.onWorldChange()
 			SilentDisconnectFeature.onPlayDisconnect()
 			minigameController.onDisconnect()
@@ -103,6 +104,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		}
 		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ ->
 			ChimeraBookDropEffectsFeature.onIncomingChatMessage(message)
+			BlazeSlayerFeature.onIncomingChatMessage(message)
 			handleIncomingMessage(message)
 		}
 		HudElementRegistry.attachElementAfter(VanillaHudElements.CHAT, Identifier.of("xclipsen", "hud")) { context, _ ->
@@ -207,6 +209,14 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 					.then(ClientCommandManager.literal("settings").executes(::openConfigScreen))
 					.then(ClientCommandManager.literal("hud").executes(::openHudEditor))
 					.then(
+						ClientCommandManager.literal("cata")
+							.executes(::showOwnCataStats)
+							.then(
+								ClientCommandManager.argument("player", StringArgumentType.word())
+									.executes(::showCataStats),
+							),
+					)
+					.then(
 						ClientCommandManager.literal("dev")
 							.executes(::toggleDevMode)
 							.then(ClientCommandManager.literal("on").executes { setDevMode(it, true) })
@@ -241,6 +251,15 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 					.then(ClientCommandManager.literal("reset").executes(::resetShardTrackerSession))
 					.then(ClientCommandManager.literal("resetall").executes(::resetShardTrackerTotal))
 					.then(ClientCommandManager.literal("toggle").executes(::toggleShardTrackerView)),
+			)
+
+			dispatcher.register(
+				ClientCommandManager.literal("cata")
+					.executes(::showOwnCataStats)
+					.then(
+						ClientCommandManager.argument("player", StringArgumentType.word())
+							.executes(::showCataStats),
+					),
 			)
 		}
 	}
@@ -284,6 +303,18 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun openHudEditor(context: CommandContext<FabricClientCommandSource>): Int {
 		pendingHudEditorOpen = true
+		return 1
+	}
+
+	private fun showOwnCataStats(context: CommandContext<FabricClientCommandSource>): Int {
+		DungeonAutoKickFeature.showCataStats(MinecraftClient.getInstance().session.username)
+		context.source.sendFeedback(Text.literal("Fetching dungeon stats..."))
+		return 1
+	}
+
+	private fun showCataStats(context: CommandContext<FabricClientCommandSource>): Int {
+		DungeonAutoKickFeature.showCataStats(StringArgumentType.getString(context, "player"))
+		context.source.sendFeedback(Text.literal("Fetching dungeon stats..."))
 		return 1
 	}
 
@@ -340,6 +371,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		FireFreezeFeature.onTick(client)
 		MineshaftAutoWarpFeature.onTick(client)
 		DungeonAutoKickFeature.onTick(client)
+		PartyFinderFeature.onTick(client)
 		CorpseEspFeature.onTick(client)
 		MobModelFeature.onTick(client)
 		ModUpdateChecker.onTick(client)

@@ -1,5 +1,6 @@
 package de.xclipsen.ircbridge.mixin
 
+import de.xclipsen.ircbridge.PartyFinderFeature
 import de.xclipsen.ircbridge.SilentDisconnectFeature
 import de.xclipsen.ircbridge.ServerTickTracker
 import io.netty.channel.ChannelHandlerContext
@@ -7,6 +8,10 @@ import net.minecraft.network.ClientConnection
 import net.minecraft.network.DisconnectionInfo
 import net.minecraft.network.packet.Packet
 import net.minecraft.network.packet.s2c.common.CommonPingS2CPacket
+import net.minecraft.network.packet.s2c.play.CloseScreenS2CPacket
+import net.minecraft.network.packet.s2c.play.InventoryS2CPacket
+import net.minecraft.network.packet.s2c.play.OpenScreenS2CPacket
+import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
@@ -21,6 +26,12 @@ abstract class ClientConnectionMixin {
 	private fun onChannelRead(context: ChannelHandlerContext, packet: Packet<*>, ci: CallbackInfo) {
 		if (packet is CommonPingS2CPacket) {
 			ServerTickTracker.onServerTick()
+		}
+		when (packet) {
+			is OpenScreenS2CPacket -> PartyFinderFeature.onServerContainerOpen(packet.syncId, packet.name)
+			is CloseScreenS2CPacket -> PartyFinderFeature.onServerContainerClose(packet.syncId)
+			is InventoryS2CPacket -> PartyFinderFeature.onServerContainerContent(packet.syncId(), packet.revision(), packet.contents())
+			is ScreenHandlerSlotUpdateS2CPacket -> PartyFinderFeature.onServerContainerSlot(packet.syncId, packet.revision, packet.slot, packet.stack)
 		}
 	}
 

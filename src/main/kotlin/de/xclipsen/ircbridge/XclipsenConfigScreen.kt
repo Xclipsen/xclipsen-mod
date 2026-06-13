@@ -420,6 +420,8 @@ class XclipsenConfigScreen(
 		candidate.slayerBlazeColoredMobsEnabled = workingCopy.slayerBlazeColoredMobsEnabled
 		candidate.slayerBlazeAutoDaggerEnabled = workingCopy.slayerBlazeAutoDaggerEnabled
 		candidate.slayerBlazeAutoDaggerDelayMaxTicks = workingCopy.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(2, 5)
+		candidate.slayerBlazeAutoDaggerResetAfterBossEnabled = workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled
+		candidate.slayerBlazeAutoDaggerDebugEnabled = workingCopy.slayerBlazeAutoDaggerDebugEnabled
 		candidate.slayerSpawnAnnouncerText = slayerAnnouncerTextField.text.trim()
 		candidate.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(workingCopy.slayerSpawnAnnouncerSoundId)
 		candidate.slayerSpawnAnnouncerSoundVolume = workingCopy.slayerSpawnAnnouncerSoundVolume
@@ -446,6 +448,10 @@ class XclipsenConfigScreen(
 		candidate.dungeonAutoKickApiOffKickEnabled = workingCopy.dungeonAutoKickApiOffKickEnabled
 		candidate.dungeonAutoKickInformKickedEnabled = workingCopy.dungeonAutoKickInformKickedEnabled
 		candidate.dungeonAutoKickCacheEnabled = workingCopy.dungeonAutoKickCacheEnabled
+		candidate.partyFinderGuiStatsEnabled = workingCopy.partyFinderGuiStatsEnabled
+		candidate.partyFinderHighlightsEnabled = workingCopy.partyFinderHighlightsEnabled
+		candidate.partyFinderMemberCountEnabled = workingCopy.partyFinderMemberCountEnabled
+		candidate.partyFinderRightClickEnabled = workingCopy.partyFinderRightClickEnabled
 		candidate.pestEspModuleEnabled = workingCopy.pestEspModuleEnabled
 		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
 		candidate.corpseEspModuleEnabled = workingCopy.corpseEspModuleEnabled
@@ -975,6 +981,8 @@ class XclipsenConfigScreen(
 			drawToggleSetting(context, slayerBlazeColoredMobsBounds(menu), "Colored Mobs", workingCopy.slayerBlazeColoredMobsEnabled, mouseX, mouseY)
 			drawToggleSetting(context, slayerBlazeAutoDaggerBounds(menu), "Auto Dagger", workingCopy.slayerBlazeAutoDaggerEnabled, mouseX, mouseY)
 			drawOptionSetting(context, slayerBlazeAutoDaggerDelayBounds(menu), "Delay", autoDaggerDelayDisplay(workingCopy.slayerBlazeAutoDaggerDelayMaxTicks), mouseX, mouseY)
+			drawToggleSetting(context, slayerBlazeAutoDaggerResetAfterBossBounds(menu), "Reset After Boss", workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled, mouseX, mouseY)
+			drawToggleSetting(context, slayerBlazeAutoDaggerDebugBounds(menu), "Debug", workingCopy.slayerBlazeAutoDaggerDebugEnabled, mouseX, mouseY)
 		}
 
 		drawDisclosureSetting(context, slayerMiscHeaderBounds(menu), "Misc", slayerMiscExpanded, mouseX, mouseY)
@@ -1053,6 +1061,7 @@ class XclipsenConfigScreen(
 
 	private fun drawDungeonAutoKickSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, dungeonAutoKickStatsDisplayBounds(menu), "Stats Display", workingCopy.dungeonAutoKickStatsDisplayEnabled, mouseX, mouseY)
+		drawToggleSetting(context, dungeonAutoKickKickLineBounds(menu), "Send Kick Line", workingCopy.dungeonAutoKickSendKickLineEnabled, mouseX, mouseY)
 		drawToggleSetting(context, dungeonAutoKickAutoKickBounds(menu), "Auto Kick", workingCopy.dungeonAutoKickAutoKickEnabled, mouseX, mouseY)
 		drawOptionSetting(context, dungeonAutoKickFloorBounds(menu), "Floor", "${if (workingCopy.dungeonAutoKickMasterMode) "M" else "F"}${workingCopy.dungeonAutoKickFloor}", mouseX, mouseY)
 		if (dungeonAutoKickFloorDropdownOpen) {
@@ -1064,6 +1073,10 @@ class XclipsenConfigScreen(
 		drawToggleSetting(context, dungeonAutoKickApiOffBounds(menu), "Kick API Off", workingCopy.dungeonAutoKickApiOffKickEnabled, mouseX, mouseY)
 		drawToggleSetting(context, dungeonAutoKickInformBounds(menu), "Inform Kicked", workingCopy.dungeonAutoKickInformKickedEnabled, mouseX, mouseY)
 		drawToggleSetting(context, dungeonAutoKickCacheBounds(menu), "Kick Cache", workingCopy.dungeonAutoKickCacheEnabled, mouseX, mouseY)
+		drawToggleSetting(context, partyFinderGuiStatsBounds(menu), "PF GUI Stats", workingCopy.partyFinderGuiStatsEnabled, mouseX, mouseY)
+		drawToggleSetting(context, partyFinderHighlightsBounds(menu), "PF Highlights", workingCopy.partyFinderHighlightsEnabled, mouseX, mouseY)
+		drawToggleSetting(context, partyFinderMemberCountBounds(menu), "PF Member Count", workingCopy.partyFinderMemberCountEnabled, mouseX, mouseY)
+		drawToggleSetting(context, partyFinderRightClickBounds(menu), "PF Right Click", workingCopy.partyFinderRightClickEnabled, mouseX, mouseY)
 		drawOptionSetting(context, dungeonAutoKickClearCacheBounds(menu), "Clear Cache", "Click", mouseX, mouseY)
 		drawInfoSetting(context, dungeonAutoKickStatusBounds(menu), "Current State", DungeonAutoKickFeature.statusLine(), mouseX, mouseY)
 	}
@@ -1922,6 +1935,18 @@ class XclipsenConfigScreen(
 				return true
 			}
 
+			if (slayerBlazeExpanded && slayerBlazeAutoDaggerResetAfterBossBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled = !workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled
+				return true
+			}
+
+			if (slayerBlazeExpanded && slayerBlazeAutoDaggerDebugBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerBlazeAutoDaggerDebugEnabled = !workingCopy.slayerBlazeAutoDaggerDebugEnabled
+				return true
+			}
+
 			if (slayerMiscHeaderBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				slayerMiscExpanded = !slayerMiscExpanded
@@ -2202,6 +2227,7 @@ class XclipsenConfigScreen(
 			readWorkingCopyFromFields(updateStatus = false)
 			when {
 				dungeonAutoKickStatsDisplayBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickStatsDisplayEnabled = !workingCopy.dungeonAutoKickStatsDisplayEnabled
+				dungeonAutoKickKickLineBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickSendKickLineEnabled = !workingCopy.dungeonAutoKickSendKickLineEnabled
 				dungeonAutoKickAutoKickBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickAutoKickEnabled = !workingCopy.dungeonAutoKickAutoKickEnabled
 				dungeonAutoKickFloorBounds(menu).contains(mouseX, mouseY) -> {
 					dungeonAutoKickFloorDropdownOpen = !dungeonAutoKickFloorDropdownOpen
@@ -2222,6 +2248,10 @@ class XclipsenConfigScreen(
 				dungeonAutoKickApiOffBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickApiOffKickEnabled = !workingCopy.dungeonAutoKickApiOffKickEnabled
 				dungeonAutoKickInformBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickInformKickedEnabled = !workingCopy.dungeonAutoKickInformKickedEnabled
 				dungeonAutoKickCacheBounds(menu).contains(mouseX, mouseY) -> workingCopy.dungeonAutoKickCacheEnabled = !workingCopy.dungeonAutoKickCacheEnabled
+				partyFinderGuiStatsBounds(menu).contains(mouseX, mouseY) -> workingCopy.partyFinderGuiStatsEnabled = !workingCopy.partyFinderGuiStatsEnabled
+				partyFinderHighlightsBounds(menu).contains(mouseX, mouseY) -> workingCopy.partyFinderHighlightsEnabled = !workingCopy.partyFinderHighlightsEnabled
+				partyFinderMemberCountBounds(menu).contains(mouseX, mouseY) -> workingCopy.partyFinderMemberCountEnabled = !workingCopy.partyFinderMemberCountEnabled
+				partyFinderRightClickBounds(menu).contains(mouseX, mouseY) -> workingCopy.partyFinderRightClickEnabled = !workingCopy.partyFinderRightClickEnabled
 				dungeonAutoKickClearCacheBounds(menu).contains(mouseX, mouseY) -> {
 					DungeonAutoKickFeature.clearKickCache()
 					statusMessage = Text.literal("Dungeon AutoKick cache cleared.")
@@ -3268,7 +3298,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun dungeonAutoKickAutoKickBounds(menu: Bounds): Bounds {
-		return dungeonAutoKickRowAfter(dungeonAutoKickStatsDisplayBounds(menu), SETTING_HEIGHT)
+		return dungeonAutoKickRowAfter(dungeonAutoKickKickLineBounds(menu), SETTING_HEIGHT)
 	}
 
 	private fun dungeonAutoKickFloorBounds(menu: Bounds): Bounds {
@@ -3310,11 +3340,27 @@ class XclipsenConfigScreen(
 	}
 
 	private fun dungeonAutoKickClearCacheBounds(menu: Bounds): Bounds {
-		return dungeonAutoKickRowAfter(dungeonAutoKickCacheBounds(menu), SETTING_HEIGHT)
+		return dungeonAutoKickRowAfter(partyFinderRightClickBounds(menu), SETTING_HEIGHT)
 	}
 
 	private fun dungeonAutoKickStatusBounds(menu: Bounds): Bounds {
 		return dungeonAutoKickRowAfter(dungeonAutoKickClearCacheBounds(menu), TEXT_INPUT_SETTING_HEIGHT)
+	}
+
+	private fun partyFinderGuiStatsBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(dungeonAutoKickCacheBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun partyFinderHighlightsBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(partyFinderGuiStatsBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun partyFinderMemberCountBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(partyFinderHighlightsBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun partyFinderRightClickBounds(menu: Bounds): Bounds {
+		return dungeonAutoKickRowAfter(partyFinderMemberCountBounds(menu), SETTING_HEIGHT)
 	}
 
 	private fun selectedDungeonAutoKickFloorIndex(): Int {
@@ -3355,8 +3401,16 @@ class XclipsenConfigScreen(
 		return slayerRowAfter(slayerBlazeAutoDaggerBounds(menu), SETTING_HEIGHT)
 	}
 
+	private fun slayerBlazeAutoDaggerResetAfterBossBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerBlazeAutoDaggerDelayBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun slayerBlazeAutoDaggerDebugBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerBlazeAutoDaggerResetAfterBossBounds(menu), SETTING_HEIGHT)
+	}
+
 	private fun slayerMiscHeaderBounds(menu: Bounds): Bounds {
-		val previous = if (slayerBlazeExpanded) slayerBlazeAutoDaggerDelayBounds(menu) else slayerBlazeHeaderBounds(menu)
+		val previous = if (slayerBlazeExpanded) slayerBlazeAutoDaggerDebugBounds(menu) else slayerBlazeHeaderBounds(menu)
 		return slayerRowAfter(previous, SETTING_HEIGHT)
 	}
 
@@ -3644,8 +3698,8 @@ class XclipsenConfigScreen(
 		private const val CHIMERA_DROP_POPUP_HEIGHT = 380
 		private const val CHIMERA_DROP_POPUP_WITH_DROPDOWN_HEIGHT = 480
 		private const val M5_POPUP_HEIGHT = 190
-		private const val DUNGEON_AUTOKICK_POPUP_HEIGHT = 455
-		private const val DUNGEON_AUTOKICK_POPUP_WITH_DROPDOWN_HEIGHT = 535
+		private const val DUNGEON_AUTOKICK_POPUP_HEIGHT = 610
+		private const val DUNGEON_AUTOKICK_POPUP_WITH_DROPDOWN_HEIGHT = 690
 		private const val STATUS_POPUP_HEIGHT = 255
 		private const val PICKAXE_COOLDOWN_POPUP_COLLAPSED_HEIGHT = 145
 		private const val PICKAXE_COOLDOWN_POPUP_EXPANDED_HEIGHT = 320

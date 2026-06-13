@@ -2,8 +2,9 @@ package de.xclipsen.ircbridge.minigame
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import de.xclipsen.ircbridge.BridgeConfig
+import de.xclipsen.ircbridge.BridgeConfigManager
 import de.xclipsen.ircbridge.XclipsenIrcBridgeClient
-import de.xclipsen.ircbridge.activeModBackendBaseUrl
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.MinecraftClient
 import net.minecraft.text.ClickEvent
@@ -53,6 +54,7 @@ class MinigameController(
 	private var activeGame: TicTacToeMatchController? = null
 	private val cancelledMatchIds = mutableSetOf<String>()
 	private var lastNetworkErrorAt = 0L
+	private var lastReconnectAttemptAt = 0L
 
 	fun initialize() {
 		MinigameRegistry.register(TicTacToeMinigame)
@@ -61,7 +63,7 @@ class MinigameController(
 
 	fun onConfigChanged() {
 		val config = mod.config()
-		val backendChanged = network.backendBaseUrl() != activeModBackendBaseUrl(config)
+		val backendChanged = network.backendBaseUrl() != activeBackendUrl(config)
 		if (backendChanged) {
 			network.disconnect()
 			inviteManager.clear()
@@ -121,6 +123,7 @@ class MinigameController(
 
 	fun invite(targetUsername: String, minigameId: String) {
 		if (!presenceManager.registered || !network.connected) {
+			requestReconnect()
 			feedback("The mini-game backend is not connected yet.", error = true)
 			return
 		}
@@ -242,6 +245,7 @@ class MinigameController(
 					}
 				}
 				"network_error" -> {
+					requestReconnect()
 					val now = System.currentTimeMillis()
 					if (now - lastNetworkErrorAt > 15_000L) {
 						lastNetworkErrorAt = now
@@ -341,6 +345,21 @@ class MinigameController(
 		network.register(uuid.toString(), username, serverId, modVersion())
 	}
 
+	private fun requestReconnect() {
+		if (!presenceManager.registered) {
+			return
+		}
+		val now = System.currentTimeMillis()
+		if (now - lastReconnectAttemptAt < RECONNECT_COOLDOWN_MS) {
+			return
+		}
+		lastReconnectAttemptAt = now
+		registerCurrentSession(presenceManager.serverId)
+	}
+
+	private fun activeBackendUrl(config: BridgeConfig): String =
+		if (config.devModeEnabled) config.devBackendBaseUrl else BridgeConfigManager.MOD_BACKEND_BASE_URL
+
 	private fun modVersion(): String = FabricLoader.getInstance().getModContainer("xclipsen_mod")
 		.map { it.metadata.version.friendlyString }
 		.orElse("unknown")
@@ -349,5 +368,6 @@ class MinigameController(
 		private val LOGGER = LoggerFactory.getLogger("xclipsen_minigames")
 		private val GSON = Gson()
 		private const val MOVE_REJECTED_MESSAGE = "Your move could not be confirmed. The board was updated."
+		private const val RECONNECT_COOLDOWN_MS = 5_000L
 	}
 }

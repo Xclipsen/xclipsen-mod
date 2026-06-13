@@ -124,6 +124,8 @@ class BridgeConfigManager(
 		value.mineshaftAutoWarpWindowMs = value.mineshaftAutoWarpWindowMs.coerceIn(5_000L, 60_000L)
 		value.slayerBlazeAutoDaggerEnabled = normalizedBoolean(value.slayerBlazeAutoDaggerEnabled)
 		value.slayerBlazeAutoDaggerDelayMaxTicks = value.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(2, 5)
+		value.slayerBlazeAutoDaggerResetAfterBossEnabled = normalizedBoolean(value.slayerBlazeAutoDaggerResetAfterBossEnabled)
+		value.slayerBlazeAutoDaggerDebugEnabled = normalizedBoolean(value.slayerBlazeAutoDaggerDebugEnabled)
 		value.slayerSpawnAnnouncerText = normalizedTemplate(value.slayerSpawnAnnouncerText, SlayerFeature.DEFAULT_ANNOUNCER_TEXT)
 		value.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(value.slayerSpawnAnnouncerSoundId)
 		value.slayerSpawnAnnouncerSoundVolume = value.slayerSpawnAnnouncerSoundVolume.coerceIn(0.0f, 2.0f)
