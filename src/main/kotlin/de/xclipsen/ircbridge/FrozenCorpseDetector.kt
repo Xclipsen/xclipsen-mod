@@ -1,26 +1,26 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.component.type.NbtComponent
-import net.minecraft.entity.EquipmentSlot
-import net.minecraft.entity.decoration.ArmorStandEntity
-import net.minecraft.item.ItemStack
+import net.minecraft.client.Minecraft
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.item.component.CustomData
+import net.minecraft.world.entity.EquipmentSlot
+import net.minecraft.world.entity.decoration.ArmorStand
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.level.entity.EntityTypeTest
 import java.util.Locale
-import kotlin.jvm.optionals.getOrNull
 
 object FrozenCorpseDetector {
 	fun isInMineshaftArea(): Boolean {
 		return LocationTracker.isOnHypixelSkyBlock && LocationTracker.currentArea.contains("mineshaft", ignoreCase = true)
 	}
 
-	fun findNearbyCorpses(client: MinecraftClient, range: Double = DEFAULT_SCAN_RANGE): List<DetectedFrozenCorpse> {
-		val world = client.world ?: return emptyList()
+	fun findNearbyCorpses(client: Minecraft, range: Double = DEFAULT_SCAN_RANGE): List<DetectedFrozenCorpse> {
+		val world = client.level ?: return emptyList()
 		val player = client.player ?: return emptyList()
-		val searchBox = player.boundingBox.expand(range)
+		val searchBox = player.boundingBox.inflate(range)
 
-		return world.getEntitiesByClass(
-			ArmorStandEntity::class.java,
+		return world.getEntities(
+			EntityTypeTest.forClass(ArmorStand::class.java),
 			searchBox,
 			::looksLikeCorpseStand,
 		).mapNotNull { armorStand ->
@@ -28,21 +28,21 @@ object FrozenCorpseDetector {
 		}
 	}
 
-	fun looksLikeCorpseStand(armorStand: ArmorStandEntity): Boolean {
+	fun looksLikeCorpseStand(armorStand: ArmorStand): Boolean {
 		if (!armorStand.isAlive || armorStand.isRemoved || armorStand.isInvisible) {
 			return false
 		}
-		if (armorStand.shouldShowBasePlate()) {
+		if (armorStand.showBasePlate()) {
 			return false
 		}
-		if (!armorStand.shouldShowArms()) {
+		if (!armorStand.showArms()) {
 			return false
 		}
 		return armorStand.customName?.string?.trim().isNullOrEmpty()
 	}
 
-	fun resolveCorpseType(armorStand: ArmorStandEntity): FrozenCorpseType? {
-		return resolveCorpseType(armorStand.getEquippedStack(EquipmentSlot.HEAD))
+	fun resolveCorpseType(armorStand: ArmorStand): FrozenCorpseType? {
+		return resolveCorpseType(armorStand.getItemBySlot(EquipmentSlot.HEAD))
 	}
 
 	fun resolveCorpseType(stack: ItemStack): FrozenCorpseType? {
@@ -50,8 +50,8 @@ object FrozenCorpseDetector {
 			return null
 		}
 
-		val customData = stack.get(DataComponentTypes.CUSTOM_DATA) as? NbtComponent ?: return null
-		val id = customData.copyNbt().getString("id").getOrNull()?.trim().orEmpty()
+		val customData = stack.get(DataComponents.CUSTOM_DATA) as? CustomData ?: return null
+		val id = customData.copyTag().getString("id").orElse("").trim()
 		if (id.isEmpty()) {
 			return null
 		}
@@ -60,7 +60,7 @@ object FrozenCorpseDetector {
 
 	data class DetectedFrozenCorpse(
 		val type: FrozenCorpseType,
-		val armorStand: ArmorStandEntity,
+		val armorStand: ArmorStand,
 	)
 
 	enum class FrozenCorpseType(

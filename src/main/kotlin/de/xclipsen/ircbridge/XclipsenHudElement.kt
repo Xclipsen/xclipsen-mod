@@ -1,8 +1,9 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import kotlin.math.max
+
+typealias Tuple<A, B> = Pair<A, B>
 
 abstract class XclipsenHudElement(
 	val id: String,
@@ -22,18 +23,18 @@ abstract class XclipsenHudElement(
 
 	open fun shouldDraw(config: BridgeConfig): Boolean = isEnabled(config)
 
-	open fun defaultX(context: DrawContext): Float = 20f
+	open fun defaultX(context: GuiGraphicsExtractor): Float = 20f
 
-	open fun defaultY(context: DrawContext): Float = 20f
+	open fun defaultY(context: GuiGraphicsExtractor): Float = 20f
 
-	fun renderElement(context: DrawContext, example: Boolean) {
+	fun renderElement(context: GuiGraphicsExtractor, example: Boolean) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!example && !shouldDraw(config)) {
 			return
 		}
 
 		val placement = placement(context)
-		val matrices = context.matrices
+		val matrices = context.pose()
 		matrices.pushMatrix()
 		matrices.translate(placement.x, placement.y)
 		matrices.scale(placement.scale)
@@ -43,7 +44,7 @@ abstract class XclipsenHudElement(
 		matrices.popMatrix()
 	}
 
-	fun drawEditor(context: DrawContext, mouseX: Int, mouseY: Int) {
+	fun drawEditor(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!isEnabled(config)) {
 			return
@@ -51,8 +52,8 @@ abstract class XclipsenHudElement(
 
 		val placement = placement(context)
 		if (isDragging) {
-			val maxX = (context.scaledWindowWidth - width * placement.scale).coerceAtLeast(1f)
-			val maxY = (context.scaledWindowHeight - height * placement.scale).coerceAtLeast(1f)
+			val maxX = (context.guiWidth() - width * placement.scale).coerceAtLeast(1f)
+			val maxY = (context.guiHeight() - height * placement.scale).coerceAtLeast(1f)
 			placement.x = (mouseX - dragOffsetX).coerceIn(0f, maxX)
 			placement.y = (mouseY - dragOffsetY).coerceIn(0f, maxY)
 		}
@@ -61,7 +62,7 @@ abstract class XclipsenHudElement(
 		renderElement(context, example = true)
 	}
 
-	fun startDragging(context: DrawContext, mouseX: Int, mouseY: Int): Boolean {
+	fun startDragging(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int): Boolean {
 		val placement = placement(context)
 		if (!isHovered(context, mouseX, mouseY)) {
 			return false
@@ -77,23 +78,23 @@ abstract class XclipsenHudElement(
 		isDragging = false
 	}
 
-	fun scaleBy(context: DrawContext, delta: Float) {
+	fun scaleBy(context: GuiGraphicsExtractor, delta: Float) {
 		val placement = placement(context)
 		placement.scale = (placement.scale + delta).coerceIn(0.5f, 4f)
 	}
 
-	fun reset(context: DrawContext) {
+	fun reset(context: GuiGraphicsExtractor) {
 		val placement = placement(context)
 		placement.x = defaultX(context)
 		placement.y = defaultY(context)
 		placement.scale = 1f
 	}
 
-	protected fun currentPlacement(context: DrawContext): HudElementPlacement = placement(context)
+	protected fun currentPlacement(context: GuiGraphicsExtractor): HudElementPlacement = placement(context)
 
-	protected abstract fun draw(context: DrawContext, example: Boolean): Pair<Float, Float>
+	protected abstract fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float>
 
-	private fun drawEditorBackground(context: DrawContext, mouseX: Int, mouseY: Int) {
+	private fun drawEditorBackground(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
 		val placement = placement(context)
 		val scaledWidth = (width * placement.scale).toInt()
 		val scaledHeight = (height * placement.scale).toInt()
@@ -109,7 +110,7 @@ abstract class XclipsenHudElement(
 		context.fill(left + scaledWidth - 1, top, left + scaledWidth, top + scaledHeight, borderColor)
 	}
 
-	private fun isHovered(context: DrawContext, mouseX: Int, mouseY: Int): Boolean {
+	private fun isHovered(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int): Boolean {
 		val placement = placement(context)
 		val scaledWidth = width * placement.scale
 		val scaledHeight = height * placement.scale
@@ -119,7 +120,7 @@ abstract class XclipsenHudElement(
 			mouseY <= placement.y + scaledHeight
 	}
 
-	private fun placement(context: DrawContext): HudElementPlacement {
+	private fun placement(context: GuiGraphicsExtractor): HudElementPlacement {
 		val config = XclipsenIrcBridgeClient.instance?.config()
 		val map = config?.hudElements
 		val current = map?.get(id)

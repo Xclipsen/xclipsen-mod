@@ -1,7 +1,7 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
 import java.util.Locale
 import java.util.concurrent.ScheduledExecutorService
@@ -40,16 +40,16 @@ object HighClassDiceTrackerFeature {
 		scheduler = null
 	}
 
-	fun requestStatus(onMessage: (Text) -> Unit) {
+	fun requestStatus(onMessage: (Component) -> Unit) {
 		ensureScheduler()
 		scheduler?.execute {
 			val response = fetchTracker()
 			val text = if (response == null) {
-				Text.literal("High Class Dice tracker status unavailable. Make sure the Xclipsen backend is updated.")
+				Component.literal("High Class Dice tracker status unavailable. Make sure the Xclipsen backend is updated.")
 			} else {
 				statusText(response)
 			}
-			MinecraftClient.getInstance().execute {
+			Minecraft.getInstance().execute {
 				onMessage(text)
 			}
 		}
@@ -109,19 +109,19 @@ object HighClassDiceTrackerFeature {
 	}
 
 	private fun sendNotification(message: String) {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		client.execute {
-			client.player?.sendMessage(Text.literal(message), false)
+			client.player?.sendSystemMessage(Component.literal(message))
 		}
 	}
 
-	private fun statusText(response: BackendHighClassDiceTrackerResponse): Text {
+	private fun statusText(response: BackendHighClassDiceTrackerResponse): Component {
 		if (!response.ok) {
-			return Text.literal("High Class Dice tracker status unavailable: ${response.error.ifBlank { "unknown error" }}")
+			return Component.literal("High Class Dice tracker status unavailable: ${response.error.ifBlank { "unknown error" }}")
 		}
 
 		val verdict = if (response.goodToSell) "good to sell" else "not a sell signal"
-		return Text.literal(
+		return Component.literal(
 			"High Class Dice: LBIN ${formatCoins(response.currentLbin)} coins, " +
 				"${formatPercent(response.percentAboveMedian)} above 7d median ${formatCoins(response.median7d)}. " +
 				"Status: $verdict.",

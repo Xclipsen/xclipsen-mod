@@ -1,13 +1,13 @@
 package de.xclipsen.ircbridge.mixin
 
-import net.minecraft.entity.passive.HorseColor
-import net.minecraft.entity.passive.HorseEntity
-import net.minecraft.entity.passive.HorseMarking
+import net.minecraft.world.entity.animal.equine.Variant
+import net.minecraft.world.entity.animal.equine.Horse
+import net.minecraft.world.entity.animal.equine.Markings
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.gen.Invoker
 
-@Mixin(HorseEntity::class)
+@Mixin(Horse::class)
 interface HorseEntityInvoker {
-	@Invoker("setHorseVariant")
-	fun `xclipsen$setHorseVariant`(color: HorseColor, marking: HorseMarking)
+	@Invoker("setVariantAndMarkings")
+	fun `xclipsen$setHorseVariant`(color: Variant, marking: Markings)
 }

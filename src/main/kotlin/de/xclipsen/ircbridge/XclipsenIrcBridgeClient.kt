@@ -5,7 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import de.xclipsen.ircbridge.minigame.MinigameController
 import net.fabricmc.api.ClientModInitializer
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands as ClientCommandManager
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
@@ -15,12 +15,12 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.screen.ChatScreen
-import net.minecraft.client.gui.screen.Screen
-import net.minecraft.text.Text
-import net.minecraft.util.Identifier
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.ChatScreen
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -76,7 +76,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(::handleEndTick)
 		ClientPlayConnectionEvents.JOIN.register { handler, _, client ->
 			SilentDisconnectFeature.onJoin(handler, client)
-			minigameController.onJoin(handler.serverInfo?.address ?: client.currentServerEntry?.address)
+			minigameController.onJoin(client.currentServer?.ip)
 		}
 		ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
 			ServerTickTracker.reset()
@@ -101,30 +101,28 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ClientReceiveMessageEvents.ALLOW_CHAT.register { message, _, _, _, _ -> !shouldSuppressIncomingMessage(message) }
 		ClientReceiveMessageEvents.GAME.register { message, overlay ->
 			ChimeraBookDropEffectsFeature.onIncomingGameMessage(message, overlay)
-			BlazeSlayerFeature.onIncomingGameMessage(message, overlay)
 			handleIncomingMessage(message)
 		}
 		ClientReceiveMessageEvents.CHAT.register { message, _, _, _, _ ->
 			ChimeraBookDropEffectsFeature.onIncomingChatMessage(message)
-			BlazeSlayerFeature.onIncomingChatMessage(message)
 			handleIncomingMessage(message)
 		}
-		HudElementRegistry.attachElementAfter(VanillaHudElements.CHAT, Identifier.of("xclipsen", "hud")) { context, _ ->
+		HudElementRegistry.attachElementAfter(VanillaHudElements.CHAT, Identifier.fromNamespaceAndPath("xclipsen", "hud")) { context, _ ->
 			XclipsenHudManager.render(context)
 		}
-		HudElementRegistry.attachElementAfter(VanillaHudElements.CROSSHAIR, Identifier.of("xclipsen", "custom_crosshair")) { context, _ ->
+		HudElementRegistry.attachElementAfter(VanillaHudElements.CROSSHAIR, Identifier.fromNamespaceAndPath("xclipsen", "custom_crosshair")) { context, _ ->
 			CustomCrosshairFeature.render(context)
 		}
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> MortDoorBarrierFeature.onRender(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> PurpleTerracottaHighlightFeature.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> FloorDropEspFeature.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> WormholeFinderFeature.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> PestEspFeature.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> CorpseEspFeature.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> M5Feature.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> FireFreezeFeature.render(context) }
-		WorldRenderEvents.AFTER_ENTITIES.register { context -> BlazeSlayerFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> ShulkerTracerRenderer.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> MortDoorBarrierFeature.onRender(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> PurpleTerracottaHighlightFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> FloorDropEspFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> WormholeFinderFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> PestEspFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> CorpseEspFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> M5Feature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> FireFreezeFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> BlazeSlayerFeature.render(context) }
 
 		ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
 			dispatcher.register(
@@ -323,14 +321,14 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun showOwnCataStats(context: CommandContext<FabricClientCommandSource>): Int {
-		DungeonAutoKickFeature.showCataStats(MinecraftClient.getInstance().session.username)
-		context.source.sendFeedback(Text.literal("Fetching dungeon stats..."))
+		DungeonAutoKickFeature.showCataStats(Minecraft.getInstance().user.name)
+		context.source.sendFeedback(Component.literal("Fetching dungeon stats..."))
 		return 1
 	}
 
 	private fun showCataStats(context: CommandContext<FabricClientCommandSource>): Int {
 		DungeonAutoKickFeature.showCataStats(StringArgumentType.getString(context, "player"))
-		context.source.sendFeedback(Text.literal("Fetching dungeon stats..."))
+		context.source.sendFeedback(Component.literal("Fetching dungeon stats..."))
 		return 1
 	}
 
@@ -344,17 +342,17 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		return try {
 			configManager.save(config)
 			HighClassDiceTrackerFeature.onConfigChanged()
-			context.source.sendFeedback(Text.literal("High Class Dice tracker ${if (enabled) "enabled" else "disabled"}."))
+			context.source.sendFeedback(Component.literal("High Class Dice tracker ${if (enabled) "enabled" else "disabled"}."))
 			1
 		} catch (_: IOException) {
 			config.highClassDiceTrackerEnabled = previous
-			context.source.sendError(Text.literal("Failed to save High Class Dice tracker setting."))
+			context.source.sendError(Component.literal("Failed to save High Class Dice tracker setting."))
 			0
 		}
 	}
 
 	private fun showHighClassDiceTrackerStatus(context: CommandContext<FabricClientCommandSource>): Int {
-		context.source.sendFeedback(Text.literal("Fetching High Class Dice tracker status..."))
+		context.source.sendFeedback(Component.literal("Fetching High Class Dice tracker status..."))
 		HighClassDiceTrackerFeature.requestStatus { message ->
 			context.source.sendFeedback(message)
 		}
@@ -363,23 +361,23 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun runDevTest(context: CommandContext<FabricClientCommandSource>): Int {
 		return if (ChimeraBookDropEffectsFeature.runTest()) {
-			context.source.sendFeedback(Text.literal("Triggered Chimera book drop effect test."))
+			context.source.sendFeedback(Component.literal("Triggered Chimera book drop effect test."))
 			1
 		} else {
-			context.source.sendError(Text.literal("Chimera book drop effects module is disabled."))
+			context.source.sendError(Component.literal("Chimera book drop effects module is disabled."))
 			0
 		}
 	}
 
 	private fun logNearbyEntities(context: CommandContext<FabricClientCommandSource>): Int {
-		val result = EntityDiagnostics.logNearby(MinecraftClient.getInstance())
+		val result = EntityDiagnostics.logNearby(Minecraft.getInstance())
 		if (result == null) {
-			context.source.sendError(Text.literal("Entity scan requires an active world."))
+			context.source.sendError(Component.literal("Entity scan requires an active world."))
 			return 0
 		}
 
 		context.source.sendFeedback(
-			Text.literal(
+			Component.literal(
 				"Logged ${result.entityCount} nearby entities, including ${result.itemDisplayCount} item displays, to latest.log.",
 			),
 		)
@@ -404,18 +402,18 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			showDevModeStatus(context)
 		} catch (_: IOException) {
 			config.devModeEnabled = previous
-			context.source.sendError(Text.literal("Dev-Modus konnte nicht gespeichert werden."))
+			context.source.sendError(Component.literal("Dev-Modus konnte nicht gespeichert werden."))
 			0
 		}
 	}
 
 	private fun showDevModeStatus(context: CommandContext<FabricClientCommandSource>): Int {
 		val mode = if (config.devModeEnabled) "Lokal" else "Produktion"
-		context.source.sendFeedback(Text.literal("Xclipsen Backend: $mode (${activeModBackendBaseUrl(config)})"))
+		context.source.sendFeedback(Component.literal("Xclipsen Backend: $mode (${activeModBackendBaseUrl(config)})"))
 		return 1
 	}
 
-	private fun handleEndTick(client: MinecraftClient) {
+	private fun handleEndTick(client: Minecraft) {
 		ChimeraBookDropEffectsFeature.onTick()
 		LocationTracker.onTick(client)
 		HideonleafShardTracker.onTick()
@@ -438,7 +436,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		ExperimentationTableFeature.onTick(client)
 		DeploybleFeature.onTick(client)
 
-		if (client.currentScreen !is ChatScreen) {
+		if (client.screen !is ChatScreen) {
 			ImagePreviewManager.setHoverPreviewActive(false)
 			backendBridge.setPreviewHoverPaused(false)
 		}
@@ -455,25 +453,25 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		if (pendingHudEditorOpen) {
 			pendingHudEditorOpen = false
-			openHudEditor(client, client.currentScreen)
+			openHudEditor(client, client.screen)
 		}
 	}
 
-	private fun openConfigScreen(client: MinecraftClient?) {
+	private fun openConfigScreen(client: Minecraft?) {
 		if (client == null) {
 			return
 		}
 
 		client.execute {
-			client.setScreen(XclipsenConfigScreen(client.currentScreen, this))
+			client.setScreen(XclipsenConfigScreen(client.screen, this))
 		}
 	}
 
 	fun openHudEditorScreen(parent: Screen?) {
-		openHudEditor(MinecraftClient.getInstance(), parent)
+		openHudEditor(Minecraft.getInstance(), parent)
 	}
 
-	private fun openHudEditor(client: MinecraftClient?, parent: Screen?) {
+	private fun openHudEditor(client: Minecraft?, parent: Screen?) {
 		if (client == null) {
 			return
 		}
@@ -487,21 +485,21 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		config = configManager.load()
 		applyBackendBridgeConfig()
 		HighClassDiceTrackerFeature.onConfigChanged()
-		context.source.sendFeedback(Text.literal("IRC bridge config reloaded: ${configManager.path()}"))
+		context.source.sendFeedback(Component.literal("IRC bridge config reloaded: ${configManager.path()}"))
 		return 1
 	}
 
 	private fun enableIncomingBridgeMessages(context: CommandContext<FabricClientCommandSource>): Int {
 		incomingBridgeMessagesEnabled = true
 		applyIncomingBridgeState()
-		context.source.sendFeedback(Text.literal("IRC incoming messages enabled."))
+		context.source.sendFeedback(Component.literal("IRC incoming messages enabled."))
 		return 1
 	}
 
 	private fun disableIncomingBridgeMessages(context: CommandContext<FabricClientCommandSource>): Int {
 		incomingBridgeMessagesEnabled = false
 		applyIncomingBridgeState()
-		context.source.sendFeedback(Text.literal("IRC incoming messages disabled."))
+		context.source.sendFeedback(Component.literal("IRC incoming messages disabled."))
 		return 1
 	}
 
@@ -523,12 +521,12 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun showStatus(context: CommandContext<FabricClientCommandSource>): Int {
 		val status = backendBridge.testConnection()
-		context.source.sendFeedback(Text.literal(formatStatus(status)))
+		context.source.sendFeedback(Component.literal(formatStatus(status)))
 		return 1
 	}
 
 	private fun showShulkerGlowStatus(context: CommandContext<FabricClientCommandSource>): Int {
-		context.source.sendFeedback(Text.literal("Shulker glow is ${if (config.shulkerGlowEnabled) "enabled" else "disabled"}."))
+		context.source.sendFeedback(Component.literal("Shulker glow is ${if (config.shulkerGlowEnabled) "enabled" else "disabled"}."))
 		return 1
 	}
 
@@ -539,10 +537,10 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		config.shulkerGlowEnabled = enabled
 		return try {
 			configManager.save(config)
-			context.source.sendFeedback(Text.literal("Shulker glow ${if (enabled) "enabled" else "disabled"}."))
+			context.source.sendFeedback(Component.literal("Shulker glow ${if (enabled) "enabled" else "disabled"}."))
 			1
 		} catch (_: IOException) {
-			context.source.sendError(Text.literal("Failed to save shulker glow setting."))
+			context.source.sendError(Component.literal("Failed to save shulker glow setting."))
 			0
 		}
 	}
@@ -550,7 +548,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private fun sendIrcMessage(context: CommandContext<FabricClientCommandSource>): Int {
 		val message = StringArgumentType.getString(context, "message").trim()
 		if (message.isBlank()) {
-			context.source.sendError(Text.literal("Message must not be empty."))
+			context.source.sendError(Component.literal("Message must not be empty."))
 			return 0
 		}
 
@@ -558,12 +556,12 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun showLinkedStatus(context: CommandContext<FabricClientCommandSource>): Int {
-		val playerName = MinecraftClient.getInstance().session.username
+		val playerName = Minecraft.getInstance().user.name
 		val status = backendBridge.getLinkStatus(playerName)
 
 		if (!status.linked) {
 			context.source.sendFeedback(
-				Text.literal(
+				Component.literal(
 					if (status.error.isBlank()) {
 						"Not linked. Use /link start on Discord, then /link CODE here."
 					} else {
@@ -576,38 +574,38 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		ircLinkWarningShown = false
 		cacheLinkedDisplayName(status)
-		context.source.sendFeedback(Text.literal("Linked usernames: ${status.minecraftUsernames.joinToString(", ")}"))
+		context.source.sendFeedback(Component.literal("Linked usernames: ${status.minecraftUsernames.joinToString(", ")}"))
 		return 1
 	}
 
 	private fun completeLink(context: CommandContext<FabricClientCommandSource>): Int {
-		val playerName = MinecraftClient.getInstance().session.username
+		val playerName = Minecraft.getInstance().user.name
 		val code = StringArgumentType.getString(context, "code")
 		val status = backendBridge.completeLink(playerName, code)
 
 		if (status.error.isNotBlank() || !status.linked) {
-			context.source.sendError(Text.literal(if (status.error.isBlank()) "Link failed." else status.error))
+			context.source.sendError(Component.literal(if (status.error.isBlank()) "Link failed." else status.error))
 			return 0
 		}
 
 		ircLinkWarningShown = false
 		backendBridge.discardBacklogOnNextPoll()
 		cacheLinkedDisplayName(status)
-		context.source.sendFeedback(Text.literal("Linked successfully: ${status.minecraftUsernames.joinToString(", ")}"))
+		context.source.sendFeedback(Component.literal("Linked successfully: ${status.minecraftUsernames.joinToString(", ")}"))
 		return 1
 	}
 
 	private fun enableIrcChatMode(context: CommandContext<FabricClientCommandSource>): Int {
 		ircChatModeExpiresAt = System.currentTimeMillis() + IRC_CHAT_MODE_WINDOW_MS
 		context.source.sendFeedback(
-			Text.literal("IRC chat mode enabled for 2.5 minutes. Normal chat messages will go to IRC."),
+			Component.literal("IRC chat mode enabled for 2.5 minutes. Normal chat messages will go to IRC."),
 		)
 		return 1
 	}
 
 	private fun disableIrcChatMode(context: CommandContext<FabricClientCommandSource>): Int {
 		ircChatModeExpiresAt = 0L
-		context.source.sendFeedback(Text.literal("IRC chat mode disabled."))
+		context.source.sendFeedback(Component.literal("IRC chat mode disabled."))
 		return 1
 	}
 
@@ -719,7 +717,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		return true
 	}
 
-	private fun handleIncomingMessage(message: Text?) {
+	private fun handleIncomingMessage(message: Component?) {
 		M5Feature.onIncomingMessage(message)
 		MineshaftAutoWarpFeature.onIncomingMessage(message)
 		DungeonAutoKickFeature.onIncomingMessage(message)
@@ -731,11 +729,11 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		handleIncomingCoopChat(message)
 	}
 
-	private fun shouldSuppressIncomingMessage(message: Text?): Boolean {
+	private fun shouldSuppressIncomingMessage(message: Component?): Boolean {
 		return SilentDisconnectFeature.shouldSuppressStatusMessage(message) || ChatFeature.shouldSuppressMessage(message)
 	}
 
-	private fun handleHideonleafLostFightAlert(message: Text?) {
+	private fun handleHideonleafLostFightAlert(message: Component?) {
 		if (!config.hideonleafHelperEnabled) {
 			return
 		}
@@ -755,7 +753,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		}
 		lastHideonleafLostFightAlertAt = now
 
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		client.execute {
 			ShulkerTracerRenderer.markCurrentTargetCompleted()
 			HideonleafShardTracker.recordKill()
@@ -769,7 +767,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	fun playHideonleafLostFightSound(config: BridgeConfig = this.config) {
-		MinecraftClient.getInstance().soundManager.play(
+		Minecraft.getInstance().soundManager.play(
 			SoundCatalog.masterSound(
 				config.hideonleafLostFightAlertSoundId,
 				config.hideonleafLostFightAlertSoundPitch.coerceIn(0.1f, 2.0f),
@@ -778,7 +776,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		)
 	}
 
-	private fun handleIncomingCoopChat(message: Text?) {
+	private fun handleIncomingCoopChat(message: Component?) {
 		if (!config.ircBridgeEnabled) {
 			return
 		}
@@ -788,7 +786,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		}
 
 		val parsed = parseCoopChatMessage(message) ?: return
-		val localPlayer = MinecraftClient.getInstance().session?.username.orEmpty()
+		val localPlayer = Minecraft.getInstance().user.name
 		if (localPlayer.isBlank()) {
 			return
 		}
@@ -801,7 +799,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		backendBridge.relayCoopChat(localPlayer, parsed.playerName, parsed.message)
 	}
 
-	private fun parseCoopChatMessage(message: Text?): CoopChatMessage? {
+	private fun parseCoopChatMessage(message: Component?): CoopChatMessage? {
 		val raw = message?.string ?: return null
 		val normalized = normalizeCoopLine(raw)
 		if (!normalized.startsWith("Co-op >")) {
@@ -909,7 +907,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			return false
 		}
 
-		val playerName = MinecraftClient.getInstance().session.username
+		val playerName = Minecraft.getInstance().user.name
 		if (playerName.isBlank()) {
 			errorHandler("Minecraft username missing.")
 			return false
@@ -943,9 +941,9 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun sendCommandError(message: String) {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		client.execute {
-			client.player?.sendMessage(Text.literal(message), false)
+			client.player?.sendSystemMessage(Component.literal(message))
 		}
 	}
 
@@ -955,7 +953,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun sendClientFeedback(message: String) {
-		MinecraftClient.getInstance().player?.sendMessage(Text.literal(message), false)
+		Minecraft.getInstance().player?.sendSystemMessage(Component.literal(message))
 	}
 
 	private fun disableIrcChatMode() {
@@ -964,9 +962,9 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	}
 
 	private fun sendClientError(message: String) {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		client.execute {
-			client.player?.sendMessage(Text.literal(message), false)
+			client.player?.sendSystemMessage(Component.literal(message))
 		}
 	}
 
@@ -975,10 +973,10 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		val duration = HideonleafShardTracker.selectedDurationMs()
 		val profit = HideonleafShardTracker.totalProfit(data)
 		val perHour = HideonleafShardTracker.displayProfitPerHour(data, duration)
-		val view = if (HideonleafShardTracker.showingSession) "Session" else "Total"
+		val view = if (HideonleafShardTracker.showingSession) "User" else "Total"
 		val durationAvailable = HideonleafShardTracker.selectedDurationAvailable()
 
-		context.source.sendFeedback(Text.literal(buildString {
+		context.source.sendFeedback(Component.literal(buildString {
 			append("§b§lShard Tracker ($view)§r\n")
 			for ((name, item) in data.items) {
 				append("  §e${item.amount}x §f$name")
@@ -997,20 +995,20 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 	private fun resetShardTrackerSession(context: CommandContext<FabricClientCommandSource>): Int {
 		HideonleafShardTracker.resetSession()
-		context.source.sendFeedback(Text.literal("§aShard tracker session reset."))
+		context.source.sendFeedback(Component.literal("§aShard tracker session reset."))
 		return 1
 	}
 
 	private fun resetShardTrackerTotal(context: CommandContext<FabricClientCommandSource>): Int {
 		HideonleafShardTracker.resetTotal()
-		context.source.sendFeedback(Text.literal("§aShard tracker fully reset (session + total)."))
+		context.source.sendFeedback(Component.literal("§aShard tracker fully reset (session + total)."))
 		return 1
 	}
 
 	private fun toggleShardTrackerView(context: CommandContext<FabricClientCommandSource>): Int {
 		HideonleafShardTracker.toggleView()
-		val view = if (HideonleafShardTracker.showingSession) "Session" else "Total"
-		context.source.sendFeedback(Text.literal("§aShard tracker now showing: §e$view"))
+		val view = if (HideonleafShardTracker.showingSession) "User" else "Total"
+		context.source.sendFeedback(Component.literal("§aShard tracker now showing: §e$view"))
 		return 1
 	}
 
@@ -1018,10 +1016,10 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		config.shardTrackerEnabled = enabled
 		return try {
 			configManager.save(config)
-			context.source.sendFeedback(Text.literal("§aShard tracker ${if (enabled) "enabled" else "disabled"}."))
+			context.source.sendFeedback(Component.literal("§aShard tracker ${if (enabled) "enabled" else "disabled"}."))
 			1
 		} catch (_: IOException) {
-			context.source.sendError(Text.literal("Failed to save shard tracker setting."))
+			context.source.sendError(Component.literal("Failed to save shard tracker setting."))
 			0
 		}
 	}

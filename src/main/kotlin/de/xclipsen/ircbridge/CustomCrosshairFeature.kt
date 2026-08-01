@@ -1,9 +1,9 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.gl.RenderPipelines
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.util.Identifier
+import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.resources.Identifier
 
 object CustomCrosshairFeature {
 	const val GRID_SIZE = 7
@@ -23,15 +23,15 @@ object CustomCrosshairFeature {
 	).joinToString("/")
 
 	fun shouldOverrideVanilla(): Boolean {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return false
 		if (!config.customCrosshairModuleEnabled) {
 			return false
 		}
-		if (client.options.hudHidden) {
+		if (client.options.hideGui) {
 			return false
 		}
-		val perspective = client.options.perspective
+		val perspective = client.options.cameraType
 		return if (perspective.isFirstPerson) {
 			config.customCrosshairShowInFirstPerson
 		} else {
@@ -39,13 +39,13 @@ object CustomCrosshairFeature {
 		}
 	}
 
-	fun render(context: DrawContext) {
-		val client = MinecraftClient.getInstance()
+	fun render(context: GuiGraphicsExtractor) {
+		val client = Minecraft.getInstance()
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
-		if (!config.customCrosshairModuleEnabled || client.options.hudHidden) {
+		if (!config.customCrosshairModuleEnabled || client.options.hideGui) {
 			return
 		}
-		val perspective = client.options.perspective
+		val perspective = client.options.cameraType
 		if (perspective.isFirstPerson) {
 			if (!config.customCrosshairShowInFirstPerson) {
 				return
@@ -64,12 +64,12 @@ object CustomCrosshairFeature {
 		}
 	}
 
-	private fun renderCustomCrosshair(context: DrawContext, config: BridgeConfig) {
+	private fun renderCustomCrosshair(context: GuiGraphicsExtractor, config: BridgeConfig) {
 		val cells = decode(config.customCrosshairPattern)
 		val step = CELL_SIZE + CELL_GAP
 		val totalSize = GRID_SIZE * step - CELL_GAP
-		val startX = (context.scaledWindowWidth - totalSize) / 2
-		val startY = (context.scaledWindowHeight - totalSize) / 2
+		val startX = (context.guiWidth() - totalSize) / 2
+		val startY = (context.guiHeight() - totalSize) / 2
 
 		for (row in 0 until GRID_SIZE) {
 			for (column in 0 until GRID_SIZE) {
@@ -81,10 +81,10 @@ object CustomCrosshairFeature {
 		}
 	}
 
-	private fun renderVanillaCrosshair(context: DrawContext) {
-		val left = (context.scaledWindowWidth - VANILLA_CROSSHAIR_SIZE) / 2
-		val top = (context.scaledWindowHeight - VANILLA_CROSSHAIR_SIZE) / 2
-		context.drawGuiTexture(RenderPipelines.CROSSHAIR, VANILLA_CROSSHAIR_TEXTURE, left, top, VANILLA_CROSSHAIR_SIZE, VANILLA_CROSSHAIR_SIZE)
+	private fun renderVanillaCrosshair(context: GuiGraphicsExtractor) {
+		val left = (context.guiWidth() - VANILLA_CROSSHAIR_SIZE) / 2
+		val top = (context.guiHeight() - VANILLA_CROSSHAIR_SIZE) / 2
+		context.blitSprite(RenderPipelines.CROSSHAIR, VANILLA_CROSSHAIR_TEXTURE, left, top, VANILLA_CROSSHAIR_SIZE, VANILLA_CROSSHAIR_SIZE)
 	}
 
 	fun normalizePattern(raw: String?): String {
@@ -123,7 +123,7 @@ object CustomCrosshairFeature {
 
 	fun resetPattern(): String = defaultPattern
 
-	private val VANILLA_CROSSHAIR_TEXTURE: Identifier = Identifier.ofVanilla("hud/crosshair")
+	private val VANILLA_CROSSHAIR_TEXTURE: Identifier = Identifier.withDefaultNamespace("hud/crosshair")
 
 	private fun encode(cells: BooleanArray): String {
 		return (0 until GRID_SIZE).joinToString("/") { row ->

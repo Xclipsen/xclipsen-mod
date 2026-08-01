@@ -1,34 +1,33 @@
 package de.xclipsen.ircbridge
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.world.ClientWorld
-import net.minecraft.client.render.VertexConsumerProvider
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext
+import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.client.render.XclipsenRenderLayers
-import net.minecraft.entity.mob.ShulkerEntity
-import net.minecraft.util.math.Vec3d
+import net.minecraft.world.entity.monster.Shulker
+import net.minecraft.world.phys.Vec3
 import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.sin
 
 object ShulkerTracerRenderer {
 	private val completedShulkerIds = LinkedHashSet<UUID>()
-	private var lastWorld: ClientWorld? = null
+	private var lastWorld: ClientLevel? = null
 
-	fun render(context: WorldRenderContext) {
+	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		val lineMode = config.shulkerTracerLineMode.coerceIn(0, 3)
 		if (!config.hideonleafHelperEnabled || lineMode == 0) {
 			return
 		}
 
-		val client = MinecraftClient.getInstance()
-		val world = client.world ?: return
-		if (client.player == null || client.options.hudHidden) {
+		val client = Minecraft.getInstance()
+		val world = client.level ?: return
+		if (client.player == null || client.options.hideGui) {
 			return
 		}
 
-		val cameraPos = context.gameRenderer().camera.cameraPos
+		val cameraPos = context.levelState().cameraRenderState.pos
 		val availableShulkers = currentAvailableShulkers(world)
 			.filterNot { completedShulkerIds.contains(it.id) }
 		val shulkerPath = buildNearestShulkerPath(cameraPos, availableShulkers, lineMode)
@@ -48,9 +47,9 @@ object ShulkerTracerRenderer {
 	}
 
 	fun markCurrentTargetCompleted() {
-		val client = MinecraftClient.getInstance()
-		val world = client.world ?: return
-		val cameraPos = client.gameRenderer.camera.cameraPos
+		val client = Minecraft.getInstance()
+		val world = client.level ?: return
+		val cameraPos = client.gameRenderer.mainCamera.position()
 		val nextTarget = buildNearestShulkerPath(
 			cameraPos,
 			currentAvailableShulkers(world).filterNot { completedShulkerIds.contains(it.id) },
@@ -60,28 +59,28 @@ object ShulkerTracerRenderer {
 		completedShulkerIds += nextTarget.id
 	}
 
-	private fun currentAvailableShulkers(world: ClientWorld): List<ShulkerTarget> {
+	private fun currentAvailableShulkers(world: ClientLevel): List<ShulkerTarget> {
 		if (world !== lastWorld) {
 			completedShulkerIds.clear()
 			lastWorld = world
 		}
 
-		val available = world.entities
+		val available = world.entitiesForRendering()
 			.asSequence()
-			.filterIsInstance<ShulkerEntity>()
+			.filterIsInstance<Shulker>()
 			.filter { it.isAlive && !it.isRemoved }
 			.map { ShulkerTarget(it.uuid, it.boundingBox.center) }
 			.toList()
 		return available
 	}
 
-	private fun buildNearestShulkerPath(start: Vec3d, availableShulkers: List<ShulkerTarget>, maxCount: Int): List<ShulkerTarget> {
+	private fun buildNearestShulkerPath(start: Vec3, availableShulkers: List<ShulkerTarget>, maxCount: Int): List<ShulkerTarget> {
 		val remaining = availableShulkers.toMutableList()
 		val path = ArrayList<ShulkerTarget>(maxCount.coerceAtMost(remaining.size))
 		var currentOrigin = start
 
 		while (path.size < maxCount && remaining.isNotEmpty()) {
-			val next = remaining.minByOrNull { it.center.squaredDistanceTo(currentOrigin) } ?: break
+			val next = remaining.minByOrNull { it.center.distanceToSqr(currentOrigin) } ?: break
 			path += next
 			remaining -= next
 			currentOrigin = next.center
@@ -90,13 +89,13 @@ object ShulkerTracerRenderer {
 		return path
 	}
 
-	private fun crosshairStart(cameraPos: Vec3d): Vec3d {
-		val client = MinecraftClient.getInstance()
+	private fun crosshairStart(cameraPos: Vec3): Vec3 {
+		val client = Minecraft.getInstance()
 		val viewEntity = client.cameraEntity ?: client.player ?: return cameraPos
-		val yawRadians = Math.toRadians(viewEntity.yaw.toDouble())
-		val pitchRadians = Math.toRadians(viewEntity.pitch.toDouble())
+		val yawRadians = Math.toRadians(viewEntity.yRot.toDouble())
+		val pitchRadians = Math.toRadians(viewEntity.xRot.toDouble())
 		val horizontalScale = cos(pitchRadians)
-		val look = Vec3d(
+		val look = Vec3(
 			-sin(yawRadians) * horizontalScale,
 			-sin(pitchRadians),
 			cos(yawRadians) * horizontalScale,
@@ -108,10 +107,10 @@ object ShulkerTracerRenderer {
 		)
 	}
 
-	private fun drawLine(context: WorldRenderContext, cameraPos: Vec3d, start: Vec3d, end: Vec3d, color: Int, width: Float) {
-		val matrices = context.matrices()
+	private fun drawLine(context: LevelRenderContext, cameraPos: Vec3, start: Vec3, end: Vec3, color: Int, width: Float) {
+		val matrices = context.poseStack()
 		val delta = end.subtract(start)
-		val lengthSquared = delta.lengthSquared()
+		val lengthSquared = delta.lengthSqr()
 		if (!delta.x.isFinite() || !delta.y.isFinite() || !delta.z.isFinite() || lengthSquared < 0.0001) {
 			return
 		}
@@ -125,21 +124,21 @@ object ShulkerTracerRenderer {
 		val blue = color and 0xFF
 		val alpha = 230
 
-		matrices.push()
+		matrices.pushPose()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-		val entry = matrices.peek()
+		val entry = matrices.last()
 		val renderLayer = XclipsenRenderLayers.getXrayLine(width.toDouble())
-		val consumer = context.consumers().getBuffer(renderLayer)
-		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
-			.color(red, green, blue, alpha)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(width)
-		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
-			.color(red, green, blue, alpha)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(width)
-		(context.consumers() as? VertexConsumerProvider.Immediate)?.draw(renderLayer)
-		matrices.pop()
+		val consumer = context.bufferSource().getBuffer(renderLayer)
+		consumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
+			.setColor(red, green, blue, alpha)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(width)
+		consumer.addVertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
+			.setColor(red, green, blue, alpha)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(width)
+		context.bufferSource().endBatch(renderLayer)
+		matrices.popPose()
 	}
 
 	private fun parseColor(hex: String): Int? {
@@ -158,6 +157,6 @@ object ShulkerTracerRenderer {
 
 	private data class ShulkerTarget(
 		val id: UUID,
-		val center: Vec3d,
+		val center: Vec3,
 	)
 }

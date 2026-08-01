@@ -1,15 +1,14 @@
 package de.xclipsen.ircbridge
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
-import net.minecraft.block.BlockState
-import net.minecraft.block.Blocks
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.render.VertexConsumerProvider
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext
+import net.minecraft.world.level.block.state.BlockState
+import net.minecraft.world.level.block.Blocks
+import net.minecraft.client.Minecraft
 import net.minecraft.client.render.XclipsenRenderLayers
-import net.minecraft.entity.Entity
-import net.minecraft.text.Text
-import net.minecraft.util.math.BlockPos
-import net.minecraft.util.math.Vec3d
+import net.minecraft.world.entity.Entity
+import net.minecraft.network.chat.Component
+import net.minecraft.core.BlockPos
+import net.minecraft.world.phys.Vec3
 
 object MortDoorBarrierFeature {
 	private const val CHECK_INTERVAL_TICKS = 4
@@ -23,18 +22,18 @@ object MortDoorBarrierFeature {
 	private const val DEBUG_ALPHA = 220
 	private const val SET_BLOCK_FLAGS = 19
 	const val modeCount: Int = 2
-	private val DOOR_BLOCK_STATE = Blocks.BARRIER.defaultState
+	private val DOOR_BLOCK_STATE = Blocks.BARRIER.defaultBlockState()
 
 	private val appliedStates = linkedMapOf<BlockPos, BlockState>()
 	private var cachedDoorCube: DoorCube? = null
 	private var tickCounter = 0
 	private var debugTickCounter = 0
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		if (++tickCounter < CHECK_INTERVAL_TICKS) return
 		tickCounter = 0
 
-		val world = client.world
+		val world = client.level
 		val player = client.player
 		val config = XclipsenIrcBridgeClient.instance?.config()
 		if (world == null || player == null || config == null || !config.dungeonDoorModuleEnabled || !config.dungeonDoorEnabled || !isRelevantArea(LocationTracker.currentArea)) {
@@ -50,7 +49,7 @@ object MortDoorBarrierFeature {
 			return
 		}
 
-		val cube = findDoorWindow(world, mort.blockPos)
+		val cube = findDoorWindow(world, mort.blockPosition())
 		if (cube != null && cube.closedCount == FULL_CUBE_TARGET_BLOCKS && cube.airCount == 0) {
 			cachedDoorCube = cube
 		} else if (cachedDoorCube != null) {
@@ -67,7 +66,7 @@ object MortDoorBarrierFeature {
 		val cachedCube = cachedDoorCube
 		if (cachedCube == null) {
 			clear(client)
-			val nearbyTargets = countNearbyTargetBlocks(world, mort.blockPos)
+			val nearbyTargets = countNearbyTargetBlocks(world, mort.blockPosition())
 			debug(client, config.dungeonDoorDebugEnabled, "mort ok, no 3x3x3 cube matched nearbyTargets=$nearbyTargets")
 			return
 		}
@@ -96,18 +95,18 @@ object MortDoorBarrierFeature {
 	}
 
 	fun onWorldChange() {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		clear(client)
 		cachedDoorCube = null
 	}
 
-	fun onRender(context: WorldRenderContext) {
-		val client = MinecraftClient.getInstance()
+	fun onRender(context: LevelRenderContext) {
+		val client = Minecraft.getInstance()
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.dungeonDoorModuleEnabled || !config.dungeonDoorDebugEnabled) return
 		if (client.player == null || appliedStates.isEmpty()) return
 
-		val cameraPos = context.gameRenderer().camera.cameraPos
+		val cameraPos = context.gameRenderer().mainCamera.position()
 		for (pos in appliedStates.keys) {
 			drawDebugBox(context, pos, cameraPos)
 		}
@@ -120,22 +119,22 @@ object MortDoorBarrierFeature {
 			area.contains("dungeon", ignoreCase = true)
 	}
 
-	private fun findNearestMort(client: MinecraftClient): Entity? {
-		val world = client.world ?: return null
+	private fun findNearestMort(client: Minecraft): Entity? {
+		val world = client.level ?: return null
 		val player = client.player ?: return null
-		return world.entities
+		return world.entitiesForRendering()
 			.asSequence()
 			.filter { !it.isRemoved }
-			.filter { it.squaredDistanceTo(player) <= MAX_MORT_DISTANCE * MAX_MORT_DISTANCE }
+			.filter { it.distanceToSqr(player) <= MAX_MORT_DISTANCE * MAX_MORT_DISTANCE }
 			.filter { entityName(it).contains("Mort", ignoreCase = true) }
-			.minByOrNull { it.squaredDistanceTo(player) }
+			.minByOrNull { it.distanceToSqr(player) }
 	}
 
 	private fun entityName(entity: Entity): String {
 		return entity.customName?.string ?: entity.displayName?.string ?: entity.name.string
 	}
 
-	private fun findDoorWindow(clientWorld: net.minecraft.client.world.ClientWorld, origin: BlockPos): DoorCube? {
+	private fun findDoorWindow(clientWorld: net.minecraft.client.multiplayer.ClientLevel, origin: BlockPos): DoorCube? {
 		val candidates = mutableListOf<DoorCube>()
 
 		for (axis in Axis.entries) {
@@ -170,18 +169,18 @@ object MortDoorBarrierFeature {
 		)
 	}
 
-	private fun countNearbyTargetBlocks(clientWorld: net.minecraft.client.world.ClientWorld, origin: BlockPos): Int {
+	private fun countNearbyTargetBlocks(clientWorld: net.minecraft.client.multiplayer.ClientLevel, origin: BlockPos): Int {
 		return collectNearbyTargetBlocks(clientWorld, origin).size
 	}
 
-	private fun collectNearbyTargetBlocks(clientWorld: net.minecraft.client.world.ClientWorld, origin: BlockPos): List<BlockPos> {
+	private fun collectNearbyTargetBlocks(clientWorld: net.minecraft.client.multiplayer.ClientLevel, origin: BlockPos): List<BlockPos> {
 		return buildList {
 			for (xOffset in -SCAN_RADIUS_XZ..SCAN_RADIUS_XZ) {
 				for (zOffset in -SCAN_RADIUS_XZ..SCAN_RADIUS_XZ) {
 					for (yOffset in SCAN_MIN_Y..SCAN_MAX_Y) {
-						val pos = origin.add(xOffset, yOffset, zOffset)
+						val pos = origin.offset(xOffset, yOffset, zOffset)
 						if (clientWorld.getBlockState(pos).block == Blocks.INFESTED_CHISELED_STONE_BRICKS) {
-							add(pos.toImmutable())
+							add(pos.immutable())
 						}
 					}
 				}
@@ -196,9 +195,9 @@ object MortDoorBarrierFeature {
 					for (yOffset in 0..2) {
 						add(
 							when (axis) {
-								Axis.X -> origin.add(planeCoord + depthOffset, yStart + yOffset, sideStart + sideOffset)
-								Axis.Z -> origin.add(sideStart + sideOffset, yStart + yOffset, planeCoord + depthOffset)
-							}.toImmutable(),
+								Axis.X -> origin.offset(planeCoord + depthOffset, yStart + yOffset, sideStart + sideOffset)
+								Axis.Z -> origin.offset(sideStart + sideOffset, yStart + yOffset, planeCoord + depthOffset)
+							}.immutable(),
 						)
 					}
 				}
@@ -208,8 +207,8 @@ object MortDoorBarrierFeature {
 
 	private fun windowStartPosition(origin: BlockPos, axis: Axis, planeCoord: Int, sideStart: Int, yStart: Int): BlockPos {
 		return when (axis) {
-			Axis.X -> origin.add(planeCoord, yStart, sideStart).toImmutable()
-			Axis.Z -> origin.add(sideStart, yStart, planeCoord).toImmutable()
+			Axis.X -> origin.offset(planeCoord, yStart, sideStart).immutable()
+			Axis.Z -> origin.offset(sideStart, yStart, planeCoord).immutable()
 		}
 	}
 
@@ -225,8 +224,8 @@ object MortDoorBarrierFeature {
 		return cube.positions.filterTo(linkedSetOf()) { pos -> pos.y == middleY }
 	}
 
-	private fun syncDesiredStates(client: MinecraftClient, desired: Set<BlockPos>) {
-		val world = client.world ?: return
+	private fun syncDesiredStates(client: Minecraft, desired: Set<BlockPos>) {
+		val world = client.level ?: return
 		val stale = appliedStates.keys.filter { it !in desired }
 		stale.forEach { restoreBlock(world, it) }
 
@@ -234,12 +233,12 @@ object MortDoorBarrierFeature {
 			val currentState = world.getBlockState(pos)
 			if (currentState.block != Blocks.INFESTED_CHISELED_STONE_BRICKS && currentState.block != DOOR_BLOCK_STATE.block) continue
 			if (currentState.block == DOOR_BLOCK_STATE.block) {
-				appliedStates.putIfAbsent(pos, Blocks.INFESTED_CHISELED_STONE_BRICKS.defaultState)
+				appliedStates.putIfAbsent(pos, Blocks.INFESTED_CHISELED_STONE_BRICKS.defaultBlockState())
 				continue
 			}
 
-			appliedStates.putIfAbsent(pos.toImmutable(), currentState)
-			world.setBlockState(pos, DOOR_BLOCK_STATE, SET_BLOCK_FLAGS)
+			appliedStates.putIfAbsent(pos.immutable(), currentState)
+			world.setBlock(pos, DOOR_BLOCK_STATE, SET_BLOCK_FLAGS)
 		}
 	}
 
@@ -247,8 +246,8 @@ object MortDoorBarrierFeature {
 		return state.block == Blocks.INFESTED_CHISELED_STONE_BRICKS || state.block == DOOR_BLOCK_STATE.block
 	}
 
-	private fun clear(client: MinecraftClient) {
-		val world = client.world ?: run {
+	private fun clear(client: Minecraft) {
+		val world = client.level ?: run {
 			appliedStates.clear()
 			return
 		}
@@ -257,21 +256,21 @@ object MortDoorBarrierFeature {
 		appliedStates.clear()
 	}
 
-	private fun restoreBlock(world: net.minecraft.client.world.ClientWorld, pos: BlockPos) {
+	private fun restoreBlock(world: net.minecraft.client.multiplayer.ClientLevel, pos: BlockPos) {
 		val original = appliedStates.remove(pos) ?: return
 		if (world.getBlockState(pos).block == DOOR_BLOCK_STATE.block) {
-			world.setBlockState(pos, original, SET_BLOCK_FLAGS)
+			world.setBlock(pos, original, SET_BLOCK_FLAGS)
 		}
 	}
 
-	private fun debug(client: MinecraftClient, enabled: Boolean, message: String) {
+	private fun debug(client: Minecraft, enabled: Boolean, message: String) {
 		if (!enabled) return
 		if (++debugTickCounter < DEBUG_INTERVAL_TICKS) return
 		debugTickCounter = 0
-		client.player?.sendMessage(Text.literal("[DoorDebug] $message"), false)
+		client.player?.sendSystemMessage(Component.literal("[DoorDebug] $message"))
 	}
 
-	private fun drawDebugBox(context: WorldRenderContext, pos: BlockPos, cameraPos: Vec3d) {
+	private fun drawDebugBox(context: LevelRenderContext, pos: BlockPos, cameraPos: Vec3) {
 		val minX = pos.x.toDouble()
 		val minY = pos.y.toDouble()
 		val minZ = pos.z.toDouble()
@@ -282,12 +281,12 @@ object MortDoorBarrierFeature {
 		val g = 64
 		val b = 64
 
-		val matrices = context.matrices()
-		matrices.push()
+		val matrices = context.poseStack()
+		matrices.pushPose()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-		val entry = matrices.peek()
+		val entry = matrices.last()
 		val layer = XclipsenRenderLayers.getXrayLine(DEBUG_LINE_WIDTH)
-		val consumers = context.consumers()
+		val consumers = context.bufferSource()
 
 		fun line(x1: Double, y1: Double, z1: Double, x2: Double, y2: Double, z2: Double) {
 			val consumer = consumers.getBuffer(layer)
@@ -298,15 +297,15 @@ object MortDoorBarrierFeature {
 			val normalX = (dx / length).toFloat()
 			val normalY = (dy / length).toFloat()
 			val normalZ = (dz / length).toFloat()
-			consumer.vertex(entry, x1.toFloat(), y1.toFloat(), z1.toFloat())
-				.color(r, g, b, DEBUG_ALPHA)
-				.normal(entry, normalX, normalY, normalZ)
-				.lineWidth(DEBUG_LINE_WIDTH.toFloat())
-			consumer.vertex(entry, x2.toFloat(), y2.toFloat(), z2.toFloat())
-				.color(r, g, b, DEBUG_ALPHA)
-				.normal(entry, normalX, normalY, normalZ)
-				.lineWidth(DEBUG_LINE_WIDTH.toFloat())
-			(consumers as? VertexConsumerProvider.Immediate)?.draw(layer)
+			consumer.addVertex(entry, x1.toFloat(), y1.toFloat(), z1.toFloat())
+				.setColor(r, g, b, DEBUG_ALPHA)
+				.setNormal(entry, normalX, normalY, normalZ)
+				.setLineWidth(DEBUG_LINE_WIDTH.toFloat())
+			consumer.addVertex(entry, x2.toFloat(), y2.toFloat(), z2.toFloat())
+				.setColor(r, g, b, DEBUG_ALPHA)
+				.setNormal(entry, normalX, normalY, normalZ)
+				.setLineWidth(DEBUG_LINE_WIDTH.toFloat())
+			consumers.endBatch(layer)
 		}
 
 		line(minX, minY, minZ, maxX, minY, minZ)
@@ -322,7 +321,7 @@ object MortDoorBarrierFeature {
 		line(maxX, minY, maxZ, maxX, maxY, maxZ)
 		line(minX, minY, maxZ, minX, maxY, maxZ)
 
-		matrices.pop()
+		matrices.popPose()
 	}
 
 	private data class DoorCube(

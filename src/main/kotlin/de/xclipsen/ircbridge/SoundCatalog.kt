@@ -1,12 +1,12 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.sound.PositionedSoundInstance
-import net.minecraft.registry.Registries
-import net.minecraft.sound.SoundCategory
-import net.minecraft.sound.SoundEvent
-import net.minecraft.sound.SoundEvents
-import net.minecraft.util.Identifier
-import net.minecraft.util.math.random.Random
+import net.minecraft.client.resources.sounds.SimpleSoundInstance
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.sounds.SoundSource
+import net.minecraft.sounds.SoundEvent
+import net.minecraft.sounds.SoundEvents
+import net.minecraft.resources.Identifier
+import net.minecraft.util.RandomSource
 import java.util.Locale
 
 object SoundCatalog {
@@ -14,30 +14,29 @@ object SoundCatalog {
 
 	val defaultSoundId: String = DEFAULT_SOUND_ID
 
-	val entries: List<SoundEntry> by lazy {
-		Registries.SOUND_EVENT.ids
-			.map { id -> SoundEntry(id.toString(), prettyName(id)) }
-			.sortedWith(compareBy<SoundEntry> { it.name }.thenBy { it.id })
+	val entries: List<SoundEventRegistration> by lazy {
+		BuiltInRegistries.SOUND_EVENT.keySet()
+			.map { id -> SoundEventRegistration(id.toString(), prettyName(id)) }
+			.sortedWith(compareBy<SoundEventRegistration> { it.name }.thenBy { it.id })
 	}
 
 	fun normalizeSoundId(value: String?): String {
 		val id = Identifier.tryParse(value?.trim().orEmpty()) ?: return DEFAULT_SOUND_ID
-		return if (Registries.SOUND_EVENT.containsId(id)) id.toString() else DEFAULT_SOUND_ID
+		return if (BuiltInRegistries.SOUND_EVENT.containsKey(id)) id.toString() else DEFAULT_SOUND_ID
 	}
 
 	fun soundEvent(value: String?): SoundEvent {
-		val id = Identifier.tryParse(normalizeSoundId(value)) ?: Identifier.of("minecraft", "block.note_block.pling")
-		val event: SoundEvent? = Registries.SOUND_EVENT.get(id)
-		return event ?: SoundEvents.BLOCK_NOTE_BLOCK_PLING.value()
+		val id = Identifier.tryParse(normalizeSoundId(value)) ?: Identifier.withDefaultNamespace("block.note_block.pling")
+		return BuiltInRegistries.SOUND_EVENT.getValue(id) ?: SoundEvents.NOTE_BLOCK_PLING.value()
 	}
 
-	fun masterSound(value: String?, pitch: Float, volume: Float): PositionedSoundInstance {
-		return PositionedSoundInstance(
+	fun masterSound(value: String?, pitch: Float, volume: Float): SimpleSoundInstance {
+		return SimpleSoundInstance(
 			soundEvent(value),
-			SoundCategory.MASTER,
+			SoundSource.MASTER,
 			volume,
 			pitch,
-			Random.create(),
+			RandomSource.create(),
 			0.0,
 			0.0,
 			0.0,
@@ -45,11 +44,11 @@ object SoundCatalog {
 	}
 
 	fun displayName(value: String?): String {
-		val id = Identifier.tryParse(normalizeSoundId(value)) ?: return prettyName(Identifier.of("minecraft", "block.note_block.pling"))
+		val id = Identifier.tryParse(normalizeSoundId(value)) ?: return prettyName(Identifier.withDefaultNamespace("block.note_block.pling"))
 		return prettyName(id)
 	}
 
-	fun filtered(query: String): List<SoundEntry> {
+	fun filtered(query: String): List<SoundEventRegistration> {
 		val normalizedQuery = query.trim()
 		if (normalizedQuery.isBlank()) {
 			return entries
@@ -70,7 +69,7 @@ object SoundCatalog {
 	}
 }
 
-data class SoundEntry(
+data class SoundEventRegistration(
 	val id: String,
 	val name: String,
 )

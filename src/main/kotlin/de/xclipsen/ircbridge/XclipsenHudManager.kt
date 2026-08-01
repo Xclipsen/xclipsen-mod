@@ -1,9 +1,8 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.ChatScreen
-import net.minecraft.client.gui.screen.Screen
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.ChatScreen
 
 object XclipsenHudManager {
 	val elements: List<XclipsenHudElement> = listOf(
@@ -23,8 +22,8 @@ object XclipsenHudManager {
 		PickaxeAbilityReadyAlertHudElement,
 	)
 
-	fun render(context: DrawContext) {
-		if (MinecraftClient.getInstance().currentScreen is XclipsenHudEditorScreen) {
+	fun render(context: GuiGraphicsExtractor) {
+		if (Minecraft.getInstance().screen is XclipsenHudEditorScreen) {
 			return
 		}
 
@@ -39,10 +38,10 @@ object XclipsenHudManager {
 	 */
 	fun handleScreenClick(mouseX: Int, mouseY: Int, button: Int): Boolean {
 		if (button != 0) return false
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		// Don't intercept clicks inside our own editor or config screens
-		if (client.currentScreen is XclipsenHudEditorScreen) return false
-		if (client.currentScreen is ChatScreen && IrcChatTabHudElement.handleClick(mouseX, mouseY)) return true
+		if (client.screen is XclipsenHudEditorScreen) return false
+		if (client.screen is ChatScreen && IrcChatTabHudElement.handleClick(mouseX, mouseY)) return true
 		return HideonleafShardTrackerHudElement.handleClick(mouseX, mouseY)
 	}
 
@@ -64,30 +63,30 @@ private object HideonleafLostFightHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		isEnabled(config) && System.currentTimeMillis() <= visibleUntil
 
-	override fun defaultX(context: DrawContext): Float {
-		return ((context.scaledWindowWidth - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
+	override fun defaultX(context: GuiGraphicsExtractor): Float {
+		return ((context.guiWidth() - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
 	}
 
-	override fun defaultY(context: DrawContext): Float {
-		return (context.scaledWindowHeight * 0.32f).coerceAtLeast(30f)
+	override fun defaultY(context: GuiGraphicsExtractor): Float {
+		return (context.guiHeight() * 0.32f).coerceAtLeast(30f)
 	}
 
 	fun show() {
 		visibleUntil = System.currentTimeMillis() + VISIBLE_MS
 	}
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val client = MinecraftClient.getInstance()
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val client = Minecraft.getInstance()
 		val text = "Hideonleaf lost the fight..."
-		val textWidth = client.textRenderer.getWidth(text)
+		val textWidth = client.font.width(text)
 		val width = textWidth.coerceAtLeast(DEFAULT_WIDTH)
-		val height = client.textRenderer.fontHeight
+		val height = client.font.lineHeight
 
-		context.drawCenteredTextWithShadow(client.textRenderer, text, width / 2, 0, 0xFFFFFFFF.toInt())
+		context.centeredText(client.font, text, width / 2, 0, 0xFFFFFFFF.toInt())
 
 		if (example) {
-			context.drawTextWithShadow(client.textRenderer, "Alert", 5, height + 4, 0xFFA0A0A0.toInt())
-			return width.toFloat() to (height + client.textRenderer.fontHeight + 6).toFloat()
+			context.text(client.font, "Alert", 5, height + 4, 0xFFA0A0A0.toInt(), true)
+			return width.toFloat() to (height + client.font.lineHeight + 6).toFloat()
 		}
 
 		return width.toFloat() to height.toFloat()

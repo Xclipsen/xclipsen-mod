@@ -1,16 +1,16 @@
 package de.xclipsen.ircbridge
 
 import com.autocroesus.util.ColorUtil
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.ingame.HandledScreen
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.component.type.LoreComponent
-import net.minecraft.item.ItemStack
-import net.minecraft.item.Items
-import net.minecraft.screen.slot.Slot
-import net.minecraft.screen.slot.SlotActionType
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.item.component.ItemLore
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
+import net.minecraft.world.inventory.Slot
+import net.minecraft.world.inventory.ContainerInput
+import net.minecraft.network.chat.Component
 import java.util.EnumSet
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -29,8 +29,8 @@ object PartyFinderFeature {
 	private var inCatacombsGate = false
 	private var currentRole: String? = null
 
-	fun onTick(client: MinecraftClient) {
-		val screen = client.currentScreen as? HandledScreen<*> ?: return
+	fun onTick(client: Minecraft) {
+		val screen = client.screen as? AbstractContainerScreen<*> ?: return
 		if (!isEnabled() || !isPartyFinderScreen(screen)) {
 			return
 		}
@@ -49,7 +49,7 @@ object PartyFinderFeature {
 		pendingStats.clear()
 	}
 
-	fun onServerContainerOpen(syncId: Int, title: Text) {
+	fun onServerContainerOpen(syncId: Int, title: Component) {
 		val titleString = title.string
 		inPartyFinder = titleString == "Party Finder"
 		inCatacombsGate = titleString == "Catacombs Gate"
@@ -89,14 +89,14 @@ object PartyFinderFeature {
 		if (!inPartyFinder) {
 			return
 		}
-		val screen = MinecraftClient.getInstance().currentScreen as? HandledScreen<*> ?: return
+		val screen = Minecraft.getInstance().screen as? AbstractContainerScreen<*> ?: return
 		if (isPartyFinderScreen(screen)) {
 			scanCurrentScreen(screen)
 		}
 	}
 
-	fun beforeDrawSlot(context: DrawContext, screen: HandledScreen<*>, slot: Slot) {
-		if (!isEnabled() || !isHighlightsEnabled() || !isPartyFinderScreen(screen) || slot.inventory == MinecraftClient.getInstance().player?.inventory) {
+	fun beforeDrawSlot(context: GuiGraphicsExtractor, screen: AbstractContainerScreen<*>, slot: Slot) {
+		if (!isEnabled() || !isHighlightsEnabled() || !isPartyFinderScreen(screen) || slot.container == Minecraft.getInstance().player?.inventory) {
 			return
 		}
 		val data = parties[slot.index] ?: return
@@ -104,38 +104,38 @@ object PartyFinderFeature {
 		context.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, color)
 	}
 
-	fun afterDrawSlots(context: DrawContext, screen: HandledScreen<*>) {
+	fun afterDrawSlots(context: GuiGraphicsExtractor, screen: AbstractContainerScreen<*>) {
 		if (!isEnabled() || !isMemberCountEnabled() || !isPartyFinderScreen(screen)) {
 			return
 		}
-		val textRenderer = MinecraftClient.getInstance().textRenderer
-		for (slot in screen.screenHandler.slots) {
-			if (slot.inventory == MinecraftClient.getInstance().player?.inventory) continue
+		val textRenderer = Minecraft.getInstance().font
+		for (slot in screen.menu.slots) {
+			if (slot.container == Minecraft.getInstance().player?.inventory) continue
 			val data = parties[slot.index] ?: continue
-			context.drawCenteredTextWithShadow(textRenderer, data.members.size.toString(), slot.x + 14, slot.y + 8, 0xFFFFFF)
+			context.centeredText(textRenderer, data.members.size.toString(), slot.x + 14, slot.y + 8, 0xFFFFFF)
 		}
 	}
 
-	fun onSlotClick(screen: HandledScreen<*>, slot: Slot?, button: Int, actionType: SlotActionType): Boolean {
+	fun onSlotClick(screen: AbstractContainerScreen<*>, slot: Slot?, button: Int, actionType: ContainerInput): Boolean {
 		if (!isEnabled() || !isRightClickEnabled() || !isPartyFinderScreen(screen)) {
 			return false
 		}
-		if (slot == null || button != 1 || actionType != SlotActionType.PICKUP || slot.inventory == MinecraftClient.getInstance().player?.inventory) {
+		if (slot == null || button != 1 || actionType != ContainerInput.PICKUP || slot.container == Minecraft.getInstance().player?.inventory) {
 			return false
 		}
-		if (slot.index !in PARTY_SLOT_RANGE || !slot.stack.isOf(Items.PLAYER_HEAD)) {
+		if (slot.index !in PARTY_SLOT_RANGE || slot.item.item != Items.PLAYER_HEAD) {
 			return false
 		}
 
-		val leader = LEADER_NAME_PATTERN.matchEntire(ColorUtil.stripColors(slot.stack.name.string))?.groupValues?.getOrNull(1) ?: return false
-		val client = MinecraftClient.getInstance()
-		client.keyboard.setClipboard(leader)
-		client.player?.sendMessage(Text.literal("§bCopied leader name §a$leader"), false)
+		val leader = LEADER_NAME_PATTERN.matchEntire(ColorUtil.stripColors(slot.item.hoverName.string))?.groupValues?.getOrNull(1) ?: return false
+		val client = Minecraft.getInstance()
+		client.keyboardHandler.setClipboard(leader)
+		client.player?.sendSystemMessage(Component.literal("§bCopied leader name §a$leader"))
 		return true
 	}
 
-	private fun scanCurrentScreen(screen: HandledScreen<*>) {
-		scanStacks(screen.screenHandler.slots.map { it.stack })
+	private fun scanCurrentScreen(screen: AbstractContainerScreen<*>) {
+		scanStacks(screen.menu.slots.map { it.item })
 	}
 
 	private fun scanStacks(stacks: List<ItemStack>) {
@@ -151,7 +151,7 @@ object PartyFinderFeature {
 	}
 
 	private fun parseParty(index: Int, stack: ItemStack): PartyFinderData? {
-		if (!stack.isOf(Items.PLAYER_HEAD)) {
+		if (stack.item != Items.PLAYER_HEAD) {
 			return null
 		}
 		val lore = loreLines(stack)
@@ -187,12 +187,12 @@ object PartyFinderFeature {
 		return result
 	}
 
-	private fun applyOverviewLore(screen: HandledScreen<*>) {
+	private fun applyOverviewLore(screen: AbstractContainerScreen<*>) {
 		for ((slotIndex, party) in parties) {
-			val slot = screen.screenHandler.slots.getOrNull(slotIndex) ?: continue
-			val stack = slot.stack
-			val lore = stack.get(DataComponentTypes.LORE) ?: continue
-			val newLore = mutableListOf<Text>()
+			val slot = screen.menu.slots.getOrNull(slotIndex) ?: continue
+			val stack = slot.item
+			val lore = stack.get(DataComponents.LORE) ?: continue
+			val newLore = mutableListOf<Component>()
 			var changed = false
 			for (line in lore.lines()) {
 				val text = line.string
@@ -222,7 +222,7 @@ object PartyFinderFeature {
 				}
 			}
 			if (changed && newLore.isNotEmpty()) {
-				stack.set(DataComponentTypes.LORE, LoreComponent(newLore))
+				stack.set(DataComponents.LORE, ItemLore(newLore))
 			}
 		}
 	}
@@ -248,7 +248,7 @@ object PartyFinderFeature {
 		}
 	}
 
-	private fun memberStatsSuffix(party: PartyFinderData, stats: BackendDungeonStats): Text {
+	private fun memberStatsSuffix(party: PartyFinderData, stats: BackendDungeonStats): Component {
 		val floors = if (party.isMasterMode) stats.floors.master else stats.floors.normal
 		val floorStats = floors[party.floor.toString()]
 		val pb = when {
@@ -256,15 +256,15 @@ object PartyFinderFeature {
 			floorStats?.sPbMs?.takeIf { it > 0L } != null -> formatTime(floorStats.sPbMs)
 			else -> null
 		}
-		return Text.literal(buildString {
+		return Component.literal(buildString {
 			append(" §8(§6${formatLevel(stats.catacombsLevel)}§8)")
 			append(" §8[§3${formatShort(stats.secrets)} §7| §b${formatFixed(stats.averageSecrets, 1)}§8]")
 			if (pb == null) append(" §8[§cNO PB§8]") else append(" §8[§a$pb§8]")
 		})
 	}
 
-	private fun missingRolesText(party: PartyFinderData): Text {
-		return Text.literal(buildString {
+	private fun missingRolesText(party: PartyFinderData): Component {
+		return Component.literal(buildString {
 			append("§eMissing: ")
 			party.missingRoles.forEachIndexed { index, role ->
 				if (index > 0) append("§7, ")
@@ -283,10 +283,10 @@ object PartyFinderFeature {
 	}
 
 	private fun loreLines(stack: ItemStack): List<String> {
-		return stack.get(DataComponentTypes.LORE)?.lines()?.map { ColorUtil.stripColors(it.string) } ?: emptyList()
+		return stack.get(DataComponents.LORE)?.lines()?.map { ColorUtil.stripColors(it.string) } ?: emptyList()
 	}
 
-	private fun isPartyFinderScreen(screen: HandledScreen<*>): Boolean = screen.title.string == "Party Finder"
+	private fun isPartyFinderScreen(screen: AbstractContainerScreen<*>): Boolean = screen.title.string == "Party Finder"
 
 	private fun isEnabled(): Boolean {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return false

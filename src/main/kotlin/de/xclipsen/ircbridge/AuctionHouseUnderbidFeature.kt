@@ -3,12 +3,12 @@ package de.xclipsen.ircbridge
 import com.autocroesus.config.AcDataStore
 import com.autocroesus.price.PriceFetcher
 import com.google.gson.JsonParser
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.component.type.NbtComponent
-import net.minecraft.item.ItemStack
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.inventory.ContainerScreen
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.item.component.CustomData
+import net.minecraft.world.item.ItemStack
+import net.minecraft.network.chat.Component
 import java.util.Locale
 import kotlin.jvm.optionals.getOrNull
 import kotlin.math.roundToLong
@@ -22,14 +22,14 @@ object AuctionHouseUnderbidFeature {
 	private var lastCopiedFingerprint: String? = null
 	@Volatile private var priceRefreshInFlight = false
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.auctionHouseModuleEnabled || !config.auctionHouseAutoCopyUnderbidEnabled) {
 			lastCopiedFingerprint = null
 			return
 		}
 
-		val screen = client.currentScreen as? GenericContainerScreen ?: run {
+		val screen = client.screen as? ContainerScreen ?: run {
 			lastCopiedFingerprint = null
 			return
 		}
@@ -40,7 +40,7 @@ object AuctionHouseUnderbidFeature {
 
 		maybeRefreshPrices()
 
-		val stack = screen.screenHandler.slots.getOrNull(CREATE_BIN_ITEM_SLOT)?.stack ?: return
+		val stack = screen.menu.slots.getOrNull(CREATE_BIN_ITEM_SLOT)?.item ?: return
 		if (stack.isEmpty) {
 			lastCopiedFingerprint = null
 			return
@@ -62,11 +62,8 @@ object AuctionHouseUnderbidFeature {
 		}
 
 		val underbidPrice = totalPrice - 1L
-		client.keyboard.setClipboard(underbidPrice.toString())
-		client.player?.sendMessage(
-			Text.literal("Copied ${formatCoins(underbidPrice)} to clipboard. (Auto Underbid)"),
-			false,
-		)
+		client.keyboardHandler.setClipboard(underbidPrice.toString())
+		client.player?.sendSystemMessage(Component.literal("Copied ${formatCoins(underbidPrice)} to clipboard. (Auto Underbid)"))
 		lastCopiedFingerprint = fingerprint
 	}
 
@@ -97,8 +94,8 @@ object AuctionHouseUnderbidFeature {
 	}
 
 	private fun resolveInternalName(stack: ItemStack): String? {
-		val customData = stack.get(DataComponentTypes.CUSTOM_DATA) as? NbtComponent ?: return null
-		val nbt = customData.copyNbt()
+		val customData = stack.get(DataComponents.CUSTOM_DATA) as? CustomData ?: return null
+		val nbt = customData.copyTag()
 		val rawId = nbt.getString("id").getOrNull()?.takeUnless { it.isBlank() } ?: return null
 		if (rawId != "PET") {
 			return rawId
@@ -116,9 +113,9 @@ object AuctionHouseUnderbidFeature {
 	}
 
 	private fun sendFeedback(message: String) {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		client.execute {
-			client.player?.sendMessage(Text.literal(message), false)
+			client.player?.sendSystemMessage(Component.literal(message))
 		}
 	}
 

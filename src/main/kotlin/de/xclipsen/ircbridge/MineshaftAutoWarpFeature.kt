@@ -2,10 +2,10 @@ package de.xclipsen.ircbridge
 
 import com.autocroesus.util.ColorUtil
 import de.xclipsen.ircbridge.FrozenCorpseDetector.FrozenCorpseType
-import net.minecraft.client.MinecraftClient
-import net.minecraft.entity.decoration.ArmorStandEntity
-import net.minecraft.text.Text
-import net.minecraft.util.math.BlockPos
+import net.minecraft.client.Minecraft
+import net.minecraft.world.entity.decoration.ArmorStand
+import net.minecraft.network.chat.Component
+import net.minecraft.core.BlockPos
 import java.util.EnumMap
 import java.util.Locale
 
@@ -30,10 +30,10 @@ object MineshaftAutoWarpFeature {
 	private var partyLeader: String? = null
 	private var previousPartyLeader: String? = null
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		val player = client.player
-		if (player == null || client.world == null || !LocationTracker.isOnHypixelSkyBlock) {
+		if (player == null || client.level == null || !LocationTracker.isOnHypixelSkyBlock) {
 			resetMineshaftState()
 			return
 		}
@@ -75,7 +75,7 @@ object MineshaftAutoWarpFeature {
 		resetPartyState()
 	}
 
-	fun onIncomingMessage(message: Text?) {
+	fun onIncomingMessage(message: Component?) {
 		val normalized = normalize(message?.string ?: return)
 		if (normalized.isBlank()) {
 			return
@@ -140,7 +140,7 @@ object MineshaftAutoWarpFeature {
 		return parseCorpseRuleInternal(normalized).error
 	}
 
-	private fun attemptWarpFlow(client: MinecraftClient, config: BridgeConfig) {
+	private fun attemptWarpFlow(client: Minecraft, config: BridgeConfig) {
 		if (caveInDetected || warpIssued || foreignMineshaftOwner != null) {
 			return
 		}
@@ -190,15 +190,15 @@ object MineshaftAutoWarpFeature {
 		}
 	}
 
-	private fun scanForCorpses(client: MinecraftClient) {
-		val world = client.world ?: return
-		for (entity in world.entities) {
-			val armorStand = entity as? ArmorStandEntity ?: continue
+	private fun scanForCorpses(client: Minecraft) {
+		val world = client.level ?: return
+		for (entity in world.entitiesForRendering()) {
+			val armorStand = entity as? ArmorStand ?: continue
 			if (!FrozenCorpseDetector.looksLikeCorpseStand(armorStand)) {
 				continue
 			}
 			val corpseKind = FrozenCorpseDetector.resolveCorpseType(armorStand) ?: continue
-			val pos = armorStand.blockPos
+			val pos = armorStand.blockPosition()
 			val existing = detectedCorpses[pos]
 			if (existing == null) {
 				detectedCorpses[pos] = DetectedCorpse(corpseKind, pos, looted = false)
@@ -228,11 +228,11 @@ object MineshaftAutoWarpFeature {
 	}
 
 	private fun markClosestCorpseLooted(kind: FrozenCorpseType) {
-		val playerPos = MinecraftClient.getInstance().player?.blockPos ?: return
+		val playerPos = Minecraft.getInstance().player?.blockPosition() ?: return
 		detectedCorpses.values
 			.asSequence()
 			.filter { it.kind == kind && !it.looted }
-			.minByOrNull { it.pos.getSquaredDistance(playerPos) }
+			.minByOrNull { it.pos.distSqr(playerPos) }
 			?.looted = true
 	}
 
@@ -416,13 +416,13 @@ object MineshaftAutoWarpFeature {
 		return false
 	}
 
-	private fun sendCommand(client: MinecraftClient, command: String): Boolean {
-		val networkHandler = client.player?.networkHandler ?: return false
+	private fun sendCommand(client: Minecraft, command: String): Boolean {
+		val networkHandler = client.player?.connection ?: return false
 		val now = System.currentTimeMillis()
 		if (now - lastCommandSentAt < COMMAND_GAP_MS) {
 			return false
 		}
-		networkHandler.sendChatCommand(command)
+		networkHandler.sendCommand(command)
 		lastCommandSentAt = now
 		return true
 	}
@@ -448,7 +448,7 @@ object MineshaftAutoWarpFeature {
 	}
 
 	private fun localPlayerName(): String {
-		return MinecraftClient.getInstance().session?.username.orEmpty()
+		return Minecraft.getInstance().user.name
 	}
 
 	private fun parseCorpseRule(raw: String): CorpseRule? {

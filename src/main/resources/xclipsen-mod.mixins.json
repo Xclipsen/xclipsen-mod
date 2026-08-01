@@ -6,6 +6,7 @@
     "ChatHudInvoker12111",
     "ChatHudMixin12111",
     "ChatScreenMixin12111",
+    "ClientClockManagerMixin",
     "ClientConnectionMixin",
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerMixin",

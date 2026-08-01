@@ -1,33 +1,21 @@
 package de.xclipsen.ircbridge.mixin
 
-import de.xclipsen.ircbridge.ClientTimeChanger
 import de.xclipsen.ircbridge.FireFreezeFeature
-import net.minecraft.client.world.ClientWorld
-import net.minecraft.entity.Entity
-import net.minecraft.particle.ParticleEffect
-import net.minecraft.registry.entry.RegistryEntry
-import net.minecraft.sound.SoundCategory
-import net.minecraft.sound.SoundEvent
+import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.world.entity.Entity
+import net.minecraft.core.particles.ParticleOptions
+import net.minecraft.core.Holder
+import net.minecraft.sounds.SoundSource
+import net.minecraft.sounds.SoundEvent
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
-import org.spongepowered.asm.mixin.injection.ModifyVariable
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 
-@Mixin(ClientWorld::class)
+@Mixin(ClientLevel::class)
 abstract class ClientWorldMixin {
-	@ModifyVariable(method = ["setTime(JJZ)V"], at = At("HEAD"), argsOnly = true, ordinal = 1)
-	private fun overrideTimeOfDay(timeOfDay: Long): Long {
-		return ClientTimeChanger.overrideTimeOfDay(timeOfDay)
-	}
-
-	@ModifyVariable(method = ["setTime(JJZ)V"], at = At("HEAD"), argsOnly = true, ordinal = 0)
-	private fun overrideShouldTickTimeOfDay(shouldTickTimeOfDay: Boolean): Boolean {
-		return ClientTimeChanger.shouldTickTimeOfDay(shouldTickTimeOfDay)
-	}
-
 	@Inject(
-		method = ["playSound(Lnet/minecraft/entity/Entity;DDDLnet/minecraft/registry/entry/RegistryEntry;Lnet/minecraft/sound/SoundCategory;FFJ)V"],
+		method = ["playSeededSound(Lnet/minecraft/world/entity/Entity;DDDLnet/minecraft/core/Holder;Lnet/minecraft/sounds/SoundSource;FFJ)V"],
 		at = [At("HEAD")],
 	)
 	private fun onPlaySound(
@@ -35,8 +23,8 @@ abstract class ClientWorldMixin {
 		x: Double,
 		y: Double,
 		z: Double,
-		sound: RegistryEntry<SoundEvent>,
-		category: SoundCategory,
+		sound: Holder<SoundEvent>,
+		category: SoundSource,
 		volume: Float,
 		pitch: Float,
 		seed: Long,
@@ -46,12 +34,12 @@ abstract class ClientWorldMixin {
 	}
 
 	@Inject(
-		method = ["addParticleClient(Lnet/minecraft/particle/ParticleEffect;DDDDDD)V"],
+		method = ["addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"],
 		at = [At("HEAD")],
 		cancellable = true,
 	)
 	private fun onAddParticleClient(
-		parameters: ParticleEffect,
+		parameters: ParticleOptions,
 		x: Double,
 		y: Double,
 		z: Double,
@@ -66,12 +54,12 @@ abstract class ClientWorldMixin {
 	}
 
 	@Inject(
-		method = ["addParticleClient(Lnet/minecraft/particle/ParticleEffect;ZZDDDDDD)V"],
+		method = ["addParticle(Lnet/minecraft/core/particles/ParticleOptions;ZZDDDDDD)V"],
 		at = [At("HEAD")],
 		cancellable = true,
 	)
 	private fun onAddParticleClientWithFlags(
-		parameters: ParticleEffect,
+		parameters: ParticleOptions,
 		alwaysSpawn: Boolean,
 		canSpawnOnMinimal: Boolean,
 		x: Double,

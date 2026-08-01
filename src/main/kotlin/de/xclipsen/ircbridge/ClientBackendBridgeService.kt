@@ -1,12 +1,12 @@
 package de.xclipsen.ircbridge
 
 import com.google.gson.Gson
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.MutableText
-import net.minecraft.text.ClickEvent
-import net.minecraft.text.Style
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.ClickEvent
+import net.minecraft.network.chat.Style
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import org.slf4j.Logger
 import java.io.IOException
 import java.net.URI
@@ -531,9 +531,9 @@ class ClientBackendBridgeService(
 	}
 
 	private fun pollMessages() {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		val playerName = currentPlayerName(client)
-		if (client == null || client.player == null || client.inGameHud == null || playerName.isBlank()) {
+		if (client == null || client.player == null || client.gui == null || playerName.isBlank()) {
 			return
 		}
 
@@ -696,7 +696,7 @@ class ClientBackendBridgeService(
 					state = "error"
 					lastError = "Health payload invalid."
 				} else {
-					val playerName = currentPlayerName(MinecraftClient.getInstance()).ifBlank { "test" }
+					val playerName = currentPlayerName(Minecraft.getInstance()).ifBlank { "test" }
 					val query = ircServerUrl(
 						"/api/messages?after=0&playerName=" + URLEncoder.encode(playerName, StandardCharsets.UTF_8),
 						configOverride,
@@ -740,18 +740,18 @@ class ClientBackendBridgeService(
 
 	private fun ircServerUrl(path: String, configOverride: BridgeConfig = config): String = configOverride.ircServerBaseUrl + path
 
-	private fun announceConnected(client: MinecraftClient?) {
-		if (announcedConnected || client?.player == null || client.inGameHud == null) {
+	private fun announceConnected(client: Minecraft?) {
+		if (announcedConnected || client?.player == null || client.gui == null) {
 			return
 		}
 
 		announcedConnected = true
-		showClientMessage(client, Text.literal("[IRC] Connected to backend.").formatted(Formatting.GREEN))
+		showClientMessage(client, Component.literal("[IRC] Connected to backend.").withStyle(ChatFormatting.GREEN))
 	}
 
 	private fun echoLocally(message: String) {
-		val client = MinecraftClient.getInstance()
-		if (client?.inGameHud == null) {
+		val client = Minecraft.getInstance()
+		if (client?.gui == null) {
 			return
 		}
 
@@ -801,17 +801,17 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	private fun showClientMessage(client: MinecraftClient?, message: Text) {
+	private fun showClientMessage(client: Minecraft?, message: Component) {
 		client?.execute {
 			when {
-				client.player != null -> client.player?.sendMessage(message, false)
-				client.inGameHud != null -> client.inGameHud.chatHud.addMessage(message)
+				client.player != null -> client.player?.sendSystemMessage(message)
+				client.gui != null -> client.gui.chat.addClientSystemMessage(message)
 			}
 		}
 	}
 
 	private fun flushPausedIncomingMessages() {
-		val client = MinecraftClient.getInstance() ?: return
+		val client = Minecraft.getInstance() ?: return
 		val drained = mutableListOf<PausedIncomingMessage>()
 		synchronized(pausedIncomingMessages) {
 			while (pausedIncomingMessages.isNotEmpty()) {
@@ -827,15 +827,15 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	private fun styleBridgeMessage(formatted: String): Text {
+	private fun styleBridgeMessage(formatted: String): Component {
 		if (formatted.startsWith("[") && formatted.contains("]")) {
 			val prefixEnd = formatted.indexOf(']') + 1
 			val prefix = formatted.substring(0, prefixEnd)
 			val rest = formatted.substring(prefixEnd)
 
-			val text: MutableText = Text.literal(prefix).formatted(Formatting.GREEN)
+			val text: MutableComponent = Component.literal(prefix).withStyle(ChatFormatting.GREEN)
 			if (rest.isNotEmpty()) {
-				appendLinkedText(text, rest, Style.EMPTY.withColor(Formatting.WHITE))
+				appendLinkedText(text, rest, Style.EMPTY.withColor(ChatFormatting.WHITE))
 			}
 			return text
 		}
@@ -843,18 +843,18 @@ class ClientBackendBridgeService(
 		return buildLinkedText(formatted, Style.EMPTY)
 	}
 
-	private fun buildLinkedText(content: String, defaultStyle: Style): MutableText {
-		val root = Text.empty()
+	private fun buildLinkedText(content: String, defaultStyle: Style): MutableComponent {
+		val root = Component.empty()
 		appendLinkedText(root, content, defaultStyle)
 		return root
 	}
 
-	private fun appendLinkedText(target: MutableText, content: String, defaultStyle: Style) {
+	private fun appendLinkedText(target: MutableComponent, content: String, defaultStyle: Style) {
 		var cursor = 0
 
 		for (match in URL_PATTERN.findAll(content)) {
 			if (match.range.first > cursor) {
-				target.append(Text.literal(content.substring(cursor, match.range.first)).setStyle(defaultStyle))
+				target.append(Component.literal(content.substring(cursor, match.range.first)).setStyle(defaultStyle))
 			}
 
 			val rawUrl = match.value
@@ -863,24 +863,24 @@ class ClientBackendBridgeService(
 
 			if (normalizedUrl.isNotBlank()) {
 				target.append(
-					Text.literal(normalizedUrl).setStyle(
+					Component.literal(normalizedUrl).setStyle(
 						defaultStyle
-							.withUnderline(true)
-							.withColor(Formatting.AQUA)
+							.withUnderlined(true)
+							.withColor(ChatFormatting.AQUA)
 							.withClickEvent(ClickEvent.OpenUrl(URI.create(normalizedUrl))),
 					),
 				)
 			}
 
 			if (trailing.isNotEmpty()) {
-				target.append(Text.literal(trailing).setStyle(defaultStyle))
+				target.append(Component.literal(trailing).setStyle(defaultStyle))
 			}
 
 			cursor = match.range.last + 1
 		}
 
 		if (cursor < content.length) {
-			target.append(Text.literal(content.substring(cursor)).setStyle(defaultStyle))
+			target.append(Component.literal(content.substring(cursor)).setStyle(defaultStyle))
 		}
 	}
 
@@ -902,7 +902,7 @@ class ClientBackendBridgeService(
 	}
 
 	private data class PausedIncomingMessage(
-		val content: Text,
+		val content: Component,
 		val isIrcMessage: Boolean,
 	)
 
@@ -946,12 +946,12 @@ class ClientBackendBridgeService(
 			return builder.toString().trim()
 		}
 
-		private fun currentPlayerName(client: MinecraftClient?): String {
-			if (client?.session == null) {
+		private fun currentPlayerName(client: Minecraft?): String {
+			if (client == null) {
 				return ""
 			}
 
-			return sanitizeInline(client.session.username, MAX_NAME_LENGTH)
+			return sanitizeInline(client.user.name, MAX_NAME_LENGTH)
 		}
 	}
 }

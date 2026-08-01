@@ -2,24 +2,24 @@ package de.xclipsen.ircbridge
 
 import de.xclipsen.ircbridge.mixin.EntityRendererInvoker
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.network.AbstractClientPlayerEntity
-import net.minecraft.client.render.command.OrderedRenderCommandQueue
-import net.minecraft.client.render.entity.state.AllayEntityRenderState
-import net.minecraft.client.render.entity.state.LivingEntityRenderState
-import net.minecraft.client.render.entity.state.PlayerEntityRenderState
-import net.minecraft.client.render.state.CameraRenderState
-import net.minecraft.client.util.math.MatrixStack
-import net.minecraft.entity.EntityPose
-import net.minecraft.entity.EntityType
-import net.minecraft.entity.EquipmentSlot
-import net.minecraft.entity.LivingEntity
-import net.minecraft.entity.SpawnReason
-import net.minecraft.entity.passive.PassiveEntity
-import net.minecraft.item.ItemStack
-import net.minecraft.util.Identifier
-import net.minecraft.util.Hand
-import net.minecraft.util.math.Vec3d
+import net.minecraft.client.Minecraft
+import net.minecraft.client.player.AbstractClientPlayer
+import net.minecraft.client.renderer.SubmitNodeCollector
+import net.minecraft.client.renderer.entity.state.AllayRenderState
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState
+import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.state.level.CameraRenderState
+import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.world.entity.Pose
+import net.minecraft.world.entity.EntityType
+import net.minecraft.world.entity.EquipmentSlot
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.EntitySpawnReason
+import net.minecraft.world.entity.AgeableMob
+import net.minecraft.world.item.ItemStack
+import net.minecraft.resources.Identifier
+import net.minecraft.world.InteractionHand
+import net.minecraft.world.phys.Vec3
 import org.slf4j.LoggerFactory
 import java.lang.reflect.Method
 import java.util.Locale
@@ -101,7 +101,7 @@ object MobModelFeature {
 		uploadInFlight = false
 	}
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val playerName = currentPlayerName(client) ?: return
 		val now = System.currentTimeMillis()
 
@@ -162,40 +162,40 @@ object MobModelFeature {
 	}
 
 	fun renderReplacement(
-		state: PlayerEntityRenderState,
-		matrices: MatrixStack,
-		queue: OrderedRenderCommandQueue,
+		state: AvatarRenderState,
+		matrices: PoseStack,
+		queue: SubmitNodeCollector,
 		cameraState: CameraRenderState,
 	): Boolean {
 		if (consumeReplacementBypass(state.id)) {
 			return false
 		}
 
-		val client = MinecraftClient.getInstance()
-		val world = client.world ?: return false
-		val player = world.getEntityById(state.id) as? AbstractClientPlayerEntity ?: return false
+		val client = Minecraft.getInstance()
+		val world = client.level ?: return false
+		val player = world.getEntity(state.id) as? AbstractClientPlayer ?: return false
 		val selection = selectionForPlayer(player) ?: return false
 		val entityType = resolveEntityType(selection.entityType) ?: return false
 		val renderEntity = prepareRenderEntity(player, selection, entityType) ?: return false
 		return runCatching {
-			val tickProgress = client.renderTickCounter.getTickProgress(false)
-			val renderState = client.entityRenderDispatcher.getAndUpdateRenderState(renderEntity, tickProgress)
+			val tickProgress = client.deltaTracker.getGameTimeDeltaPartialTick(false)
+			val renderState = client.entityRenderDispatcher.extractEntity(renderEntity, tickProgress)
 			val renderer = client.entityRenderDispatcher.getRenderer(renderState)
 			adjustRenderState(renderState, state, renderEntity, selection)
-			val displayName = renderState.displayName
-			val nameLabelPos = renderState.nameLabelPos
-			matrices.push()
+			val displayName = renderState.nameTag
+			val nameLabelPos = renderState.nameTagAttachment
+			matrices.pushPose()
 			try {
 				matrices.scale(selection.scale, selection.scale, selection.scale)
-				renderState.displayName = null
-				renderer.render(renderState, matrices, queue, cameraState)
+				renderState.nameTag = null
+				renderer.submit(renderState, matrices, queue, cameraState)
 			} finally {
-				matrices.pop()
+				matrices.popPose()
 			}
-			renderState.displayName = displayName
-			renderState.nameLabelPos = adjustedNameLabelPos(nameLabelPos, renderState.height, selection.scale)
+			renderState.nameTag = displayName
+			renderState.nameTagAttachment = adjustedNameLabelPos(nameLabelPos, renderState.boundingBoxHeight, selection.scale)
 			(renderer as? EntityRendererInvoker)?.invokeRenderLabelIfPresent(renderState, matrices, queue, cameraState)
-			renderState.nameLabelPos = nameLabelPos
+			renderState.nameTagAttachment = nameLabelPos
 			true
 		}.getOrElse { failure ->
 			LOGGER.warn("Failed to render mob model replacement for {}", selection.entityType, failure)
@@ -203,7 +203,7 @@ object MobModelFeature {
 		}
 	}
 
-	fun inventoryPreviewEntity(player: AbstractClientPlayerEntity, useMobModel: Boolean): LivingEntity {
+	fun inventoryPreviewEntity(player: AbstractClientPlayer, useMobModel: Boolean): LivingEntity {
 		if (!useMobModel) {
 			return player
 		}
@@ -266,8 +266,8 @@ object MobModelFeature {
 		}
 	}
 
-	private fun selectionForPlayer(player: AbstractClientPlayerEntity): BackendMobModelState? {
-		val client = MinecraftClient.getInstance()
+	private fun selectionForPlayer(player: AbstractClientPlayer): BackendMobModelState? {
+		val client = Minecraft.getInstance()
 		if (player == client.player) {
 			return localSelection(XclipsenIrcBridgeClient.instance?.config() ?: return null)
 		}
@@ -315,58 +315,58 @@ object MobModelFeature {
 	}
 
 	private fun prepareRenderEntity(
-		player: AbstractClientPlayerEntity,
+		player: AbstractClientPlayer,
 		selection: BackendMobModelState,
 		entityType: EntityType<*>,
 	): LivingEntity? {
-		val world = player.entityWorld
+		val world = player.level()
 		val cacheKey = "${player.gameProfile.name.lowercase(Locale.ROOT)}|${selection.entityType}|${selection.variant}|${selection.baby}"
 		val existing = renderEntityCache[cacheKey]
-		val renderEntity = if (existing != null && existing.type == entityType && existing.entityWorld == world) {
+		val renderEntity = if (existing != null && existing.type == entityType && existing.level() == world) {
 			existing
 		} else {
-			val created = entityType.create(world, SpawnReason.COMMAND) as? LivingEntity ?: return null
-			created.limbAnimator.reset()
+			val created = entityType.create(world, EntitySpawnReason.COMMAND) as? LivingEntity ?: return null
+			created.walkAnimation.stop()
 			renderEntityCache.clear()
 			renderEntityCache[cacheKey] = created
 			created
 		}
 
-		val previousAge = renderEntity.age
+		val previousAge = renderEntity.tickCount
 		renderEntity.setId(player.id)
-		renderEntity.setLastPositionAndAngles(Vec3d(player.lastX, player.lastY, player.lastZ), player.lastYaw, player.lastPitch)
-		renderEntity.copyPositionAndRotation(player)
-		renderEntity.refreshPositionAndAngles(player.x, player.y, player.z, player.yaw, player.pitch)
-		renderEntity.setYaw(player.yaw)
-		renderEntity.setPitch(player.pitch)
-		renderEntity.setBodyYaw(player.bodyYaw)
-		renderEntity.setHeadYaw(player.headYaw)
-		renderEntity.lastYaw = player.lastYaw
-		renderEntity.lastPitch = player.lastPitch
-		renderEntity.bodyYaw = player.bodyYaw
-		renderEntity.lastBodyYaw = player.lastBodyYaw
-		renderEntity.headYaw = player.headYaw
-		renderEntity.lastHeadYaw = player.lastHeadYaw
-		renderEntity.setPose(EntityPose.STANDING)
-		renderEntity.setSneaking(player.isSneaking)
+		renderEntity.setOldPosAndRot(Vec3(player.xo, player.yo, player.zo), player.yRotO, player.xRotO)
+		renderEntity.copyPosition(player)
+		renderEntity.absSnapTo(player.x, player.y, player.z, player.yRot, player.xRot)
+		renderEntity.setYRot(player.yRot)
+		renderEntity.setXRot(player.xRot)
+		renderEntity.setYBodyRot(player.yBodyRot)
+		renderEntity.setYHeadRot(player.yHeadRot)
+		renderEntity.yRotO = player.yRotO
+		renderEntity.xRotO = player.xRotO
+		renderEntity.yBodyRot = player.yBodyRot
+		renderEntity.yBodyRotO = player.yBodyRotO
+		renderEntity.yHeadRot = player.yHeadRot
+		renderEntity.yHeadRotO = player.yHeadRotO
+		renderEntity.setPose(Pose.STANDING)
+		renderEntity.setShiftKeyDown(player.isShiftKeyDown)
 		renderEntity.setSprinting(player.isSprinting)
 		renderEntity.setInvisible(player.isInvisible)
-		renderEntity.setOnGround(player.isOnGround)
-		renderEntity.setVelocity(player.velocity)
-		renderEntity.age = player.age
-		renderEntity.sidewaysSpeed = player.sidewaysSpeed
-		renderEntity.forwardSpeed = player.forwardSpeed
-		renderEntity.upwardSpeed = player.upwardSpeed
-		renderEntity.handSwinging = player.handSwinging
-		renderEntity.handSwingTicks = player.handSwingTicks
-		renderEntity.handSwingProgress = player.handSwingProgress
-		renderEntity.lastHandSwingProgress = player.lastHandSwingProgress
-		if (previousAge != player.age) {
-			renderEntity.limbAnimator.updateLimbs(player.limbAnimator.getSpeed(), 1.0f, 1.0f)
+		renderEntity.setOnGround(player.onGround())
+		renderEntity.setDeltaMovement(player.deltaMovement)
+		renderEntity.tickCount = player.tickCount
+		renderEntity.xxa = player.xxa
+		renderEntity.zza = player.zza
+		renderEntity.yya = player.yya
+		renderEntity.swinging = player.swinging
+		renderEntity.swingTime = player.swingTime
+		renderEntity.attackAnim = player.attackAnim
+		renderEntity.oAttackAnim = player.oAttackAnim
+		if (previousAge != player.tickCount) {
+			renderEntity.walkAnimation.update(player.walkAnimation.speed(), 1.0f, 1.0f)
 		}
-		renderEntity.lastRenderX = player.lastRenderX
-		renderEntity.lastRenderY = player.lastRenderY
-		renderEntity.lastRenderZ = player.lastRenderZ
+		renderEntity.xOld = player.xOld
+		renderEntity.yOld = player.yOld
+		renderEntity.zOld = player.zOld
 		renderEntity.setCustomName(player.displayName)
 		renderEntity.setCustomNameVisible(true)
 		applyBabyState(renderEntity, selection.baby)
@@ -377,59 +377,59 @@ object MobModelFeature {
 
 	private fun applyEquipmentState(
 		renderEntity: LivingEntity,
-		player: AbstractClientPlayerEntity,
+		player: AbstractClientPlayer,
 		selection: BackendMobModelState,
 	) {
-		val head = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.HEAD).copy() else ItemStack.EMPTY
-		val chest = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.CHEST).copy() else ItemStack.EMPTY
-		val legs = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.LEGS).copy() else ItemStack.EMPTY
-		val feet = if (selection.showArmor) player.getEquippedStack(EquipmentSlot.FEET).copy() else ItemStack.EMPTY
-		renderEntity.equipStack(EquipmentSlot.HEAD, head)
-		renderEntity.equipStack(EquipmentSlot.CHEST, chest)
-		renderEntity.equipStack(EquipmentSlot.LEGS, legs)
-		renderEntity.equipStack(EquipmentSlot.FEET, feet)
+		val head = if (selection.showArmor) player.getItemBySlot(EquipmentSlot.HEAD).copy() else ItemStack.EMPTY
+		val chest = if (selection.showArmor) player.getItemBySlot(EquipmentSlot.CHEST).copy() else ItemStack.EMPTY
+		val legs = if (selection.showArmor) player.getItemBySlot(EquipmentSlot.LEGS).copy() else ItemStack.EMPTY
+		val feet = if (selection.showArmor) player.getItemBySlot(EquipmentSlot.FEET).copy() else ItemStack.EMPTY
+		renderEntity.setItemSlot(EquipmentSlot.HEAD, head)
+		renderEntity.setItemSlot(EquipmentSlot.CHEST, chest)
+		renderEntity.setItemSlot(EquipmentSlot.LEGS, legs)
+		renderEntity.setItemSlot(EquipmentSlot.FEET, feet)
 
-		val mainHand = if (selection.showHeldItems) player.getStackInHand(Hand.MAIN_HAND).copy() else ItemStack.EMPTY
-		val offHand = if (selection.showHeldItems) player.getStackInHand(Hand.OFF_HAND).copy() else ItemStack.EMPTY
-		renderEntity.setStackInHand(Hand.MAIN_HAND, mainHand)
-		renderEntity.setStackInHand(Hand.OFF_HAND, offHand)
+		val mainHand = if (selection.showHeldItems) player.getItemInHand(InteractionHand.MAIN_HAND).copy() else ItemStack.EMPTY
+		val offHand = if (selection.showHeldItems) player.getItemInHand(InteractionHand.OFF_HAND).copy() else ItemStack.EMPTY
+		renderEntity.setItemInHand(InteractionHand.MAIN_HAND, mainHand)
+		renderEntity.setItemInHand(InteractionHand.OFF_HAND, offHand)
 
 		if (selection.showHeldItems && player.isUsingItem) {
-			renderEntity.setCurrentHand(player.activeHand)
+			renderEntity.startUsingItem(player.usedItemHand)
 		} else {
-			renderEntity.clearActiveItem()
+			renderEntity.stopUsingItem()
 		}
 	}
 
 	private fun adjustRenderState(
 		renderState: Any,
-		playerState: PlayerEntityRenderState,
+		playerState: AvatarRenderState,
 		renderEntity: LivingEntity,
 		selection: BackendMobModelState,
 	) {
 		if (renderState is LivingEntityRenderState) {
-			renderState.bodyYaw = playerState.bodyYaw
-			renderState.relativeHeadYaw = playerState.relativeHeadYaw
-			renderState.pitch = playerState.pitch
-			renderState.pose = EntityPose.STANDING
-			renderState.sleepingDirection = null
+			renderState.bodyRot = playerState.bodyRot
+			renderState.yRot = playerState.yRot
+			renderState.xRot = playerState.xRot
+			renderState.pose = Pose.STANDING
+			renderState.bedOrientation = null
 			renderState.deathTime = 0.0f
-			renderState.usingRiptide = false
-			renderState.flipUpsideDown = false
+			renderState.isAutoSpinAttack = false
+			renderState.isUpsideDown = false
 			if (selection.entityType in aquaticModelIds) {
-				renderState.touchingWater = true
+				renderState.isInWater = true
 			}
 		}
 
-		if (renderState is AllayEntityRenderState) {
+		if (renderState is AllayRenderState) {
 			val isHoldingItem = selection.showHeldItems && (
-				!renderEntity.getStackInHand(Hand.MAIN_HAND).isEmpty || !renderEntity.getStackInHand(Hand.OFF_HAND).isEmpty
+				!renderEntity.getItemInHand(InteractionHand.MAIN_HAND).isEmpty || !renderEntity.getItemInHand(InteractionHand.OFF_HAND).isEmpty
 			)
-			renderState.itemHoldAnimationTicks = if (isHoldingItem) 1.0f else 0.0f
+			renderState.holdingAnimationProgress = if (isHoldingItem) 1.0f else 0.0f
 		}
 	}
 
-	private fun adjustedNameLabelPos(base: Vec3d?, entityHeight: Float, scale: Float): Vec3d? {
+	private fun adjustedNameLabelPos(base: Vec3?, entityHeight: Float, scale: Float): Vec3? {
 		val current = base ?: return null
 		if (scale == 1.0f) {
 			return current
@@ -440,7 +440,7 @@ object MobModelFeature {
 	}
 
 	private fun applyBabyState(entity: LivingEntity, baby: Boolean) {
-		if (entity is PassiveEntity) {
+		if (entity is AgeableMob) {
 			entity.setBaby(baby)
 			return
 		}
@@ -457,8 +457,8 @@ object MobModelFeature {
 		return MobModelCatalog.resolve(normalizeEntityTypeId(rawId))
 	}
 
-	private fun currentPlayerName(client: MinecraftClient): String? {
-		val username = client.session?.username?.trim().orEmpty()
+	private fun currentPlayerName(client: Minecraft): String? {
+		val username = client.user?.name?.trim().orEmpty()
 		return username.takeIf { it.isNotBlank() }
 	}
 
@@ -477,7 +477,7 @@ object MobModelFeature {
 		return id.toString()
 	}
 
-	private fun localStateSignature(client: MinecraftClient): String {
+	private fun localStateSignature(client: Minecraft): String {
 		return localStateSignature(XclipsenIrcBridgeClient.instance?.config() ?: BridgeConfig())
 	}
 
@@ -499,7 +499,7 @@ object MobModelFeature {
 	}
 
 	private fun requestImmediateSync() {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		val playerName = currentPlayerName(client) ?: return
 		if (!uploadInFlight) {
 			uploadInFlight = true

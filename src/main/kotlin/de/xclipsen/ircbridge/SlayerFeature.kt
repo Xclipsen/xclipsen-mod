@@ -1,17 +1,17 @@
 package de.xclipsen.ircbridge
 
 import com.autocroesus.util.ColorUtil
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.font.TextRenderer
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.entity.player.PlayerInventory
-import net.minecraft.item.ItemStack
-import net.minecraft.screen.ScreenHandler
-import net.minecraft.screen.slot.Slot
-import net.minecraft.text.HoverEvent
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Font
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.inventory.ContainerScreen
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.entity.player.Inventory
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.inventory.AbstractContainerMenu
+import net.minecraft.world.inventory.Slot
+import net.minecraft.network.chat.HoverEvent
+import net.minecraft.network.chat.Component
 import java.util.Locale
 import java.util.concurrent.CompletableFuture
 import kotlin.math.max
@@ -35,7 +35,7 @@ object SlayerFeature {
 	@Volatile
 	private var wikiFetchInFlight = false
 
-	fun onIncomingMessage(message: Text?) {
+	fun onIncomingMessage(message: Component?) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.slayerModuleEnabled) {
 			return
@@ -54,13 +54,13 @@ object SlayerFeature {
 			}
 			lastAnnounceAt = now
 
-			MinecraftClient.getInstance().execute {
+			Minecraft.getInstance().execute {
 				triggerAnnouncer(config)
 			}
 		}
 	}
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.slayerModuleEnabled || !config.slayerRngMeterDisplayEnabled || !LocationTracker.isOnHypixelSkyBlock) {
 			return
@@ -70,19 +70,19 @@ object SlayerFeature {
 		}
 		if (++screenScanTickCounter >= SCREEN_SCAN_INTERVAL_TICKS) {
 			screenScanTickCounter = 0
-			(client.currentScreen as? GenericContainerScreen)?.let { screen ->
+			(client.screen as? ContainerScreen)?.let { screen ->
 				readRngMeterInventory(config, screen)
 			}
 		}
 	}
 
-	fun onSlotUpdate(screenHandler: ScreenHandler) {
+	fun onSlotUpdate(screenHandler: AbstractContainerMenu) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.slayerModuleEnabled || !config.slayerRngMeterDisplayEnabled || !LocationTracker.isOnHypixelSkyBlock) {
 			return
 		}
-		val screen = MinecraftClient.getInstance().currentScreen as? GenericContainerScreen ?: return
-		if (screen.screenHandler != screenHandler) {
+		val screen = Minecraft.getInstance().screen as? ContainerScreen ?: return
+		if (screen.menu != screenHandler) {
 			return
 		}
 		readRngMeterInventory(config, screen)
@@ -109,7 +109,7 @@ object SlayerFeature {
 
 	fun rngMeterDisplayLines(config: BridgeConfig = XclipsenIrcBridgeClient.instance?.config() ?: BridgeConfig()): List<String> {
 		val state = currentRngMeterState(config) ?: return listOf(
-			if (config.slayerRngMeterCompactMode) "§cOpen RNG Meter" else "§cOpen RNG Meter Inventory!"
+			if (config.slayerRngMeterCompactMode) "§cOpen RNG Meter" else "§cOpen RNG Meter Container!"
 		)
 		val lines = mutableListOf<String>()
 		val selectedItem = state.itemGoal.trim()
@@ -118,7 +118,7 @@ object SlayerFeature {
 			return compactRngMeterDisplayLines(config, state, selectedItem, displayItem)
 		}
 		when {
-			state.itemGoal == "?" -> lines += "§cOpen RNG Meter Inventory!"
+			state.itemGoal == "?" -> lines += "§cOpen RNG Meter Container!"
 			selectedItem.isBlank() -> {
 				lines += "§eNo RNG Item selected!"
 			}
@@ -179,7 +179,7 @@ object SlayerFeature {
 			rngMeterDisplayLines(config).any { it.isNotBlank() }
 	}
 
-	private fun handleRngMeterChatUpdate(config: BridgeConfig, message: Text?) {
+	private fun handleRngMeterChatUpdate(config: BridgeConfig, message: Component?) {
 		if (!config.slayerRngMeterDisplayEnabled) {
 			return
 		}
@@ -257,7 +257,7 @@ object SlayerFeature {
 			saveCurrentConfigThrottled()
 		}
 
-	private fun readRngMeterInventory(config: BridgeConfig, screen: GenericContainerScreen) {
+	private fun readRngMeterInventory(config: BridgeConfig, screen: ContainerScreen) {
 		val title = normalize(screen.title.string)
 		if (SLAYER_RNG_METER_OVERVIEW_TITLES.any { title.equals(it, ignoreCase = true) }) {
 			readSlayerRngMeterOverview(config, screen)
@@ -268,7 +268,7 @@ object SlayerFeature {
 		config.slayerRngMeterActiveSlayer = slayer
 		val state = stateFor(config, slayer)
 
-		val menuSlots = screen.screenHandler.slots.filter { slot -> slot.inventory !is PlayerInventory }
+		val menuSlots = screen.menu.slots.filter { slot -> slot.container !is Inventory }
 		val parsedDrops = menuSlots.mapNotNull { slot -> parseRngMeterDrop(slayer, slot) }
 		if (parsedDrops.isEmpty()) {
 			saveCurrentConfigThrottled()
@@ -303,8 +303,8 @@ object SlayerFeature {
 		saveCurrentConfigThrottled()
 	}
 
-	private fun readSlayerRngMeterOverview(config: BridgeConfig, screen: GenericContainerScreen) {
-		val menuSlots = screen.screenHandler.slots.filter { slot -> slot.inventory !is PlayerInventory }
+	private fun readSlayerRngMeterOverview(config: BridgeConfig, screen: ContainerScreen) {
+		val menuSlots = screen.menu.slots.filter { slot -> slot.container !is Inventory }
 		val parsedSlots = menuSlots.mapNotNull(::parseSlayerRngMeterOverviewSlot)
 		val parsed = parsedSlots.firstOrNull { it.item.isNotBlank() }
 			?: parsedSlots.firstOrNull { it.slayer.equals(config.slayerRngMeterActiveSlayer, ignoreCase = true) }
@@ -337,7 +337,7 @@ object SlayerFeature {
 	}
 
 	private fun parseSlayerRngMeterOverviewSlot(slot: Slot): ParsedRngMeterOverview? {
-		val stack = slot.stack
+		val stack = slot.item
 		if (stack.isEmpty) {
 			return null
 		}
@@ -345,7 +345,7 @@ object SlayerFeature {
 		if (lore.isEmpty()) {
 			return null
 		}
-		val allLines = listOf(normalize(stack.name.string)) + lore
+		val allLines = listOf(normalize(stack.hoverName.string)) + lore
 		val slayer = allLines.firstNotNullOfOrNull { line ->
 			RNG_METER_TITLE_PATTERN.matchEntire(line)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
 		} ?: return null
@@ -378,7 +378,7 @@ object SlayerFeature {
 					continue
 				}
 				if (candidate.startsWith("Progress:", ignoreCase = true) ||
-					candidate.startsWith("Click to", ignoreCase = true) ||
+					candidate.startsWith("MouseButtonEvent to", ignoreCase = true) ||
 					candidate.startsWith("minecraft:", ignoreCase = true)
 				) {
 					return ""
@@ -390,7 +390,7 @@ object SlayerFeature {
 	}
 
 	private fun parseRngMeterDrop(slayer: String, slot: Slot): ParsedRngMeterDrop? {
-		val stack = slot.stack
+		val stack = slot.item
 		if (stack.isEmpty) {
 			return null
 		}
@@ -403,7 +403,7 @@ object SlayerFeature {
 		val current = parseCompactLong(xpMatch.groupValues[1]) ?: return null
 			val goal = parseCompactLong(xpMatch.groupValues[2]) ?: return null
 			val odds = parseOddsPercent(lore) ?: return null
-			val item = normalizeItemName(stack.name.string).takeIf { it.isNotBlank() } ?: return null
+			val item = normalizeItemName(stack.hoverName.string).takeIf { it.isNotBlank() } ?: return null
 			if (isRngMeterInfoItemName(item)) {
 				return null
 			}
@@ -484,7 +484,7 @@ object SlayerFeature {
 		val oddsPercent = when {
 			state.itemGoal.isNotBlank() && state.itemGoal != "?" && state.oddsPercent > 0.0 -> state.oddsPercent
 			state.lastSelectedOddsPercent > 0.0 -> state.lastSelectedOddsPercent
-			else -> return "§cOpen RNG Meter Inventory for odds"
+			else -> return "§cOpen RNG Meter Container for odds"
 		}
 		val threshold = optimalRemovalThreshold(
 			goalNeeded = state.goalNeeded,
@@ -646,14 +646,14 @@ object SlayerFeature {
 					}
 					.orEmpty()
 				if (parsed.isNotEmpty()) {
-					MinecraftClient.getInstance().execute {
+					Minecraft.getInstance().execute {
 						config.slayerRngMeterWikiCache.putAll(parsed)
 						config.slayerRngMeterWikiCacheUpdatedAtMs = response?.updatedAt?.takeIf { it > 0L } ?: System.currentTimeMillis()
 						saveCurrentConfig()
 					}
 				}
 			} catch (_: Exception) {
-				MinecraftClient.getInstance().execute {
+				Minecraft.getInstance().execute {
 					config.slayerRngMeterWikiCacheUpdatedAtMs = System.currentTimeMillis()
 					saveCurrentConfig()
 				}
@@ -680,7 +680,7 @@ object SlayerFeature {
 	}
 
 	private fun loreLines(stack: ItemStack): List<String> {
-		return stack.get(DataComponentTypes.LORE)?.lines()?.map { it.string } ?: emptyList()
+		return stack.get(DataComponents.LORE)?.lines()?.map { it.string } ?: emptyList()
 	}
 
 	private fun normalizeItemName(raw: String): String {
@@ -712,7 +712,7 @@ object SlayerFeature {
 			alertVisibleUntil = System.currentTimeMillis() + ALERT_VISIBLE_MS
 		}
 
-		MinecraftClient.getInstance().soundManager.play(
+		Minecraft.getInstance().soundManager.play(
 			SoundCatalog.masterSound(
 				config.slayerSpawnAnnouncerSoundId,
 				config.slayerSpawnAnnouncerSoundPitch.coerceIn(0.1f, 2.0f),
@@ -725,7 +725,7 @@ object SlayerFeature {
 		return translateAmpersandFormatting(config.slayerSpawnAnnouncerText.ifBlank { DEFAULT_ANNOUNCER_TEXT })
 	}
 
-	private fun isSlayerSpawnPetRule(message: Text): Boolean {
+	private fun isSlayerSpawnPetRule(message: Component): Boolean {
 		val visibleText = normalize(message.string)
 		if (!visibleText.contains("Autopet equipped your", ignoreCase = true) || !visibleText.contains("VIEW RULE", ignoreCase = true)) {
 			return false
@@ -738,13 +738,13 @@ object SlayerFeature {
 		}
 	}
 
-	private fun collectHoverTexts(text: Text): List<String> {
+	private fun collectHoverTexts(text: Component): List<String> {
 		val result = mutableListOf<String>()
 		collectHoverTexts(text, result)
 		return result
 	}
 
-	private fun collectHoverTexts(text: Text, result: MutableList<String>) {
+	private fun collectHoverTexts(text: Component, result: MutableList<String>) {
 		val hoverEvent = text.style.hoverEvent
 		if (hoverEvent is HoverEvent.ShowText) {
 			result += hoverEvent.value().string
@@ -865,28 +865,28 @@ object SlayerSpawnAnnouncerHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		isEnabled(config) && SlayerFeature.shouldDrawAlert(config)
 
-	override fun defaultX(context: DrawContext): Float {
-		return ((context.scaledWindowWidth - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
+	override fun defaultX(context: GuiGraphicsExtractor): Float {
+		return ((context.guiWidth() - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
 	}
 
-	override fun defaultY(context: DrawContext): Float {
-		return (context.scaledWindowHeight * 0.28f).coerceAtLeast(28f)
+	override fun defaultY(context: GuiGraphicsExtractor): Float {
+		return (context.guiHeight() * 0.28f).coerceAtLeast(28f)
 	}
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val client = MinecraftClient.getInstance()
-		val textRenderer = client.textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val client = Minecraft.getInstance()
+		val textRenderer = client.font
 		val text = if (example) SlayerFeature.DEFAULT_ANNOUNCER_TEXT else SlayerFeature.currentAlertText()
-		val width = max(DEFAULT_WIDTH, textRenderer.getWidth(text) + (PADDING_X * 2))
-		val height = PADDING_Y + textRenderer.fontHeight + PADDING_Y
+		val width = max(DEFAULT_WIDTH, textRenderer.width(text) + (PADDING_X * 2))
+		val height = PADDING_Y + textRenderer.lineHeight + PADDING_Y
 
 		drawAlertPanel(context, textRenderer, text, width, height)
 		return width.toFloat() to height.toFloat()
 	}
 
 	private fun drawAlertPanel(
-		context: DrawContext,
-		textRenderer: TextRenderer,
+		context: GuiGraphicsExtractor,
+		textRenderer: Font,
 		text: String,
 		width: Int,
 		height: Int,
@@ -897,7 +897,7 @@ object SlayerSpawnAnnouncerHudElement : XclipsenHudElement(
 		context.fill(0, 0, 1, height, ACCENT)
 		context.fill(width - 1, 0, width, height, ACCENT)
 		context.fill(3, 3, width - 3, height - 3, INNER_BACKGROUND)
-		context.drawCenteredTextWithShadow(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
+		context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
 	}
 
 	private const val DEFAULT_WIDTH = 180
@@ -919,13 +919,13 @@ object SlayerRngMeterHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		isEnabled(config) && SlayerFeature.shouldDrawRngMeter(config)
 
-	override fun defaultX(context: DrawContext): Float = 410f.coerceAtMost((context.scaledWindowWidth - 120).coerceAtLeast(4).toFloat())
+	override fun defaultX(context: GuiGraphicsExtractor): Float = 410f.coerceAtMost((context.guiWidth() - 120).coerceAtLeast(4).toFloat())
 
-	override fun defaultY(context: DrawContext): Float = 110f.coerceAtMost((context.scaledWindowHeight - 20).coerceAtLeast(4).toFloat())
+	override fun defaultY(context: GuiGraphicsExtractor): Float = 110f.coerceAtMost((context.guiHeight() - 20).coerceAtLeast(4).toFloat())
 
-		override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-			val client = MinecraftClient.getInstance()
-			val renderer = client.textRenderer
+		override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+			val client = Minecraft.getInstance()
+			val renderer = client.font
 			val config = XclipsenIrcBridgeClient.instance?.config()
 			val lines = if (example) {
 				if (config?.slayerRngMeterCompactMode == true) {
@@ -939,11 +939,11 @@ object SlayerRngMeterHudElement : XclipsenHudElement(
 		var width = 1
 		var y = 0
 		for (line in lines) {
-			context.drawTextWithShadow(renderer, line, 0, y, 0xFFFFFFFF.toInt())
-			width = max(width, renderer.getWidth(line))
-			y += renderer.fontHeight + LINE_GAP
+			context.text(renderer, line, 0, y, 0xFFFFFFFF.toInt(), true)
+			width = max(width, renderer.width(line))
+			y += renderer.lineHeight + LINE_GAP
 		}
-		return width.toFloat() to (y - LINE_GAP).coerceAtLeast(renderer.fontHeight).toFloat()
+		return width.toFloat() to (y - LINE_GAP).coerceAtLeast(renderer.lineHeight).toFloat()
 	}
 
 	private const val LINE_GAP = 2

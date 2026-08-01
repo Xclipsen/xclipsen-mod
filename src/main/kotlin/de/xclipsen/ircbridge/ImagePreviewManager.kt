@@ -1,15 +1,14 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gl.RenderPipelines
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.texture.NativeImage
-import net.minecraft.client.texture.NativeImageBackedTexture
-import net.minecraft.text.ClickEvent
-import net.minecraft.text.Text
-import net.minecraft.text.Style
-import net.minecraft.util.Identifier
-import org.lwjgl.glfw.GLFW
+import net.minecraft.client.Minecraft
+import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import com.mojang.blaze3d.platform.NativeImage
+import net.minecraft.client.renderer.texture.DynamicTexture
+import net.minecraft.network.chat.ClickEvent
+import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.Style
+import net.minecraft.resources.Identifier
 import java.io.ByteArrayInputStream
 import java.net.URI
 import java.net.http.HttpClient
@@ -36,7 +35,7 @@ object ImagePreviewManager {
 	@Volatile
 	private var hoverPreviewActive = false
 
-	fun renderHoverPreview(graphics: DrawContext, style: Style?, mouseX: Int, mouseY: Int) {
+	fun renderHoverPreview(graphics: GuiGraphicsExtractor, style: Style?, mouseX: Int, mouseY: Int) {
 		val imageUrl = extractImageUrl(style)
 		hoverPreviewActive = imageUrl != null
 		XclipsenIrcBridgeClient.instance?.setPreviewHoverPaused(imageUrl != null)
@@ -44,31 +43,33 @@ object ImagePreviewManager {
 		val state = previews.computeIfAbsent(imageUrl) { PreviewState() }
 		state.requestLoad(imageUrl)
 
-		val client = MinecraftClient.getInstance() ?: return
+		val client = Minecraft.getInstance() ?: return
 		when (val current = state.state.get()) {
 			is LoadedPreview -> renderLoadedPreview(graphics, client, current, mouseX, mouseY)
-			is FailedPreview -> graphics.drawTooltip(client.textRenderer, Text.literal(current.message), mouseX, mouseY)
-			else -> graphics.drawTooltip(client.textRenderer, Text.literal("Loading image preview..."), mouseX, mouseY)
+			is FailedPreview -> graphics.setTooltipForNextFrame(client.font, Component.literal(current.message), mouseX, mouseY)
+			else -> graphics.setTooltipForNextFrame(client.font, Component.literal("Loading image preview..."), mouseX, mouseY)
 		}
 	}
 
 	private fun renderLoadedPreview(
-		graphics: DrawContext,
-		client: MinecraftClient,
+		graphics: GuiGraphicsExtractor,
+		client: Minecraft,
 		preview: LoadedPreview,
 		mouseX: Int,
 		mouseY: Int,
 	) {
-		val fullscreen = isShiftDown(client)
+		val fullscreen = client.hasShiftDown()
+		val scaledWidth = graphics.guiWidth()
+		val scaledHeight = graphics.guiHeight()
 		val maxWidth = if (fullscreen) {
-			max(320, client.window.scaledWidth - 80)
+			max(320, scaledWidth - 80)
 		} else {
-			max(220, client.window.scaledWidth * 35 / 100)
+			max(220, scaledWidth * 35 / 100)
 		}
 		val maxHeight = if (fullscreen) {
-			max(220, client.window.scaledHeight - 80)
+			max(220, scaledHeight - 80)
 		} else {
-			max(160, client.window.scaledHeight * 35 / 100)
+			max(160, scaledHeight * 35 / 100)
 		}
 		val scale = if (fullscreen) {
 			min(maxWidth.toFloat() / preview.width.toFloat(), maxHeight.toFloat() / preview.height.toFloat())
@@ -79,28 +80,28 @@ object ImagePreviewManager {
 		val renderHeight = max(1, (preview.height * scale).toInt())
 		val padding = 8
 		val shadowPadding = 2
-		val footerHeight = client.textRenderer.fontHeight + 6
+		val footerHeight = client.font.lineHeight + 6
 
 		var x = if (fullscreen) {
-			(client.window.scaledWidth - renderWidth - padding * 2) / 2
+			(scaledWidth - renderWidth - padding * 2) / 2
 		} else {
 			mouseX + 18
 		}
 		var y = if (fullscreen) {
-			(client.window.scaledHeight - renderHeight - padding * 2 - footerHeight) / 2
+			(scaledHeight - renderHeight - padding * 2 - footerHeight) / 2
 		} else {
 			mouseY + 18
 		}
 
-		if (!fullscreen && x + renderWidth + padding * 2 > client.window.scaledWidth) {
+		if (!fullscreen && x + renderWidth + padding * 2 > scaledWidth) {
 			x = mouseX - renderWidth - padding * 2 - 18
 		}
 		if (x < 4) {
 			x = 4
 		}
 
-		if (!fullscreen && y + renderHeight + padding * 2 + footerHeight > client.window.scaledHeight) {
-			y = client.window.scaledHeight - renderHeight - padding * 2 - footerHeight - 4
+		if (!fullscreen && y + renderHeight + padding * 2 + footerHeight > scaledHeight) {
+			y = scaledHeight - renderHeight - padding * 2 - footerHeight - 4
 		}
 		if (y < 4) {
 			y = 4
@@ -115,7 +116,7 @@ object ImagePreviewManager {
 		val imageBottom = imageTop + renderHeight
 
 		if (fullscreen) {
-			graphics.fill(0, 0, client.window.scaledWidth, client.window.scaledHeight, 0x96000000.toInt())
+			graphics.fill(0, 0, scaledWidth, scaledHeight, 0x96000000.toInt())
 		}
 
 		graphics.fill(
@@ -130,7 +131,7 @@ object ImagePreviewManager {
 		graphics.fill(panelLeft + 1, panelTop + 1, panelRight - 1, panelTop + 3, 0xFF8AA0FF.toInt())
 		graphics.fill(imageLeft - 1, imageTop - 1, imageLeft + renderWidth + 1, imageBottom + 1, 0xCC000000.toInt())
 
-		graphics.drawTexture(
+		graphics.blit(
 			RenderPipelines.GUI_TEXTURED,
 			preview.textureId,
 			imageLeft,
@@ -150,9 +151,9 @@ object ImagePreviewManager {
 		} else {
 			"${preview.width}x${preview.height}  |  Hold Shift"
 		}
-		graphics.drawText(
-			client.textRenderer,
-			Text.literal(dimensionText),
+		graphics.text(
+			client.font,
+			Component.literal(dimensionText),
 			panelLeft + padding,
 			imageBottom + 4,
 			0xFFD7DBFF.toInt(),
@@ -162,7 +163,7 @@ object ImagePreviewManager {
 
 	private fun extractImageUrl(style: Style?): String? {
 		val clickEvent = style?.clickEvent ?: return null
-		if (clickEvent.action != ClickEvent.Action.OPEN_URL) {
+		if (clickEvent.action() != ClickEvent.Action.OPEN_URL) {
 			return null
 		}
 
@@ -171,12 +172,6 @@ object ImagePreviewManager {
 			else -> ""
 		}.trim()
 		return value.takeIf(::isPreviewableImageUrl)
-	}
-
-	private fun isShiftDown(client: MinecraftClient): Boolean {
-		val handle = client.window.handle
-		return GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS ||
-			GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS
 	}
 
 	fun setHoverPreviewActive(active: Boolean) {
@@ -227,7 +222,7 @@ object ImagePreviewManager {
 						val image = NativeImage.read(stream)
 						val width = image.width
 						val height = image.height
-						val client = MinecraftClient.getInstance()
+						val client = Minecraft.getInstance()
 						if (client == null) {
 							image.close()
 							state.set(FailedPreview("Minecraft client unavailable."))
@@ -236,8 +231,8 @@ object ImagePreviewManager {
 
 						client.execute {
 							try {
-								val textureId = Identifier.of("xclipsen_mod", "preview/${url.hashCode().toUInt().toString(16)}")
-								client.textureManager.registerTexture(textureId, NativeImageBackedTexture({ "IRC preview" }, image))
+								val textureId = Identifier.fromNamespaceAndPath("xclipsen_mod", "preview/${url.hashCode().toUInt().toString(16)}")
+								client.textureManager.register(textureId, DynamicTexture({ "IRC preview" }, image))
 								state.set(LoadedPreview(textureId, width, height))
 							} catch (exception: Exception) {
 								image.close()

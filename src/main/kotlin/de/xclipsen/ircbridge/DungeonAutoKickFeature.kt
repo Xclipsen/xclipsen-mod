@@ -1,12 +1,12 @@
 package de.xclipsen.ircbridge
 
 import com.autocroesus.util.ColorUtil
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.ClickEvent
-import net.minecraft.text.HoverEvent
-import net.minecraft.text.MutableText
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.ClickEvent
+import net.minecraft.network.chat.HoverEvent
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -20,11 +20,11 @@ object DungeonAutoKickFeature {
 	private var lastCommandSentAt = 0L
 	private var lastStatus = "Idle"
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		return
 	}
 
-	fun onIncomingMessage(message: Text?) {
+	fun onIncomingMessage(message: Component?) {
 		val normalized = normalize(message?.string ?: return)
 		if (normalized.isBlank()) {
 			return
@@ -54,28 +54,28 @@ object DungeonAutoKickFeature {
 	fun showCataStats(playerName: String) {
 		val safePlayerName = cleanPlayerName(playerName)
 		if (!USERNAME_PATTERN.matches(safePlayerName)) {
-			sendClientMessage("Usage: /cata <player>", Formatting.RED)
+			sendClientMessage("Usage: /cata <player>", ChatFormatting.RED)
 			return
 		}
 
 		executor.execute {
-			val client = MinecraftClient.getInstance()
+			val client = Minecraft.getInstance()
 			try {
 				val response = XclipsenIrcBridgeClient.instance?.backendBridge()?.fetchDungeonStats(safePlayerName)
 				client.execute {
 					if (response == null) {
-						sendClientMessage("Cata: backend unreachable for $safePlayerName.", Formatting.RED)
+						sendClientMessage("Cata: backend unreachable for $safePlayerName.", ChatFormatting.RED)
 						return@execute
 					}
 					if (!response.ok) {
-						sendClientMessage("Cata: ${response.error.ifBlank { "Stats unavailable for $safePlayerName" }}", Formatting.RED)
+						sendClientMessage("Cata: ${response.error.ifBlank { "Stats unavailable for $safePlayerName" }}", ChatFormatting.RED)
 						return@execute
 					}
 					sendOdinStatsCard(response, XclipsenIrcBridgeClient.instance?.config() ?: BridgeConfig(), includeKickLine = false)
 				}
 			} catch (exception: Exception) {
 				client.execute {
-					sendClientMessage("Cata: failed to check $safePlayerName: ${exception.message ?: exception::class.java.simpleName}", Formatting.RED)
+					sendClientMessage("Cata: failed to check $safePlayerName: ${exception.message ?: exception::class.java.simpleName}", ChatFormatting.RED)
 				}
 			}
 		}
@@ -98,11 +98,11 @@ object DungeonAutoKickFeature {
 
 		executor.execute {
 			try {
-				val client = MinecraftClient.getInstance()
+				val client = Minecraft.getInstance()
 				if (config.dungeonAutoKickAutoKickEnabled && config.dungeonAutoKickCacheEnabled && kickedCache.contains(key)) {
 					client.execute {
 						sendCommand(client, "party kick $playerName", forceDelay = true)
-						sendClientMessage("Kicked $playerName because they are in the AutoKick cache.", Formatting.YELLOW)
+						sendClientMessage("Kicked $playerName because they are in the AutoKick cache.", ChatFormatting.YELLOW)
 					}
 					return@execute
 				}
@@ -111,12 +111,12 @@ object DungeonAutoKickFeature {
 				client.execute {
 					if (response == null) {
 						lastStatus = "Backend unreachable for $playerName"
-						sendClientMessage("Dungeon AutoKick: backend unreachable for $playerName.", Formatting.RED)
+						sendClientMessage("Dungeon AutoKick: backend unreachable for $playerName.", ChatFormatting.RED)
 						return@execute
 					}
 					if (!response.ok) {
 						lastStatus = response.error.ifBlank { "Stats unavailable for $playerName" }
-						sendClientMessage("Dungeon AutoKick: ${lastStatus}", Formatting.RED)
+						sendClientMessage("Dungeon AutoKick: ${lastStatus}", ChatFormatting.RED)
 						return@execute
 					}
 
@@ -149,12 +149,12 @@ object DungeonAutoKickFeature {
 					if (config.dungeonAutoKickCacheEnabled) {
 						kickedCache += key
 					}
-					sendClientMessage("Kicking $playerName for: ${reasons.joinToString("; ")}", Formatting.YELLOW)
+					sendClientMessage("Kicking $playerName for: ${reasons.joinToString("; ")}", ChatFormatting.YELLOW)
 				}
 			} catch (exception: Exception) {
 				lastStatus = "Stats check failed for $playerName"
-				MinecraftClient.getInstance().execute {
-					sendClientMessage("Dungeon AutoKick: failed to check $playerName: ${exception.message ?: exception::class.java.simpleName}", Formatting.RED)
+				Minecraft.getInstance().execute {
+					sendClientMessage("Dungeon AutoKick: failed to check $playerName: ${exception.message ?: exception::class.java.simpleName}", ChatFormatting.RED)
 				}
 			} finally {
 				pendingLookups.remove(key)
@@ -193,7 +193,7 @@ object DungeonAutoKickFeature {
 
 	private fun sendOdinStatsCard(response: BackendDungeonStatsResponse, config: BridgeConfig, includeKickLine: Boolean = config.dungeonAutoKickSendKickLineEnabled) {
 		val stats = response.stats
-		val card = Text.literal("§d§m           §r §b${response.username} §d§m           §r\n")
+		val card = Component.literal("§d§m           §r §b${response.username} §d§m           §r\n")
 			.append(buildCataSecretsBloodLine(stats))
 			.append(buildClassLevelsLine(stats))
 			.append(buildFloorTimesLine(stats))
@@ -201,35 +201,35 @@ object DungeonAutoKickFeature {
 				if (stats.armor.isNotEmpty()) append(buildArmorLine(stats.armor))
 				if (stats.missingItems.isNotEmpty()) append(buildMissingItemsLine(stats.missingItems))
 			}
-			.append(Text.literal("§d§m                           §r"))
+			.append(Component.literal("§d§m                           §r"))
 
 		sendClientText(card)
 
 		if (includeKickLine) {
 			sendClientText(
-				Text.literal("§aPress to kick ${response.username}").styled {
+				Component.literal("§aPress to kick ${response.username}").withStyle {
 					it.withClickEvent(ClickEvent.RunCommand("/party kick ${response.username}"))
 				},
 			)
 		}
 	}
 
-	private fun buildCataSecretsBloodLine(stats: BackendDungeonStats): MutableText {
+	private fun buildCataSecretsBloodLine(stats: BackendDungeonStats): MutableComponent {
 		val totalRuns = stats.totalRuns.coerceAtLeast(0)
 		val watcherKills = stats.watcherKills.takeIf { it > 0L } ?: stats.bloodMobKills
 		return hover(
-			Text.literal("§7Cata: §e${formatFixed(stats.catacombsLevel)}"),
-			Text.literal("§7Catacombs Level\n§7XP: §b${formatNumber(stats.catacombsXp)}"),
+			Component.literal("§7Cata: §e${formatFixed(stats.catacombsLevel)}"),
+			Component.literal("§7Catacombs Level\n§7XP: §b${formatNumber(stats.catacombsXp)}"),
 		).append(hover(
-			Text.literal(" §8| §7Secrets: §e${formatNumber(stats.secrets)} §8(§b${formatFixed(stats.averageSecrets, 1)}§8)"),
-			Text.literal("§7Total Secrets: §e${formatNumber(stats.secrets)}\n§7Total Runs: §b$totalRuns\n§7Average: §a${formatFixed(stats.averageSecrets)}"),
+			Component.literal(" §8| §7Secrets: §e${formatNumber(stats.secrets)} §8(§b${formatFixed(stats.averageSecrets, 1)}§8)"),
+			Component.literal("§7Total Secrets: §e${formatNumber(stats.secrets)}\n§7Total Runs: §b$totalRuns\n§7Average: §a${formatFixed(stats.averageSecrets)}"),
 		)).append(hover(
-			Text.literal(" §8| §7Blood: §c${formatNumber(watcherKills)}"),
-			Text.literal("§7Total Watcher Kills: §c${formatNumber(watcherKills)}\n§7Blood Mobs Killed: §5${formatNumber(stats.bloodMobKills)}"),
-		)).append(Text.literal("\n"))
+			Component.literal(" §8| §7Blood: §c${formatNumber(watcherKills)}"),
+			Component.literal("§7Total Watcher Kills: §c${formatNumber(watcherKills)}\n§7Blood Mobs Killed: §5${formatNumber(stats.bloodMobKills)}"),
+		)).append(Component.literal("\n"))
 	}
 
-	private fun buildClassLevelsLine(stats: BackendDungeonStats): MutableText {
+	private fun buildClassLevelsLine(stats: BackendDungeonStats): MutableComponent {
 		val classEntries = listOf(
 			ClassDisplay("archer", "Archer", "§6"),
 			ClassDisplay("berserk", "Berserk", "§4"),
@@ -240,40 +240,40 @@ object DungeonAutoKickFeature {
 		val classLevels = classEntries.map { stats.classes[it.key]?.level ?: 0.0 }
 		val classAvg = stats.classAverage.takeIf { it > 0.0 } ?: classLevels.average().takeUnless { it.isNaN() } ?: 0.0
 		val totalClassXp = stats.totalClassXp.takeIf { it > 0.0 } ?: classEntries.sumOf { stats.classes[it.key]?.xp ?: 0.0 }
-		return Text.literal("§7Classes: ").apply {
+		return Component.literal("§7Classes: ").apply {
 			classEntries.forEachIndexed { index, entry ->
 				val classStats = stats.classes[entry.key] ?: BackendDungeonClassStats()
 				append(hover(
-					Text.literal("${entry.color}${formatFixed(classStats.level)}"),
-					Text.literal("${entry.color}${entry.displayName} ${entry.color}Level\n§7XP: §b${formatNumber(classStats.xp)}"),
+					Component.literal("${entry.color}${formatFixed(classStats.level)}"),
+					Component.literal("${entry.color}${entry.displayName} ${entry.color}Level\n§7XP: §b${formatNumber(classStats.xp)}"),
 				))
-				if (index < classEntries.lastIndex) append(Text.literal("§8/"))
+				if (index < classEntries.lastIndex) append(Component.literal("§8/"))
 			}
 			append(hover(
-				Text.literal(" §8(§7Avg: §a${formatFixed(classAvg, 1)}§8)"),
-				Text.literal("§7Class Average\n§7Total Class XP: §b${formatNumber(totalClassXp)}"),
+				Component.literal(" §8(§7Avg: §a${formatFixed(classAvg, 1)}§8)"),
+				Component.literal("§7Class Average\n§7Total Class XP: §b${formatNumber(totalClassXp)}"),
 			))
-			append(Text.literal("\n"))
+			append(Component.literal("\n"))
 		}
 	}
 
-	private fun buildFloorTimesLine(stats: BackendDungeonStats): MutableText {
-		return Text.literal("§7Floors: ")
-			.append(hover(Text.literal("§6Normal"), buildFloorHover(stats.floors.normal, "§6§lNormal Floors", "§eF")))
-			.append(Text.literal(" §8| "))
-			.append(hover(Text.literal("§cMaster"), buildFloorHover(stats.floors.master, "§c§lMaster Floors", "§cM")))
-			.append(Text.literal(" §8| "))
+	private fun buildFloorTimesLine(stats: BackendDungeonStats): MutableComponent {
+		return Component.literal("§7Floors: ")
+			.append(hover(Component.literal("§6Normal"), buildFloorHover(stats.floors.normal, "§6§lNormal Floors", "§eF")))
+			.append(Component.literal(" §8| "))
+			.append(hover(Component.literal("§cMaster"), buildFloorHover(stats.floors.master, "§c§lMaster Floors", "§cM")))
+			.append(Component.literal(" §8| "))
 			.append(hover(
-				Text.literal("§7MP: §d${formatNumber(stats.magicalPower.toLong())}"),
-				Text.literal("§bTunings").apply {
-					stats.tunings.forEach { tuning -> append(Text.literal("\n§7- §e$tuning")) }
+				Component.literal("§7MP: §d${formatNumber(stats.magicalPower.toLong())}"),
+				Component.literal("§bTunings").apply {
+					stats.tunings.forEach { tuning -> append(Component.literal("\n§7- §e$tuning")) }
 				},
 			))
-			.append(Text.literal("\n"))
+			.append(Component.literal("\n"))
 	}
 
-	private fun buildFloorHover(floors: Map<String, BackendDungeonFloorStats>, title: String, floorPrefix: String): Text {
-		return Text.literal(title).apply {
+	private fun buildFloorHover(floors: Map<String, BackendDungeonFloorStats>, title: String, floorPrefix: String): Component {
+		return Component.literal(title).apply {
 			for (floor in 1..7) {
 				val floorStats = floors[floor.toString()]
 				val sPlusMs = floorStats?.sPlusPbMs ?: 0L
@@ -284,13 +284,13 @@ object DungeonAutoKickFeature {
 					bestMs > 0L -> "§7${formatTime(bestMs, 2)}"
 					else -> "§8None"
 				}
-				append(Text.literal("\n$floorPrefix$floor: $time §8(§b$completions§8)"))
+				append(Component.literal("\n$floorPrefix$floor: $time §8(§b$completions§8)"))
 			}
 		}
 	}
 
-	private fun buildArmorLine(armor: List<BackendDungeonArmorPiece>): MutableText {
-		return Text.literal("§7Armor: ").apply {
+	private fun buildArmorLine(armor: List<BackendDungeonArmorPiece>): MutableComponent {
+		return Component.literal("§7Armor: ").apply {
 			armor.take(4).forEachIndexed { index, piece ->
 				val slotLabel = when (piece.slot.lowercase(Locale.ROOT)) {
 					"helmet" -> "⛑"
@@ -299,35 +299,35 @@ object DungeonAutoKickFeature {
 					"boots" -> "👢"
 					else -> piece.slot.ifBlank { "?" }
 				}
-				val hoverText = Text.literal(piece.displayName.ifBlank { "§8Empty Slot" }).apply {
-					piece.lore.forEach { loreLine -> append(Text.literal("\n$loreLine")) }
+				val hoverText = Component.literal(piece.displayName.ifBlank { "§8Empty Slot" }).apply {
+					piece.lore.forEach { loreLine -> append(Component.literal("\n$loreLine")) }
 				}
-				append(hover(Text.literal(slotLabel), hoverText))
-				if (index < armor.take(4).lastIndex) append(Text.literal(" §8| "))
+				append(hover(Component.literal(slotLabel), hoverText))
+				if (index < armor.take(4).lastIndex) append(Component.literal(" §8| "))
 			}
-			append(Text.literal("\n"))
+			append(Component.literal("\n"))
 		}
 	}
 
-	private fun buildMissingItemsLine(missing: List<BackendDungeonMissingItem>): MutableText {
-		return Text.literal("§7Missing: ").apply {
+	private fun buildMissingItemsLine(missing: List<BackendDungeonMissingItem>): MutableComponent {
+		return Component.literal("§7Missing: ").apply {
 			missing.forEachIndexed { index, item ->
 				append(hover(
-					Text.literal("§c✖ ${item.shortName.ifBlank { item.name }}"),
-					Text.literal("§cMissing ${item.name.ifBlank { item.shortName }}"),
+					Component.literal("§c✖ ${item.shortName.ifBlank { item.name }}"),
+					Component.literal("§cMissing ${item.name.ifBlank { item.shortName }}"),
 				))
-				if (index < missing.lastIndex) append(Text.literal(" §8| "))
+				if (index < missing.lastIndex) append(Component.literal(" §8| "))
 			}
-			append(Text.literal("\n"))
+			append(Component.literal("\n"))
 		}
 	}
 
-	private fun hover(text: MutableText, hoverText: Text): MutableText {
-		return text.styled { it.withHoverEvent(HoverEvent.ShowText(hoverText)) }
+	private fun hover(text: MutableComponent, hoverText: Component): MutableComponent {
+		return text.withStyle { it.withHoverEvent(HoverEvent.ShowText(hoverText)) }
 	}
 
-	private fun sendCommand(client: MinecraftClient, command: String, forceDelay: Boolean = false): Boolean {
-		val networkHandler = client.player?.networkHandler ?: return false
+	private fun sendCommand(client: Minecraft, command: String, forceDelay: Boolean = false): Boolean {
+		val networkHandler = client.player?.connection ?: return false
 		val now = System.currentTimeMillis()
 		if (now - lastCommandSentAt < COMMAND_GAP_MS) {
 			if (!forceDelay) {
@@ -342,20 +342,19 @@ object DungeonAutoKickFeature {
 			}
 			return true
 		}
-		networkHandler.sendChatCommand(command)
+		networkHandler.sendCommand(command)
 		lastCommandSentAt = now
 		return true
 	}
 
-	private fun sendClientMessage(message: String, color: Formatting) {
-		MinecraftClient.getInstance().player?.sendMessage(
-			Text.literal("[Xclipsen] $message").formatted(color),
-			false,
+	private fun sendClientMessage(message: String, color: ChatFormatting) {
+		Minecraft.getInstance().player?.sendSystemMessage(
+			Component.literal("[Xclipsen] $message").withStyle(color),
 		)
 	}
 
-	private fun sendClientText(message: Text) {
-		MinecraftClient.getInstance().player?.sendMessage(message, false)
+	private fun sendClientText(message: Component) {
+		Minecraft.getInstance().player?.sendSystemMessage(message)
 	}
 
 	private fun normalize(raw: String): String {
@@ -376,7 +375,7 @@ object DungeonAutoKickFeature {
 		return USERNAME_PATTERN.findAll(current).lastOrNull()?.value ?: current.trim()
 	}
 
-	private fun localPlayerName(): String = MinecraftClient.getInstance().session?.username.orEmpty()
+	private fun localPlayerName(): String = Minecraft.getInstance().user.name
 
 	private fun formatNumber(value: Long): String = formatNumber(value.toDouble())
 

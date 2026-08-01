@@ -3,25 +3,25 @@ package de.xclipsen.ircbridge
 import de.xclipsen.ircbridge.mixin.HandledScreenAccessor
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen
-import net.minecraft.client.gui.screen.ingame.HandledScreen
-import net.minecraft.entity.player.PlayerInventory
-import net.minecraft.item.ItemStack
-import net.minecraft.item.Items
-import net.minecraft.screen.ScreenHandler
-import net.minecraft.screen.slot.Slot
-import net.minecraft.screen.slot.SlotActionType
-import net.minecraft.text.Style
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.inventory.ContainerScreen
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
+import net.minecraft.world.entity.player.Inventory
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
+import net.minecraft.world.inventory.AbstractContainerMenu
+import net.minecraft.world.inventory.Slot
+import net.minecraft.world.inventory.ContainerInput
+import net.minecraft.network.chat.Style
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import org.slf4j.LoggerFactory
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 object ExperimentationTableFeature {
 	private const val MODE_SLOT = 49
-	private val unknownSuperpairsClickPattern = Regex("""(?:§.)+(?:\?|(?:Click a(?: seco)?n[dy]|Next) button(?: is instantly rewarded)?!?)""")
+	private val unknownSuperpairsClickPattern = Regex("""(?:§.)+(?:\?|(?:MouseButtonEvent a(?: seco)?n[dy]|Next) button(?: is instantly rewarded)?!?)""")
 	private val LOGGER = LoggerFactory.getLogger("xclipsen_experimentation")
 
 	private var handler: ExperimentHandler? = null
@@ -30,7 +30,7 @@ object ExperimentationTableFeature {
 
 	fun init() {
 		ScreenEvents.AFTER_INIT.register { _, screen, _, _ ->
-			if (screen !is GenericContainerScreen) {
+			if (screen !is ContainerScreen) {
 				reset()
 				return@register
 			}
@@ -50,11 +50,11 @@ object ExperimentationTableFeature {
 				if (!isEnabled()) {
 					return@register true
 				}
-				currentScreen !is GenericContainerScreen || handler == null
+				currentScreen !is ContainerScreen || handler == null
 			}
 
 			ScreenMouseEvents.beforeMouseClick(screen).register { currentScreen, click ->
-				if (currentScreen !is GenericContainerScreen || !isEnabled() || !isSuperpairsRound(currentScreen.title.string)) {
+				if (currentScreen !is ContainerScreen || !isEnabled() || !isSuperpairsRound(currentScreen.title.string)) {
 					return@register
 				}
 
@@ -64,13 +64,13 @@ object ExperimentationTableFeature {
 		}
 	}
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		if (!isEnabled()) {
 			reset()
 			return
 		}
 
-		val screen = client.currentScreen as? GenericContainerScreen ?: run {
+		val screen = client.screen as? ContainerScreen ?: run {
 			handler = null
 			superpairsVisibility.reset()
 			return
@@ -87,7 +87,7 @@ object ExperimentationTableFeature {
 		}
 
 		handler.nextClick()?.let { slotId ->
-			guiClick(screen.screenHandler.syncId, slotId, 2, SlotActionType.CLONE)
+			guiClick(screen.menu.containerId, slotId, 2, ContainerInput.CLONE)
 			lastClick = now
 		}
 
@@ -95,17 +95,17 @@ object ExperimentationTableFeature {
 			return
 		}
 
-		client.player?.closeHandledScreen()
+		client.player?.closeContainer()
 		this.handler = null
 	}
 
-	fun onSlotUpdate(screenHandler: ScreenHandler) {
+	fun onSlotUpdate(screenHandler: AbstractContainerMenu) {
 		if (!isEnabled()) {
 			return
 		}
 
-		val screen = MinecraftClient.getInstance().currentScreen as? GenericContainerScreen ?: return
-		if (screen.screenHandler !== screenHandler) {
+		val screen = Minecraft.getInstance().screen as? ContainerScreen ?: return
+		if (screen.menu !== screenHandler) {
 			return
 		}
 
@@ -117,13 +117,13 @@ object ExperimentationTableFeature {
 		}
 	}
 
-	fun onSlotStackChanged(screenHandler: ScreenHandler, slotIndex: Int, stack: ItemStack) {
+	fun onSlotStackChanged(screenHandler: AbstractContainerMenu, slotIndex: Int, stack: ItemStack) {
 		if (!isEnabled()) {
 			return
 		}
 
-		val screen = MinecraftClient.getInstance().currentScreen as? GenericContainerScreen ?: return
-		if (screen.screenHandler !== screenHandler || !isSuperpairsRound(screen.title.string)) {
+		val screen = Minecraft.getInstance().screen as? ContainerScreen ?: return
+		if (screen.menu !== screenHandler || !isSuperpairsRound(screen.title.string)) {
 			return
 		}
 
@@ -131,9 +131,9 @@ object ExperimentationTableFeature {
 	}
 
 	@JvmStatic
-	fun replaceSuperpairsItem(screen: HandledScreen<*>, slot: Slot, original: ItemStack): ItemStack {
-		val genericScreen = screen as? GenericContainerScreen ?: return original
-		if (slot.inventory is PlayerInventory) {
+	fun replaceSuperpairsItem(screen: AbstractContainerScreen<*>, slot: Slot, original: ItemStack): ItemStack {
+		val genericScreen = screen as? ContainerScreen ?: return original
+		if (slot.container is Inventory) {
 			return original
 		}
 		return superpairsVisibility.replacementFor(genericScreen, slot.index, original) ?: original
@@ -190,18 +190,18 @@ object ExperimentationTableFeature {
 
 	private fun isSuperpairsRound(title: String): Boolean = title.startsWith("Superpairs (")
 
-	private fun guiClick(syncId: Int, slotIndex: Int, button: Int = 2, clickType: SlotActionType = SlotActionType.PICKUP) {
-		val client = MinecraftClient.getInstance()
+	private fun guiClick(syncId: Int, slotIndex: Int, button: Int = 2, clickType: ContainerInput = ContainerInput.PICKUP) {
+		val client = Minecraft.getInstance()
 		val player = client.player ?: return
-		client.interactionManager?.clickSlot(syncId, slotIndex, button, clickType, player)
+		client.gameMode?.handleContainerInput(syncId, slotIndex, button, clickType, player)
 	}
 
-	private fun findSlotAt(screen: GenericContainerScreen, mouseX: Int, mouseY: Int): Int? {
+	private fun findSlotAt(screen: ContainerScreen, mouseX: Int, mouseY: Int): Int? {
 		val handledScreen = screen as? HandledScreenAccessor ?: return null
 		val originX = handledScreen.`xclipsen$getX`()
 		val originY = handledScreen.`xclipsen$getY`()
 
-		val slotIndex = screen.screenHandler.slots.indexOfFirst { slot ->
+		val slotIndex = screen.menu.slots.indexOfFirst { slot ->
 			val left = originX + slot.x
 			val top = originY + slot.y
 			mouseX in left until (left + 16) && mouseY in top until (top + 16)
@@ -209,15 +209,15 @@ object ExperimentationTableFeature {
 		return slotIndex.takeIf { it >= 0 }
 	}
 
-	private fun slotStack(screen: GenericContainerScreen, slotIndex: Int): ItemStack = screen.screenHandler.slots[slotIndex].stack
+	private fun slotStack(screen: ContainerScreen, slotIndex: Int): ItemStack = screen.menu.slots[slotIndex].item
 
-	private fun slotStack(screenHandler: ScreenHandler, slotIndex: Int): ItemStack = screenHandler.slots[slotIndex].stack
+	private fun slotStack(screenHandler: AbstractContainerMenu, slotIndex: Int): ItemStack = screenHandler.slots[slotIndex].item
 
 	private fun describeStack(stack: ItemStack): String {
 		return if (stack.isEmpty) {
 			"EMPTY"
 		} else {
-			"${stack.item} x${stack.count} name='${stack.name.string}' formatted='${stack.formattedName.formattedTextCompatLeadingWhiteLessResets()}'"
+			"${stack.item} x${stack.count} name='${stack.hoverName.string}' formatted='${stack.styledHoverName.formattedTextCompatLeadingWhiteLessResets()}'"
 		}
 	}
 
@@ -230,14 +230,14 @@ object ExperimentationTableFeature {
 		private var lastAddedSlot = -1
 		private var close = false
 
-		override fun onSlotUpdate(screenHandler: ScreenHandler) {
+		override fun onSlotUpdate(screenHandler: AbstractContainerMenu) {
 			val slots = screenHandler.slots
 			val center = slotStack(screenHandler, MODE_SLOT)
 
 			if (
 				lastAddedSlot != -1 &&
 				center.item == Items.GLOWSTONE &&
-				!slotStack(screenHandler, lastAddedSlot).hasGlint()
+				!slotStack(screenHandler, lastAddedSlot).hasFoil()
 			) {
 				close = order.size > if (getMaxXp()) 15 else 11 - serumCount()
 				hasData = false
@@ -248,7 +248,7 @@ object ExperimentationTableFeature {
 				return
 			}
 
-			val slot = slots.firstOrNull { it.index in 10..43 && it.stack.hasGlint() } ?: return
+			val slot = slots.firstOrNull { it.index in 10..43 && it.item.hasFoil() } ?: return
 			order.add(slot.index)
 			lastAddedSlot = slot.index
 			hasData = true
@@ -273,7 +273,7 @@ object ExperimentationTableFeature {
 	private class UltrasequencerHandler : ExperimentHandler() {
 		private val order = ConcurrentHashMap<Int, Int>()
 
-		override fun onSlotUpdate(screenHandler: ScreenHandler) {
+		override fun onSlotUpdate(screenHandler: AbstractContainerMenu) {
 			val slots = screenHandler.slots
 			val center = slotStack(screenHandler, MODE_SLOT)
 
@@ -288,8 +288,8 @@ object ExperimentationTableFeature {
 
 			order.clear()
 			for (slot in slots) {
-				val stack = slot.stack
-				if (slot.index in 9..44 && stack.name.string.noControlCodes().matches(Regex("\\d+"))) {
+				val stack = slot.item
+				if (slot.index in 9..44 && stack.hoverName.string.noControlCodes().matches(Regex("\\d+"))) {
 					order[stack.count - 1] = slot.index
 				}
 			}
@@ -309,7 +309,7 @@ object ExperimentationTableFeature {
 		protected var clicks = 0
 		protected var hasData = false
 
-		abstract fun onSlotUpdate(screenHandler: ScreenHandler)
+		abstract fun onSlotUpdate(screenHandler: AbstractContainerMenu)
 
 		abstract fun nextClick(): Int?
 
@@ -321,7 +321,7 @@ object ExperimentationTableFeature {
 		private val superpairsSlotsToRead = mutableSetOf<Int>()
 		private val replacementLogState = mutableMapOf<Int, String>()
 
-		fun onSlotClick(screen: GenericContainerScreen, slotIndex: Int) {
+		fun onSlotClick(screen: ContainerScreen, slotIndex: Int) {
 			if (!keepItemsVisibleEnabled()) {
 				return
 			}
@@ -348,7 +348,7 @@ object ExperimentationTableFeature {
 			}
 		}
 
-		fun onInventoryUpdate(screen: GenericContainerScreen) {
+		fun onInventoryUpdate(screen: ContainerScreen) {
 			if (!keepItemsVisibleEnabled()) {
 				reset()
 				return
@@ -358,7 +358,7 @@ object ExperimentationTableFeature {
 				return
 			}
 
-			screen.screenHandler.slots
+			screen.menu.slots
 				.map { it.index }
 				.filter { it in superpairsSlotsToRead }
 				.forEach { slotIndex ->
@@ -376,7 +376,7 @@ object ExperimentationTableFeature {
 				}
 		}
 
-		fun onSlotStackChanged(screen: GenericContainerScreen, slotIndex: Int, stack: ItemStack) {
+		fun onSlotStackChanged(screen: ContainerScreen, slotIndex: Int, stack: ItemStack) {
 			if (!keepItemsVisibleEnabled()) {
 				reset()
 				return
@@ -397,7 +397,7 @@ object ExperimentationTableFeature {
 			}
 		}
 
-		fun replacementFor(screen: GenericContainerScreen, slotIndex: Int, original: ItemStack): ItemStack? {
+		fun replacementFor(screen: ContainerScreen, slotIndex: Int, original: ItemStack): ItemStack? {
 			if (!keepItemsVisibleEnabled() || !isSuperpairsRound(screen.title.string)) {
 				return null
 			}
@@ -429,11 +429,11 @@ object ExperimentationTableFeature {
 		}
 
 		private fun isUnknownSuperpairsClick(stack: ItemStack): Boolean {
-			return unknownSuperpairsClickPattern.matches(stack.formattedName.formattedTextCompatLeadingWhiteLessResets())
+			return unknownSuperpairsClickPattern.matches(stack.styledHoverName.formattedTextCompatLeadingWhiteLessResets())
 		}
 	}
 
-	private fun Text.formattedTextCompatLeadingWhiteLessResets(): String {
+	private fun Component.formattedTextCompatLeadingWhiteLessResets(): String {
 		val sb = StringBuilder(32)
 		var wasFormatted = false
 		visit({ style, text ->
@@ -450,8 +450,8 @@ object ExperimentationTableFeature {
 
 	private fun Style.chatStyle(): String = buildString {
 		color?.let { textColor ->
-			Formatting.entries.firstOrNull { formatting ->
-				formatting.colorValue != null && textColor.rgb == formatting.colorValue
+			ChatFormatting.entries.firstOrNull { formatting ->
+				formatting.color != null && textColor.value == formatting.color
 			}?.let { append(it.toString()) }
 		}
 		if (isBold) append("§l")

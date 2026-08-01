@@ -1,10 +1,10 @@
 package de.xclipsen.ircbridge.mixin
 
 import de.xclipsen.ircbridge.IrcChatTabManager
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.hud.ChatHud
-import net.minecraft.client.gui.hud.InGameHud
-import net.minecraft.client.gui.screen.ChatScreen
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.components.ChatComponent
+import net.minecraft.client.gui.Gui
+import net.minecraft.client.gui.screens.ChatScreen
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Redirect
@@ -12,10 +12,10 @@ import org.spongepowered.asm.mixin.injection.Redirect
 @Mixin(ChatScreen::class)
 abstract class ChatScreenMixin12111 {
 	@Redirect(
-		method = ["removed", "keyPressed", "mouseScrolled", "mouseClicked", "setChatFromHistory", "render"],
-		at = At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/InGameHud;getChatHud()Lnet/minecraft/client/gui/hud/ChatHud;"),
+		method = ["init", "removed", "keyPressed", "mouseScrolled", "mouseClicked", "moveInHistory", "extractRenderState", "handleChatInput"],
+		at = At(value = "INVOKE", target = "Lnet/minecraft/client/gui/Gui;getChat()Lnet/minecraft/client/gui/components/ChatComponent;"),
 	)
-	private fun redirectActiveChatHud(inGameHud: InGameHud): ChatHud {
-		return IrcChatTabManager.activeChatHud(MinecraftClient.getInstance())
+	private fun redirectActiveChatHud(inGameHud: Gui): ChatComponent {
+		return IrcChatTabManager.activeChatHud(Minecraft.getInstance())
 	}
 }

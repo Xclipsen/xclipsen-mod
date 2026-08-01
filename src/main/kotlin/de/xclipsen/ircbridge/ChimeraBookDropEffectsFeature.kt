@@ -1,11 +1,11 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.item.ItemStack
-import net.minecraft.item.Items
-import net.minecraft.particle.ParticleTypes
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
+import net.minecraft.core.particles.ParticleTypes
+import net.minecraft.network.chat.Component
 
 object ChimeraBookDropEffectsFeature {
 	private const val CHIMERA_BOOK = "Enchanted Book (Chimera I)"
@@ -15,7 +15,7 @@ object ChimeraBookDropEffectsFeature {
 	private var pendingTestConfig: BridgeConfig? = null
 	private var lastTriggerAt = 0L
 
-	fun onIncomingGameMessage(message: Text?, overlay: Boolean) {
+	fun onIncomingGameMessage(message: Component?, overlay: Boolean) {
 		if (overlay || !isEnabled()) {
 			return
 		}
@@ -23,7 +23,7 @@ object ChimeraBookDropEffectsFeature {
 		tryTriggerFromMessage(message)
 	}
 
-	fun onIncomingChatMessage(message: Text?) {
+	fun onIncomingChatMessage(message: Component?) {
 		if (!isEnabled()) {
 			return
 		}
@@ -37,8 +37,8 @@ object ChimeraBookDropEffectsFeature {
 			return false
 		}
 
-		MinecraftClient.getInstance().execute {
-			MinecraftClient.getInstance().setScreen(null)
+		Minecraft.getInstance().execute {
+			Minecraft.getInstance().setScreen(null)
 			pendingTestConfig = value.copy()
 			pendingTestTicks = 3
 		}
@@ -60,7 +60,7 @@ object ChimeraBookDropEffectsFeature {
 
 	fun statusLine(): String = if (isEnabled()) "Enabled" else "Disabled"
 
-	private fun tryTriggerFromMessage(message: Text?) {
+	private fun tryTriggerFromMessage(message: Component?) {
 		val itemName = rareDropPattern.matchEntire(normalizeMessage(message?.string ?: return))?.groups?.get("item")?.value ?: return
 		if (itemName == CHIMERA_BOOK) {
 			val now = System.currentTimeMillis()
@@ -84,12 +84,12 @@ object ChimeraBookDropEffectsFeature {
 	private fun isEnabled(config: BridgeConfig): Boolean = config.chimeraBookDropEffectsModuleEnabled
 
 	private fun triggerEffect(config: BridgeConfig) {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		val player = client.player ?: return
 		val stack = chimeraBookStack()
 
-		client.particleManager.addEmitter(player, ParticleTypes.SCRAPE, 30)
-		client.gameRenderer.showFloatingItem(stack)
+		client.particleEngine.createTrackingEmitter(player, ParticleTypes.SCRAPE, 30)
+		client.gameRenderer.displayItemActivation(stack)
 		client.soundManager.play(
 			SoundCatalog.masterSound(
 				config.chimeraBookDropEffectsSoundId,
@@ -101,7 +101,7 @@ object ChimeraBookDropEffectsFeature {
 
 	private fun chimeraBookStack(): ItemStack {
 		return ItemStack(Items.ENCHANTED_BOOK).also { stack ->
-			stack.set(DataComponentTypes.CUSTOM_NAME, Text.literal(CHIMERA_BOOK))
+			stack.set(DataComponents.CUSTOM_NAME, Component.literal(CHIMERA_BOOK))
 		}
 	}
 }

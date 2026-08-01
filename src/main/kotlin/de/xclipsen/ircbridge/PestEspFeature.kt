@@ -1,36 +1,35 @@
 package de.xclipsen.ircbridge
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.render.VertexConsumer
-import net.minecraft.client.render.VertexConsumerProvider
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext
+import net.minecraft.client.Minecraft
+import com.mojang.blaze3d.vertex.VertexConsumer
 import net.minecraft.client.render.XclipsenRenderLayers
-import net.minecraft.entity.Entity
-import net.minecraft.entity.LivingEntity
-import net.minecraft.entity.decoration.ArmorStandEntity
-import net.minecraft.entity.mob.SilverfishEntity
-import net.minecraft.entity.passive.BatEntity
-import net.minecraft.entity.player.PlayerEntity
-import net.minecraft.util.math.Vec3d
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.decoration.ArmorStand
+import net.minecraft.world.entity.monster.Silverfish
+import net.minecraft.world.entity.ambient.Bat
+import net.minecraft.world.entity.player.Player
+import net.minecraft.world.phys.Vec3
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 object PestEspFeature {
-	fun render(context: WorldRenderContext) {
+	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.pestEspModuleEnabled || !LocationTracker.isOnGarden) {
 			return
 		}
 
-		val client = MinecraftClient.getInstance()
-		val world = client.world ?: return
+		val client = Minecraft.getInstance()
+		val world = client.level ?: return
 		val player = client.player ?: return
-		if (client.options.hudHidden) {
+		if (client.options.hideGui) {
 			return
 		}
 
-		val pests = world.entities.asSequence()
+		val pests = world.entitiesForRendering().asSequence()
 			.filterIsInstance<LivingEntity>()
 			.filter(::isGardenPest)
 			.toList()
@@ -45,13 +44,13 @@ object PestEspFeature {
 		val redFloat = red / 255.0f
 		val greenFloat = green / 255.0f
 		val blueFloat = blue / 255.0f
-		val cameraPos = context.gameRenderer().camera.cameraPos
-		val matrices = context.matrices()
-		val consumers = context.consumers()
+		val cameraPos = context.levelState().cameraRenderState.pos
+		val matrices = context.poseStack()
+		val consumers = context.bufferSource()
 
-		matrices.push()
+		matrices.pushPose()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-		val entry = matrices.peek()
+		val entry = matrices.last()
 		val lineLayer = XclipsenRenderLayers.getXrayLine(OUTLINE_WIDTH)
 		val lineConsumer = consumers.getBuffer(lineLayer)
 		val fillConsumer = consumers.getBuffer(XclipsenRenderLayers.getXrayFill())
@@ -69,24 +68,24 @@ object PestEspFeature {
 			}
 		}
 
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(XclipsenRenderLayers.getXrayFill())
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(lineLayer)
-		matrices.pop()
+		consumers.endBatch(XclipsenRenderLayers.getXrayFill())
+		consumers.endBatch(lineLayer)
+		matrices.popPose()
 	}
 
 	private fun drawBoundingBox(
 		pest: LivingEntity,
 		fillConsumer: VertexConsumer,
 		lineConsumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		matrices: net.minecraft.client.util.math.MatrixStack,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		matrices: com.mojang.blaze3d.vertex.PoseStack,
 		red: Float,
 		green: Float,
 		blue: Float,
 	) {
-		val box = pest.boundingBox.expand(BOX_EXPANSION_XZ, BOX_EXPANSION_Y, BOX_EXPANSION_XZ)
+		val box = pest.boundingBox.inflate(BOX_EXPANSION_XZ, BOX_EXPANSION_Y, BOX_EXPANSION_XZ)
 		XclipsenWorldRenderUtils.drawFilledBox(
-			matrices.peek(),
+			matrices.last(),
 			fillConsumer,
 			box.minX.toFloat(),
 			box.minY.toFloat(),
@@ -104,13 +103,13 @@ object PestEspFeature {
 
 	private fun drawLine(
 		lineConsumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		start: Vec3d,
-		end: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		start: Vec3,
+		end: Vec3,
 		color: Int,
 	) {
 		val delta = end.subtract(start)
-		val lengthSquared = delta.lengthSquared()
+		val lengthSquared = delta.lengthSqr()
 		if (!delta.x.isFinite() || !delta.y.isFinite() || !delta.z.isFinite() || lengthSquared < 0.0001) {
 			return
 		}
@@ -123,21 +122,21 @@ object PestEspFeature {
 		val green = color shr 8 and 0xFF
 		val blue = color and 0xFF
 
-		lineConsumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
-			.color(red, green, blue, LINE_ALPHA)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(OUTLINE_WIDTH.toFloat())
-		lineConsumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
-			.color(red, green, blue, LINE_ALPHA)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(OUTLINE_WIDTH.toFloat())
+		lineConsumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
+			.setColor(red, green, blue, LINE_ALPHA)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(OUTLINE_WIDTH.toFloat())
+		lineConsumer.addVertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
+			.setColor(red, green, blue, LINE_ALPHA)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(OUTLINE_WIDTH.toFloat())
 	}
 
-	private fun crosshairStart(cameraPos: Vec3d, player: PlayerEntity): Vec3d {
-		val yawRadians = Math.toRadians(player.yaw.toDouble())
-		val pitchRadians = Math.toRadians(player.pitch.toDouble())
+	private fun crosshairStart(cameraPos: Vec3, player: Player): Vec3 {
+		val yawRadians = Math.toRadians(player.yRot.toDouble())
+		val pitchRadians = Math.toRadians(player.xRot.toDouble())
 		val horizontalScale = cos(pitchRadians)
-		val look = Vec3d(
+		val look = Vec3(
 			-sin(yawRadians) * horizontalScale,
 			-sin(pitchRadians),
 			cos(yawRadians) * horizontalScale,
@@ -153,10 +152,10 @@ object PestEspFeature {
 		if (!entity.isAlive || entity.isRemoved) {
 			return false
 		}
-		if (entity !is LivingEntity || entity is PlayerEntity || entity is ArmorStandEntity) {
+		if (entity !is LivingEntity || entity is Player || entity is ArmorStand) {
 			return false
 		}
-		if (entity !is BatEntity && entity !is SilverfishEntity) {
+		if (entity !is Bat && entity !is Silverfish) {
 			return false
 		}
 
@@ -167,21 +166,19 @@ object PestEspFeature {
 		entity.customName?.string?.trim()?.takeIf { it.isNotEmpty() }?.let { yield(it) }
 		entity.name.string.trim().takeIf { it.isNotEmpty() }?.let { yield(it) }
 
-		val searchBox = entity.boundingBox.expand(NAME_SEARCH_RANGE_XZ, NAME_SEARCH_RANGE_Y, NAME_SEARCH_RANGE_XZ)
-		val nearbyArmorStands = entity.entityWorld.getEntitiesByClass(
-			ArmorStandEntity::class.java,
-			searchBox,
-		) { stand ->
-			stand.isAlive &&
-				!stand.isRemoved &&
-				stand.squaredDistanceTo(entity) <= NAME_SEARCH_DISTANCE_SQUARED &&
-				kotlin.math.abs(stand.x - entity.x) <= MAX_NAME_OFFSET_XZ &&
-				kotlin.math.abs(stand.z - entity.z) <= MAX_NAME_OFFSET_XZ &&
-				stand.y >= entity.y - MAX_NAME_OFFSET_BELOW &&
-				stand.y <= entity.y + MAX_NAME_OFFSET_ABOVE
-		}
+		val searchBox = entity.boundingBox.inflate(NAME_SEARCH_RANGE_XZ, NAME_SEARCH_RANGE_Y, NAME_SEARCH_RANGE_XZ)
+		val nearbyArmorStands = entity.level().getEntities(entity, searchBox) { candidate ->
+			candidate is ArmorStand &&
+				candidate.isAlive &&
+				!candidate.isRemoved &&
+				candidate.distanceToSqr(entity) <= NAME_SEARCH_DISTANCE_SQUARED &&
+				kotlin.math.abs(candidate.x - entity.x) <= MAX_NAME_OFFSET_XZ &&
+				kotlin.math.abs(candidate.z - entity.z) <= MAX_NAME_OFFSET_XZ &&
+				candidate.y >= entity.y - MAX_NAME_OFFSET_BELOW &&
+				candidate.y <= entity.y + MAX_NAME_OFFSET_ABOVE
+		}.filterIsInstance<ArmorStand>()
 
-		for (stand in nearbyArmorStands.sortedBy { it.squaredDistanceTo(entity) }) {
+		for (stand in nearbyArmorStands.sortedBy { it.distanceToSqr(entity) }) {
 			stand.customName?.string?.trim()?.takeIf { it.isNotEmpty() }?.let { yield(it) }
 			stand.name.string.trim().takeIf { it.isNotEmpty() }?.let { yield(it) }
 		}
@@ -220,7 +217,7 @@ object PestEspFeature {
 		"Beetle",
 		"Cricket",
 		"Earthworm",
-		"Field Mouse",
+		"Field MouseHandler",
 		"Fly",
 		"Locust",
 		"Mite",

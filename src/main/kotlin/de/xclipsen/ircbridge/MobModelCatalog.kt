@@ -1,7 +1,7 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.entity.EntityType
-import net.minecraft.util.Identifier
+import net.minecraft.world.entity.EntityType
+import net.minecraft.resources.Identifier
 import org.slf4j.LoggerFactory
 import java.util.Locale
 

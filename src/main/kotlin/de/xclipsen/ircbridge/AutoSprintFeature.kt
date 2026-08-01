@@ -1,17 +1,17 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.network.ClientPlayerEntity
-import net.minecraft.client.option.KeyBinding
-import net.minecraft.registry.tag.FluidTags
-import net.minecraft.util.math.BlockPos
+import net.minecraft.client.Minecraft
+import net.minecraft.client.player.LocalPlayer
+import net.minecraft.client.KeyMapping
+import net.minecraft.tags.FluidTags
+import net.minecraft.core.BlockPos
 
 object AutoSprintFeature {
 	private var wasBlockingSprintKey = false
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
-		val world = client.world ?: return
+		val world = client.level ?: return
 		val player = client.player ?: return
 		if (!config.autoSprintModuleEnabled) {
 			clearSprintKeyBlock()
@@ -31,8 +31,8 @@ object AutoSprintFeature {
 			return original
 		}
 
-		val client = MinecraftClient.getInstance()
-		val world = client.world ?: return original
+		val client = Minecraft.getInstance()
+		val world = client.level ?: return original
 		val player = client.player ?: return original
 		if (config.autoSprintDisableWhenFullySubmerged && isHeadAndFeetUnderwater(player, world)) {
 			return false
@@ -41,8 +41,8 @@ object AutoSprintFeature {
 		return original || config.autoSprintModuleEnabled
 	}
 
-	private fun blockSprintKey(client: MinecraftClient, player: ClientPlayerEntity) {
-		client.options.sprintKey.setPressed(false)
+	private fun blockSprintKey(client: Minecraft, player: LocalPlayer) {
+		client.options.keySprint.setDown(false)
 		wasBlockingSprintKey = true
 		if (player.isSprinting) {
 			player.setSprinting(false)
@@ -54,13 +54,13 @@ object AutoSprintFeature {
 			return
 		}
 		wasBlockingSprintKey = false
-		KeyBinding.updatePressedStates()
+		KeyMapping.setAll()
 	}
 
-	private fun isHeadAndFeetUnderwater(player: ClientPlayerEntity, world: net.minecraft.world.World): Boolean {
-		val feet = BlockPos.ofFloored(player.x, player.y + 0.1, player.z)
-		val head = BlockPos.ofFloored(player.x, player.eyeY, player.z)
-		return world.getFluidState(feet).isIn(FluidTags.WATER) &&
-			world.getFluidState(head).isIn(FluidTags.WATER)
+	private fun isHeadAndFeetUnderwater(player: LocalPlayer, world: net.minecraft.world.level.Level): Boolean {
+		val feet = BlockPos.containing(player.x, player.y + 0.1, player.z)
+		val head = BlockPos.containing(player.x, player.eyeY, player.z)
+		return world.getFluidState(feet).`is`(FluidTags.WATER) &&
+			world.getFluidState(head).`is`(FluidTags.WATER)
 	}
 }

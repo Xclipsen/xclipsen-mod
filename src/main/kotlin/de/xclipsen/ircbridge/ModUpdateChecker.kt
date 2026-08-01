@@ -3,12 +3,12 @@ package de.xclipsen.ircbridge
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.ClickEvent
-import net.minecraft.text.MutableText
-import net.minecraft.text.Style
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.ClickEvent
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Style
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import java.io.IOException
 import java.net.URI
 import java.net.http.HttpClient
@@ -99,11 +99,11 @@ object ModUpdateChecker {
 		return true
 	}
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		if (announcementShown) {
 			return
 		}
-		if (client.player == null && client.inGameHud == null) {
+		if (client.player == null && client.gui == null) {
 			return
 		}
 
@@ -112,8 +112,8 @@ object ModUpdateChecker {
 				announcementShown = true
 				showClientMessage(
 					client,
-					Text.literal("[Update] ").formatted(Formatting.GREEN)
-						.append(Text.literal("Xclipsen Mod ${latestVersion ?: "?"} is available.").formatted(Formatting.WHITE)),
+					Component.literal("[Update] ").withStyle(ChatFormatting.GREEN)
+						.append(Component.literal("Xclipsen Mod ${latestVersion ?: "?"} is available.").withStyle(ChatFormatting.WHITE)),
 				)
 				showClientMessage(
 					client,
@@ -124,10 +124,10 @@ object ModUpdateChecker {
 				announcementShown = true
 				showClientMessage(
 					client,
-					Text.literal("[Update] ").formatted(Formatting.GREEN)
+					Component.literal("[Update] ").withStyle(ChatFormatting.GREEN)
 						.append(
-							Text.literal("Xclipsen Mod ${latestVersion ?: "?"} wurde heruntergeladen. Bitte Minecraft neu starten.")
-								.formatted(Formatting.WHITE),
+							Component.literal("Xclipsen Mod ${latestVersion ?: "?"} wurde heruntergeladen. Bitte Minecraft neu starten.")
+								.withStyle(ChatFormatting.WHITE),
 						),
 				)
 			}
@@ -135,8 +135,8 @@ object ModUpdateChecker {
 				announcementShown = true
 				showClientMessage(
 					client,
-					Text.literal("[Update] ").formatted(Formatting.RED)
-						.append(Text.literal("Auto-Download fehlgeschlagen: $lastError").formatted(Formatting.WHITE)),
+					Component.literal("[Update] ").withStyle(ChatFormatting.RED)
+						.append(Component.literal("Auto-Download fehlgeschlagen: $lastError").withStyle(ChatFormatting.WHITE)),
 				)
 				showClientMessage(
 					client,
@@ -392,20 +392,20 @@ object ModUpdateChecker {
 		return XclipsenIrcBridgeClient.instance?.config()?.autoUpdateEnabled == true
 	}
 
-	private fun clickableLink(label: String, url: String): MutableText {
-		return Text.literal(label).setStyle(
+	private fun clickableLink(label: String, url: String): MutableComponent {
+		return Component.literal(label).setStyle(
 			Style.EMPTY
-				.withColor(Formatting.AQUA)
-				.withUnderline(true)
+				.withColor(ChatFormatting.AQUA)
+				.withUnderlined(true)
 				.withClickEvent(ClickEvent.OpenUrl(URI.create(url))),
 		)
 	}
 
-	private fun showClientMessage(client: MinecraftClient?, message: Text) {
+	private fun showClientMessage(client: Minecraft?, message: Component) {
 		client?.execute {
 			when {
-				client.player != null -> client.player?.sendMessage(message, false)
-				client.inGameHud != null -> client.inGameHud.chatHud.addMessage(message)
+				client.player != null -> client.player?.sendSystemMessage(message)
+				client.gui != null -> client.gui.chat.addClientSystemMessage(message)
 			}
 		}
 	}

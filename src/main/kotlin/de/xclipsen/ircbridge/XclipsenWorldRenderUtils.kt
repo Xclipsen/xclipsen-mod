@@ -1,13 +1,13 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.render.VertexConsumer
-import net.minecraft.client.util.math.MatrixStack
-import net.minecraft.util.math.Box
+import com.mojang.blaze3d.vertex.VertexConsumer
+import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.world.phys.AABB
 import kotlin.math.sqrt
 
 object XclipsenWorldRenderUtils {
 	fun drawFilledBox(
-		entry: MatrixStack.Entry,
+		entry: PoseStack.Pose,
 		consumer: VertexConsumer,
 		minX: Float,
 		minY: Float,
@@ -29,9 +29,9 @@ object XclipsenWorldRenderUtils {
 	}
 
 	fun drawBox(
-		entry: MatrixStack.Entry,
+		entry: PoseStack.Pose,
 		consumer: VertexConsumer,
-		box: Box,
+		box: AABB,
 		red: Float,
 		green: Float,
 		blue: Float,
@@ -60,7 +60,7 @@ object XclipsenWorldRenderUtils {
 
 	private fun face(
 		consumer: VertexConsumer,
-		entry: MatrixStack.Entry,
+		entry: PoseStack.Pose,
 		red: Float,
 		green: Float,
 		blue: Float,
@@ -69,14 +69,14 @@ object XclipsenWorldRenderUtils {
 	) {
 		var index = 0
 		while (index + 2 < xyz.size) {
-			consumer.vertex(entry, xyz[index], xyz[index + 1], xyz[index + 2]).color(red, green, blue, alpha)
+			consumer.addVertex(entry, xyz[index], xyz[index + 1], xyz[index + 2]).setColor(red, green, blue, alpha)
 			index += 3
 		}
 	}
 
 	private fun line(
 		consumer: VertexConsumer,
-		entry: MatrixStack.Entry,
+		entry: PoseStack.Pose,
 		startX: Float,
 		startY: Float,
 		startZ: Float,
@@ -96,7 +96,7 @@ object XclipsenWorldRenderUtils {
 		val normalX = dx / length
 		val normalY = dy / length
 		val normalZ = dz / length
-		consumer.vertex(entry, startX, startY, startZ).color(red, green, blue, alpha).normal(entry, normalX, normalY, normalZ).lineWidth(lineWidth)
-		consumer.vertex(entry, endX, endY, endZ).color(red, green, blue, alpha).normal(entry, normalX, normalY, normalZ).lineWidth(lineWidth)
+		consumer.addVertex(entry, startX, startY, startZ).setColor(red, green, blue, alpha).setNormal(entry, normalX, normalY, normalZ).setLineWidth(lineWidth)
+		consumer.addVertex(entry, endX, endY, endZ).setColor(red, green, blue, alpha).setNormal(entry, normalX, normalY, normalZ).setLineWidth(lineWidth)
 	}
 }

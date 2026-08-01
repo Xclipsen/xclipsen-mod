@@ -1,8 +1,8 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.network.ClientPlayNetworkHandler
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientPacketListener
+import net.minecraft.network.chat.Component
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -42,8 +42,8 @@ object SilentDisconnectFeature {
 			return
 		}
 
-		val client = MinecraftClient.getInstance()
-		if (!isHypixelAddress(client.currentServerEntry?.address) && !LocationTracker.isOnHypixel) {
+		val client = Minecraft.getInstance()
+		if (!isHypixelAddress(client.currentServer?.ip) && !LocationTracker.isOnHypixel) {
 			return
 		}
 
@@ -63,7 +63,7 @@ object SilentDisconnectFeature {
 		}
 	}
 
-	fun onJoin(handler: ClientPlayNetworkHandler, client: MinecraftClient) {
+	fun onJoin(handler: ClientPacketListener, client: Minecraft) {
 		disconnectHandled = false
 
 		val mod = XclipsenIrcBridgeClient.instance ?: return
@@ -72,7 +72,7 @@ object SilentDisconnectFeature {
 			return
 		}
 
-		if (!isHypixelAddress(handler.serverInfo?.address) && !isHypixelAddress(client.currentServerEntry?.address)) {
+		if (!isHypixelAddress(handler.serverData?.ip) && !isHypixelAddress(client.currentServer?.ip)) {
 			return
 		}
 
@@ -86,7 +86,7 @@ object SilentDisconnectFeature {
 		enqueueSuppression(statusToRestore)
 	}
 
-	fun shouldSuppressStatusMessage(message: Text?): Boolean {
+	fun shouldSuppressStatusMessage(message: Component?): Boolean {
 		val raw = message?.string?.trim().orEmpty()
 		if (raw.isEmpty()) {
 			return false
@@ -125,16 +125,16 @@ object SilentDisconnectFeature {
 		persistConfig("persist silent disconnect status")
 	}
 
-	private fun sendStatusCommand(client: MinecraftClient, status: String): Boolean {
-		val networkHandler = client.player?.networkHandler ?: return false
+	private fun sendStatusCommand(client: Minecraft, status: String): Boolean {
+		val networkHandler = client.player?.connection ?: return false
 		return sendStatusCommand(networkHandler, status)
 	}
 
-	private fun sendStatusCommand(handler: ClientPlayNetworkHandler, status: String): Boolean {
+	private fun sendStatusCommand(handler: ClientPacketListener, status: String): Boolean {
 		val normalizedStatus = normalizeStatus(status)
 		enqueueInternalCommand(normalizedStatus)
 		return try {
-			handler.sendChatCommand("status $normalizedStatus")
+			handler.sendCommand("status $normalizedStatus")
 			true
 		} catch (exception: RuntimeException) {
 			discardInternalCommand(normalizedStatus)

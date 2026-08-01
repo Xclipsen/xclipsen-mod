@@ -3,9 +3,9 @@ package de.xclipsen.ircbridge
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.network.chat.Component
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
@@ -57,7 +57,7 @@ object HideonleafShardTracker {
 	)
 
 	// ── Fallback prices (used before live Bazaar prices arrive) ──────────
-	// Source: Hypixel Bazaar sell-price, approximate as of 2026-04.
+	// Channel: Hypixel Bazaar sell-price, approximate as of 2026-04.
 	private val DEFAULT_PRICES: Map<String, Double> = mapOf(
 		"Hideonleaf Shards"  to  68_000.0,   // SHARD_HIDEONLEAF
 		"Hideonbox Shards"   to 1_475_506.0, // SHARD_HIDEONBOX
@@ -75,7 +75,7 @@ object HideonleafShardTracker {
 	private const val PRICE_REFRESH_INTERVAL_MINUTES = 5L
 
 	// ── AFK detection ────────────────────────────────────────────────────
-	// Timer pauses after this many ms without any drop or kill.
+	// TimerQueue pauses after this many ms without any drop or kill.
 	private const val AFK_THRESHOLD_MS = 1 * 60 * 1_000L   // 1 minute
 	private var priceScheduler: ScheduledExecutorService? = null
 
@@ -88,7 +88,7 @@ object HideonleafShardTracker {
 	var pricesLastRefreshedAt: Long = 0L
 		private set
 
-	// ── State ────────────────────────────────────────────────────────────
+	// ── StateHolder ────────────────────────────────────────────────────────────
 
 	private var totalData: TrackerData = TrackerData()
 	private var sessionData: TrackerData = TrackerData()
@@ -203,7 +203,7 @@ object HideonleafShardTracker {
 	 * Called for every incoming chat/game message. Strips formatting and tries
 	 * to match a drop pattern.
 	 */
-	fun processChat(message: Text?) {
+	fun processChat(message: Component?) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled) return
 		if (!LocationTracker.isOnGalatea) return
@@ -260,16 +260,15 @@ object HideonleafShardTracker {
 		recordLocalMutation()
 		markShareDirty(forceUpload = true)
 
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		client.execute {
-			client.player?.sendMessage(
-				Text.literal("§a§l+ $amount §r§a$canonicalName §7(Tracker)"),
-				true,
+			client.player?.sendOverlayMessage(
+				Component.literal("§a§l+ $amount §r§a$canonicalName §7(Tracker)"),
 			)
 		}
 	}
 
-	// ── Session control ──────────────────────────────────────────────────
+	// ── User control ──────────────────────────────────────────────────
 
 	fun resetSession() {
 		sessionData = TrackerData()
@@ -296,7 +295,7 @@ object HideonleafShardTracker {
 		showingSession = !showingSession
 	}
 
-	// ── Timer pause / resume ─────────────────────────────────────────────
+	// ── TimerQueue pause / resume ─────────────────────────────────────────────
 
 	/**
 	 * Called every client tick. Pauses the stopwatch when the player is not
@@ -421,7 +420,7 @@ object HideonleafShardTracker {
 	// ── Persistence ──────────────────────────────────────────────────────
 
 	private fun ensureActivePlayerLoaded(): Boolean {
-		val playerName = MinecraftClient.getInstance().session?.username?.trim().orEmpty()
+		val playerName = Minecraft.getInstance().user.name.trim()
 		if (playerName.isBlank()) {
 			return activePlayerName.isNotBlank()
 		}
@@ -663,7 +662,7 @@ object HideonleafShardTracker {
 			return
 		}
 
-		val playerName = MinecraftClient.getInstance().session?.username.orEmpty()
+		val playerName = Minecraft.getInstance().user.name
 		if (playerName.isBlank()) {
 			return
 		}
@@ -699,7 +698,7 @@ object HideonleafShardTracker {
 			return
 		}
 
-		val playerName = MinecraftClient.getInstance().session?.username.orEmpty()
+		val playerName = Minecraft.getInstance().user.name
 		if (playerName.isBlank()) {
 			return
 		}
@@ -714,7 +713,7 @@ object HideonleafShardTracker {
 		syncExecutor.execute {
 			try {
 				val remote = mod.backendBridge().fetchHideonleafStats(playerName)
-				MinecraftClient.getInstance().execute {
+				Minecraft.getInstance().execute {
 					initialRemoteSyncCompleted = true
 					if (remote == null) {
 						return@execute
@@ -899,7 +898,7 @@ object HideonleafShardTracker {
 		)
 	}
 
-	// ── Formatting helpers ───────────────────────────────────────────────
+	// ── ChatFormatting helpers ───────────────────────────────────────────────
 
 	fun formatCoins(value: Double): String {
 		return when {
@@ -932,7 +931,7 @@ object HideonleafShardTracker {
 	private const val HISTORY_BASELINE_MIN_DURATION_MS = 20 * 60 * 1000L
 }
 
-// ── HUD Element ──────────────────────────────────────────────────────────
+// ── HUD GuiEventListener ──────────────────────────────────────────────────────────
 
 object HideonleafShardTrackerHudElement : XclipsenHudElement(
 	id = "hideonleaf_shard_tracker",
@@ -940,7 +939,7 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 ) {
 	private const val LINE_HEIGHT = 11
 	private const val PADDING = 4
-	// Line index of the clickable Session/Total toggle (0 = title, 1 = toggle)
+	// Line index of the clickable User/Total toggle (0 = title, 1 = toggle)
 	private const val TOGGLE_LINE_INDEX = 1
 
 	private const val HEADER_COLOR  = 0xFF55FFFF.toInt() // aqua
@@ -954,7 +953,7 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 	private const val BORDER_COLOR     = 0xFF36C5F0.toInt()
 	private const val TOGGLE_HOVER_BG  = 0x30FFFFFF      // subtle highlight when clickable
 
-	// ── Click detection ───────────────────────────────────────────────
+	// ── MouseButtonEvent detection ───────────────────────────────────────────────
 
 	/** Absolute screen bounds of the toggle row, updated every render tick. */
 	@Volatile private var toggleClickBounds: ClickArea? = null
@@ -999,12 +998,12 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		isEnabled(config) && LocationTracker.isOnGalatea
 
-	override fun defaultX(context: DrawContext): Float = 4f
-	override fun defaultY(context: DrawContext): Float = 80f
+	override fun defaultX(context: GuiGraphicsExtractor): Float = 4f
+	override fun defaultY(context: GuiGraphicsExtractor): Float = 80f
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val client   = MinecraftClient.getInstance()
-		val renderer = client.textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val client   = Minecraft.getInstance()
+		val renderer = client.font
 		val data      = if (example) exampleData() else HideonleafShardTracker.displayData()
 		val durationMs = if (example) 3_723_000L    else HideonleafShardTracker.selectedDurationMs()
 		val isSession  = HideonleafShardTracker.showingSession
@@ -1016,7 +1015,7 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 		lines += TrackerLine("Hideonleaf Profit Tracker", HEADER_COLOR, centered = true)
 
 		// Line 1: clickable toggle — arrows hint that it's interactive
-		val viewLabel = if (isSession) "Session" else "Total"
+		val viewLabel = if (isSession) "User" else "Total"
 		lines += TrackerLine("< $viewLabel >", TOGGLE_COLOR, centered = true, isToggle = true)
 
 		lines += TrackerLine.SEPARATOR
@@ -1062,7 +1061,7 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 		var maxTextWidth = 0
 		for (line in lines) {
 			if (line.isSeparator) continue
-			val w = renderer.getWidth(stripSectionSigns(line.text))
+			val w = renderer.width(stripSectionSigns(line.text))
 			if (w > maxTextWidth) maxTextWidth = w
 		}
 		val totalWidth  = maxTextWidth + (PADDING * 2) + 4
@@ -1091,17 +1090,17 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 
 			val segments = parseColoredText(line.text)
 			if (line.centered) {
-				val fullWidth = segments.sumOf { renderer.getWidth(it.text) }
+				val fullWidth = segments.sumOf { renderer.width(it.text) }
 				var x = (totalWidth - fullWidth) / 2
 				for (seg in segments) {
-					context.drawTextWithShadow(renderer, seg.text, x, y, seg.color)
-					x += renderer.getWidth(seg.text)
+					context.text(renderer, seg.text, x, y, seg.color, true)
+					x += renderer.width(seg.text)
 				}
 			} else {
 				var x = PADDING
 				for (seg in segments) {
-					context.drawTextWithShadow(renderer, seg.text, x, y, seg.color)
-					x += renderer.getWidth(seg.text)
+					context.text(renderer, seg.text, x, y, seg.color, true)
+					x += renderer.width(seg.text)
 				}
 			}
 			y += LINE_HEIGHT

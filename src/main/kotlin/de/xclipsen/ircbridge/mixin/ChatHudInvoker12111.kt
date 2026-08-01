@@ -1,21 +1,21 @@
 package de.xclipsen.ircbridge.mixin
 
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.font.TextRenderer
-import net.minecraft.client.gui.hud.ChatHud
+import net.minecraft.client.gui.Font
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.ChatComponent
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.gen.Invoker
 
-@Mixin(ChatHud::class)
+@Mixin(ChatComponent::class)
 interface ChatHudInvoker12111 {
-	@Invoker("render")
+	@Invoker("extractRenderState")
 	fun `xclipsen$render12111`(
-		context: DrawContext,
-		textRenderer: TextRenderer,
+		context: GuiGraphicsExtractor,
+		textRenderer: Font,
 		currentTick: Int,
 		mouseX: Int,
 		mouseY: Int,
-		focused: Boolean,
-		refresh: Boolean,
+		displayMode: ChatComponent.DisplayMode,
+		insertionClickMode: Boolean,
 	)
 }

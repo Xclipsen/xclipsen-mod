@@ -6,13 +6,11 @@ import de.xclipsen.ircbridge.BridgeConfig
 import de.xclipsen.ircbridge.BridgeConfigManager
 import de.xclipsen.ircbridge.XclipsenIrcBridgeClient
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.ClickEvent
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.ClickEvent
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import org.slf4j.LoggerFactory
-import java.nio.charset.StandardCharsets
-import java.util.UUID
 
 class MinigameInviteManager {
 	private val pending = linkedMapOf<String, MinigameInvite>()
@@ -67,7 +65,7 @@ class MinigameController(
 		if (backendChanged) {
 			network.disconnect()
 			inviteManager.clear()
-			if (activeGame?.mode == GameMode.MULTIPLAYER) {
+			if (activeGame?.mode == GameType.MULTIPLAYER) {
 				activeGame = null
 			}
 		}
@@ -80,7 +78,7 @@ class MinigameController(
 
 	fun onJoin(serverAddress: String?) {
 		val client = client()
-		val username = client.session.username
+		val username = client.user.name
 		val serverId = serverAddress?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: "integrated:$username"
 		presenceManager.registered(serverId)
 		network.configure(mod.config())
@@ -89,7 +87,7 @@ class MinigameController(
 
 	fun onDisconnect() {
 		presenceManager.disconnected()
-		if (activeGame?.mode == GameMode.MULTIPLAYER) {
+		if (activeGame?.mode == GameType.MULTIPLAYER) {
 			activeGame = null
 		}
 		network.disconnect()
@@ -210,16 +208,15 @@ class MinigameController(
 	fun activeMatch(): MinigameMatch? = activeGame?.multiplayerMatch
 	fun hasActiveGame(): Boolean = activeGame != null
 	fun invites(): List<MinigameInvite> = inviteManager.all()
-	fun localUuid(): String = (client().session.uuidOrNull ?: UUID.nameUUIDFromBytes("OfflinePlayer:${client().session.username}".toByteArray(StandardCharsets.UTF_8))).toString()
-	fun client(): MinecraftClient = MinecraftClient.getInstance()
+	fun localUuid(): String = client().user.profileId.toString()
+	fun client(): Minecraft = Minecraft.getInstance()
 
 	fun feedback(message: String, error: Boolean = false) {
 		if (message.isBlank()) return
 		client().execute {
-			client().player?.sendMessage(
-				Text.literal("[Minigames] ").formatted(Formatting.GOLD)
-					.append(Text.literal(message).formatted(if (error) Formatting.RED else Formatting.WHITE)),
-				false,
+			client().player?.sendSystemMessage(
+				Component.literal("[Minigames] ").withStyle(ChatFormatting.GOLD)
+					.append(Component.literal(message).withStyle(if (error) ChatFormatting.RED else ChatFormatting.WHITE)),
 			)
 		}
 	}
@@ -259,16 +256,15 @@ class MinigameController(
 	private fun handleInviteReceived(invite: MinigameInvite?) {
 		invite ?: return
 		inviteManager.add(invite)
-		val accept = Text.literal("[Accept]").formatted(Formatting.GREEN).styled {
+		val accept = Component.literal("[Accept]").withStyle(ChatFormatting.GREEN).withStyle {
 			it.withClickEvent(ClickEvent.RunCommand("/game accept ${invite.senderUsername}"))
 		}
-		val deny = Text.literal("[Deny]").formatted(Formatting.RED).styled {
+		val deny = Component.literal("[Deny]").withStyle(ChatFormatting.RED).withStyle {
 			it.withClickEvent(ClickEvent.RunCommand("/game deny ${invite.senderUsername}"))
 		}
-		client().player?.sendMessage(
-			Text.literal("${invite.senderUsername} challenged you to Tic-Tac-Toe.\n").formatted(Formatting.GOLD)
-				.append(accept).append(Text.literal(" ")).append(deny),
-			false,
+		client().player?.sendSystemMessage(
+			Component.literal("${invite.senderUsername} challenged you to Tic-Tac-Toe.\n").withStyle(ChatFormatting.GOLD)
+				.append(accept).append(Component.literal(" ")).append(deny),
 		)
 	}
 
@@ -276,7 +272,7 @@ class MinigameController(
 		if (match.status != "ACTIVE" || match.matchId in cancelledMatchIds) return
 		inviteManager.clear()
 		val current = activeGame
-		if (current?.mode == GameMode.MULTIPLAYER) {
+		if (current?.mode == GameType.MULTIPLAYER) {
 			if (current.multiplayerMatch?.matchId == match.matchId) {
 				current.updateMatch(match)
 				return
@@ -290,9 +286,9 @@ class MinigameController(
 	private fun updateMultiplayerMatch(match: MinigameMatch) {
 		if (match.matchId in cancelledMatchIds) return
 		val current = activeGame
-		if (current?.mode == GameMode.MULTIPLAYER && current.multiplayerMatch?.matchId == match.matchId) {
+		if (current?.mode == GameType.MULTIPLAYER && current.multiplayerMatch?.matchId == match.matchId) {
 			current.updateMatch(match)
-		} else if (match.status == "ACTIVE" && (current?.mode != GameMode.MULTIPLAYER || current.finished)) {
+		} else if (match.status == "ACTIVE" && (current?.mode != GameType.MULTIPLAYER || current.finished)) {
 			activeGame = TicTacToeMatchController.multiplayer(this, match)
 			openActiveMatch()
 		}
@@ -303,7 +299,7 @@ class MinigameController(
 		if (requestId.isBlank()) return
 		val authoritativeMatch = parseNestedMatch(data)
 		val matchId = data.get("matchId")?.asString ?: authoritativeMatch?.matchId
-		val game = activeGame?.takeIf { it.mode == GameMode.MULTIPLAYER && it.multiplayerMatch?.matchId == matchId }
+		val game = activeGame?.takeIf { it.mode == GameType.MULTIPLAYER && it.multiplayerMatch?.matchId == matchId }
 		if (game?.rejectPendingMove(requestId, authoritativeMatch) == true) {
 			feedback(MOVE_REJECTED_MESSAGE, error = true)
 		}
@@ -312,11 +308,11 @@ class MinigameController(
 	private fun handleCancelledMatch(match: MinigameMatch) {
 		if (match.status != "CANCELLED") return
 		if (!cancelledMatchIds.add(match.matchId)) return
-		val current = activeGame?.takeIf { it.mode == GameMode.MULTIPLAYER && it.multiplayerMatch?.matchId == match.matchId }
+		val current = activeGame?.takeIf { it.mode == GameType.MULTIPLAYER && it.multiplayerMatch?.matchId == match.matchId }
 		current?.updateMatch(match)
 		if (current != null) {
 			activeGame = null
-			if ((client().currentScreen as? TicTacToeScreen)?.belongsTo(match.matchId) == true) {
+			if ((client().screen as? TicTacToeScreen)?.belongsTo(match.matchId) == true) {
 				client().setScreen(null)
 			}
 		}
@@ -340,8 +336,8 @@ class MinigameController(
 
 	private fun registerCurrentSession(serverId: String) {
 		val client = client()
-		val username = client.session.username
-		val uuid = client.session.uuidOrNull ?: UUID.nameUUIDFromBytes("OfflinePlayer:$username".toByteArray(StandardCharsets.UTF_8))
+		val username = client.user.name
+		val uuid = client.user.profileId
 		network.register(uuid.toString(), username, serverId, modVersion())
 	}
 

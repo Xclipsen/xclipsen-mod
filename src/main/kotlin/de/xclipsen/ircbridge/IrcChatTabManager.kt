@@ -1,10 +1,10 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.hud.ChatHud
-import net.minecraft.client.gui.screen.ChatScreen
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.ChatComponent
+import net.minecraft.client.gui.screens.ChatScreen
+import net.minecraft.network.chat.Component
 
 object IrcChatTabManager {
 	enum class ChatTab {
@@ -16,46 +16,46 @@ object IrcChatTabManager {
 	private var activeTab: ChatTab = ChatTab.MAIN
 
 	@Volatile
-	private var ircChatHud: ChatHud? = null
+	private var ircChatHud: ChatComponent? = null
 
 	fun activeTab(): ChatTab = activeTab
 
 	fun isIrcTabActive(): Boolean = activeTab == ChatTab.IRC
 
-	fun isSecondaryChatHud(chatHud: ChatHud): Boolean = ircChatHud === chatHud
+	fun isSecondaryChatHud(chatHud: ChatComponent): Boolean = ircChatHud === chatHud
 
-	fun shouldProxy(mainChatHud: ChatHud, client: MinecraftClient?): Boolean {
-		return client?.inGameHud?.chatHud === mainChatHud && isIrcTabActive()
+	fun shouldProxy(mainChatHud: ChatComponent, client: Minecraft?): Boolean {
+		return client?.gui?.chat === mainChatHud && isIrcTabActive()
 	}
 
-	fun ircChatHud(client: MinecraftClient): ChatHud {
+	fun ircChatHud(client: Minecraft): ChatComponent {
 		val current = ircChatHud
 		if (current != null) {
 			return current
 		}
 
 		return synchronized(this) {
-			ircChatHud ?: ChatHud(client).also { ircChatHud = it }
+			ircChatHud ?: ChatComponent(client).also { ircChatHud = it }
 		}
 	}
 
-	fun activeChatHud(client: MinecraftClient): ChatHud {
-		return if (isIrcTabActive()) ircChatHud(client) else client.inGameHud.chatHud
+	fun activeChatHud(client: Minecraft): ChatComponent {
+		return if (isIrcTabActive()) ircChatHud(client) else client.gui.chat
 	}
 
-	fun addIrcMessage(message: Text) {
-		val client = MinecraftClient.getInstance()
+	fun addIrcMessage(message: Component) {
+		val client = Minecraft.getInstance()
 		client.execute {
-			ircChatHud(client).addMessage(message)
+			ircChatHud(client).addClientSystemMessage(message)
 		}
 	}
 
 	fun clearIrcChat(clearHistory: Boolean) {
-		ircChatHud?.clear(clearHistory)
+		ircChatHud?.clearMessages(clearHistory)
 	}
 
 	fun resetIrcChat() {
-		ircChatHud?.reset()
+		ircChatHud?.rescaleChat()
 	}
 
 	fun toggleTab() {
@@ -74,15 +74,15 @@ object IrcChatTabHudElement : XclipsenHudElement(
 	override fun isEnabled(config: BridgeConfig): Boolean = true
 
 	override fun shouldDraw(config: BridgeConfig): Boolean =
-		config.ircBridgeEnabled && MinecraftClient.getInstance().currentScreen is ChatScreen
+		config.ircBridgeEnabled && Minecraft.getInstance().screen is ChatScreen
 
-	override fun defaultX(context: DrawContext): Float = 6f
+	override fun defaultX(context: GuiGraphicsExtractor): Float = 6f
 
-	override fun defaultY(context: DrawContext): Float =
-		(context.scaledWindowHeight - 27f).coerceAtLeast(6f)
+	override fun defaultY(context: GuiGraphicsExtractor): Float =
+		(context.guiHeight() - 27f).coerceAtLeast(6f)
 
 	fun handleClick(mouseX: Int, mouseY: Int): Boolean {
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return false
 		if (!shouldDraw(config)) {
 			return false
@@ -99,17 +99,17 @@ object IrcChatTabHudElement : XclipsenHudElement(
 		return true
 	}
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val client = MinecraftClient.getInstance()
-		val textRenderer = client.textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val client = Minecraft.getInstance()
+		val textRenderer = client.font
 		val activeTab = if (example) IrcChatTabManager.ChatTab.IRC else IrcChatTabManager.activeTab()
 		drawToggleButton(context, textRenderer, activeTab == IrcChatTabManager.ChatTab.IRC)
 		return BUTTON_WIDTH.toFloat() to BUTTON_HEIGHT.toFloat()
 	}
 
 	private fun drawToggleButton(
-		context: DrawContext,
-		textRenderer: net.minecraft.client.font.TextRenderer,
+		context: GuiGraphicsExtractor,
+		textRenderer: net.minecraft.client.gui.Font,
 		active: Boolean,
 	) {
 		val fill = if (active) ACTIVE_FILL else INACTIVE_FILL
@@ -117,8 +117,8 @@ object IrcChatTabHudElement : XclipsenHudElement(
 		val textColor = if (active) ACTIVE_TEXT else INACTIVE_TEXT
 		val glow = if (active) ACTIVE_GLOW else INACTIVE_GLOW
 		val label = "IRC"
-		val labelX = (BUTTON_WIDTH - textRenderer.getWidth(label)) / 2
-		val labelY = (BUTTON_HEIGHT - textRenderer.fontHeight) / 2
+		val labelX = (BUTTON_WIDTH - textRenderer.width(label)) / 2
+		val labelY = (BUTTON_HEIGHT - textRenderer.lineHeight) / 2
 
 		context.fill(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, fill)
 		context.fill(0, 0, BUTTON_WIDTH, 1, border)
@@ -126,11 +126,11 @@ object IrcChatTabHudElement : XclipsenHudElement(
 		context.fill(0, 0, 1, BUTTON_HEIGHT, border)
 		context.fill(BUTTON_WIDTH - 1, 0, BUTTON_WIDTH, BUTTON_HEIGHT, border)
 		context.fill(2, 2, BUTTON_WIDTH - 2, BUTTON_HEIGHT - 2, glow)
-		context.drawTextWithShadow(textRenderer, label, labelX, labelY, textColor)
+		context.text(textRenderer, label, labelX, labelY, textColor, true)
 	}
 
-	private fun placement(client: MinecraftClient): HudElementPlacement {
-		val window = client.window ?: return HudElementPlacement(6f, 6f, 1f)
+	private fun placement(client: Minecraft): HudElementPlacement {
+		val window = client.window
 		val config = XclipsenIrcBridgeClient.instance?.config()
 		val current = config?.hudElements?.get(id)
 		if (current != null && current.x.isFinite() && current.y.isFinite() && current.x >= 0f && current.y >= 0f) {
@@ -138,7 +138,7 @@ object IrcChatTabHudElement : XclipsenHudElement(
 			return current
 		}
 
-		val fallback = HudElementPlacement(6f, (window.scaledHeight - 27f).coerceAtLeast(6f), 1f)
+		val fallback = HudElementPlacement(6f, (window.guiScaledHeight - 27f).coerceAtLeast(6f), 1f)
 		config?.hudElements?.set(id, fallback)
 		return fallback
 	}

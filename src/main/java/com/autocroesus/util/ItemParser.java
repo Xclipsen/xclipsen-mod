@@ -221,7 +221,7 @@ public class ItemParser {
         ITEM_REPLACEMENTS.put("Shiny Wither Leggings", "WITHER_LEGGINGS");
         ITEM_REPLACEMENTS.put("Shiny Wither Chestplate", "WITHER_CHESTPLATE");
         ITEM_REPLACEMENTS.put("Shiny Wither Helmet", "WITHER_HELMET");
-        ITEM_REPLACEMENTS.put("Shiny Necron's Handle", "NECRON_HANDLE");
+        ITEM_REPLACEMENTS.put("Shiny Necron's ResourceHandle", "NECRON_HANDLE");
         ITEM_REPLACEMENTS.put("Wither Shard", "SHARD_WITHER");
         ITEM_REPLACEMENTS.put("Thorn Shard", "SHARD_THORN");
         ITEM_REPLACEMENTS.put("Apex Dragon Shard", "SHARD_APEX_DRAGON");

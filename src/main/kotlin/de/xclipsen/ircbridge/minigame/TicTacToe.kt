@@ -1,7 +1,7 @@
 package de.xclipsen.ircbridge.minigame
 
-import net.minecraft.item.Items
-import net.minecraft.text.Text
+import net.minecraft.world.item.Items
+import net.minecraft.network.chat.Component
 import java.util.UUID
 import kotlin.random.Random
 
@@ -10,7 +10,7 @@ object TicTacToeMinigame : Minigame {
 	override val displayName: String = "Tic-Tac-Toe"
 	override val icon = Items.IRON_SWORD
 	override val description: List<String> = listOf("Get three marks in a row.", "Play against AI or another player.")
-	override val supportedModes: Set<GameMode> = setOf(GameMode.AI, GameMode.MULTIPLAYER)
+	override val supportedModes: Set<GameType> = setOf(GameType.AI, GameType.MULTIPLAYER)
 
 	override fun openModeMenu(controller: MinigameController) {
 		controller.client().setScreen(GameModeSelectionScreen(controller, this))
@@ -69,7 +69,7 @@ object TicTacToeAI {
 
 class TicTacToeMatchController private constructor(
 	val owner: MinigameController,
-	val mode: GameMode,
+	val mode: GameType,
 ) {
 	private val localBoard = TicTacToeBoard()
 	var multiplayerMatch: MinigameMatch? = null
@@ -98,7 +98,7 @@ class TicTacToeMatchController private constructor(
 	val winningCombination: List<Int>
 		get() = multiplayerMatch?.state?.winningCombination ?: localBoard.winningCombination()
 	val finished: Boolean
-		get() = if (mode == GameMode.MULTIPLAYER) multiplayerMatch?.status?.let { it != "ACTIVE" } ?: false else localWinner != null || localDraw
+		get() = if (mode == GameType.MULTIPLAYER) multiplayerMatch?.status?.let { it != "ACTIVE" } ?: false else localWinner != null || localDraw
 
 	fun updateMatch(match: MinigameMatch) {
 		val current = multiplayerMatch
@@ -116,7 +116,7 @@ class TicTacToeMatchController private constructor(
 
 	fun clickField(index: Int) {
 		if (!canClickField(index)) return
-		if (mode == GameMode.MULTIPLAYER) {
+		if (mode == GameType.MULTIPLAYER) {
 			val match = multiplayerMatch ?: return
 			val pending = PendingMove(index, UUID.randomUUID().toString(), match.revision)
 			pendingMove = pending
@@ -130,7 +130,7 @@ class TicTacToeMatchController private constructor(
 
 	fun canClickField(index: Int): Boolean {
 		if (index !in 0..8 || finished || leaveRequested || board[index].isNotBlank()) return false
-		if (mode == GameMode.AI) return aiThinkingUntil == 0L
+		if (mode == GameType.AI) return aiThinkingUntil == 0L
 		val match = multiplayerMatch ?: return false
 		return pendingMove == null && match.status == "ACTIVE" && match.state.currentTurnUuid == owner.localUuid()
 	}
@@ -143,14 +143,14 @@ class TicTacToeMatchController private constructor(
 	}
 
 	fun tick() {
-		if (mode != GameMode.AI || aiThinkingUntil == 0L || System.currentTimeMillis() < aiThinkingUntil || finished) return
+		if (mode != GameType.AI || aiThinkingUntil == 0L || System.currentTimeMillis() < aiThinkingUntil || finished) return
 		aiThinkingUntil = 0L
 		TicTacToeAI.chooseMove(localBoard.cells)?.let { localBoard.cells[it] = "O" }
 		evaluateLocal()
 	}
 
 	fun rematch() {
-		if (mode == GameMode.AI) {
+		if (mode == GameType.AI) {
 			localBoard.reset()
 			localWinner = null
 			localDraw = false
@@ -161,11 +161,11 @@ class TicTacToeMatchController private constructor(
 	}
 
 	fun hasRequestedRematch(): Boolean =
-		mode == GameMode.MULTIPLAYER && owner.localUuid() in (multiplayerMatch?.state?.rematchVotes ?: emptyList())
+		mode == GameType.MULTIPLAYER && owner.localUuid() in (multiplayerMatch?.state?.rematchVotes ?: emptyList())
 
 	fun opponentRequestedRematch(): Boolean {
 		val match = multiplayerMatch ?: return false
-		if (mode != GameMode.MULTIPLAYER || hasRequestedRematch()) return false
+		if (mode != GameType.MULTIPLAYER || hasRequestedRematch()) return false
 		val opponentUuid = if (match.playerOneUuid == owner.localUuid()) match.playerTwoUuid else match.playerOneUuid
 		return opponentUuid in match.state.rematchVotes
 	}
@@ -176,7 +176,7 @@ class TicTacToeMatchController private constructor(
 			owner.openMainMenu()
 			return
 		}
-		if (mode == GameMode.MULTIPLAYER) {
+		if (mode == GameType.MULTIPLAYER) {
 			if (leaveRequested) return
 			leaveRequested = true
 			multiplayerMatch?.let { owner.leaveMatch(it.matchId) }
@@ -191,7 +191,7 @@ class TicTacToeMatchController private constructor(
 	}
 
 	fun visualState(): TicTacToeVisualState {
-		if (mode == GameMode.AI) {
+		if (mode == GameType.AI) {
 			return when {
 				localWinner == "X" -> TicTacToeVisualState.won()
 				localWinner == "O" -> TicTacToeVisualState.lost()
@@ -230,16 +230,16 @@ class TicTacToeMatchController private constructor(
 	}
 
 	companion object {
-		fun ai(owner: MinigameController): TicTacToeMatchController = TicTacToeMatchController(owner, GameMode.AI)
+		fun ai(owner: MinigameController): TicTacToeMatchController = TicTacToeMatchController(owner, GameType.AI)
 		fun multiplayer(owner: MinigameController, match: MinigameMatch): TicTacToeMatchController =
-			TicTacToeMatchController(owner, GameMode.MULTIPLAYER).apply { updateMatch(match) }
+			TicTacToeMatchController(owner, GameType.MULTIPLAYER).apply { updateMatch(match) }
 	}
 }
 
 data class TicTacToeVisualState(
-	val backgroundItem: net.minecraft.item.Item,
+	val backgroundItem: net.minecraft.world.item.Item,
 	val backgroundName: String,
-	val statusItem: net.minecraft.item.Item,
+	val statusItem: net.minecraft.world.item.Item,
 	val statusName: String,
 	val statusLore: List<String>,
 ) {
@@ -281,14 +281,14 @@ data class TicTacToeVisualState(
 		fun draw() = finished(Items.YELLOW_STAINED_GLASS_PANE, Items.GRAY_DYE, "Draw!")
 		fun waiting(status: String) = finished(Items.GRAY_STAINED_GLASS_PANE, Items.CLOCK, status)
 
-		private fun finished(background: net.minecraft.item.Item, statusItem: net.minecraft.item.Item, status: String) =
+		private fun finished(background: net.minecraft.world.item.Item, statusItem: net.minecraft.world.item.Item, status: String) =
 			TicTacToeVisualState(background, status, statusItem, status, emptyList())
 	}
 }
 
 class TicTacToeScreen(
 	private val game: TicTacToeMatchController,
-) : ChestLikeScreen(Text.literal(titleFor(game))) {
+) : ChestLikeScreen(Component.literal(titleFor(game))) {
 	override fun slots(): Map<Int, MenuSlot> {
 		val entries = mutableMapOf<Int, MenuSlot>()
 		val visualState = game.visualState()
@@ -323,15 +323,15 @@ class TicTacToeScreen(
 		return entries
 	}
 
-	override fun handledScreenTick() {
+	override fun containerTick() {
 		game.tick()
 	}
 
-	override fun close() {
+	override fun onClose() {
 		if (!game.finished) {
 			game.owner.feedback("The match is still running. Open it again with /game.")
 		}
-		super.close()
+		super.onClose()
 	}
 
 	fun belongsTo(matchId: String): Boolean = game.multiplayerMatch?.matchId == matchId
@@ -353,7 +353,7 @@ class TicTacToeScreen(
 				name = "Not available yet",
 				enabled = false,
 			)
-			game.mode == GameMode.AI -> MenuSlot(
+			game.mode == GameType.AI -> MenuSlot(
 				item = Items.SLIME_BALL,
 				name = "Play again",
 				enabled = true,

@@ -2,13 +2,14 @@ package de.xclipsen.ircbridge
 
 import com.autocroesus.config.AcConfig
 import com.autocroesus.config.AcDataStore
-import net.minecraft.client.gui.Click
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.Screen
-import net.minecraft.client.gui.widget.TextFieldWidget
-import net.minecraft.client.input.KeyInput
-import net.minecraft.text.Text
-import net.minecraft.util.Identifier
+import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.gui.Font
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.GuiGraphicsExtractor as GuiGraphics
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.components.EditBox
+import net.minecraft.client.input.KeyEvent
+import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
 import java.io.IOException
@@ -17,7 +18,33 @@ import java.util.Locale
 class XclipsenConfigScreen(
 	private val parent: Screen?,
 	private val mod: XclipsenIrcBridgeClient,
-) : Screen(Text.literal("Xclipsen Settings")) {
+) : Screen(Component.literal("Xclipsen Settings")) {
+	private val textRenderer: Font
+		get() = font
+	private var EditBox.text: String
+		get() = value
+		set(value) = setValue(value)
+
+	private fun GuiGraphicsExtractor.drawTextWithShadow(font: Font, text: String, x: Int, y: Int, color: Int) {
+		text(font, text, x, y, color, true)
+	}
+
+	private fun GuiGraphicsExtractor.drawTextWithShadow(font: Font, text: Component, x: Int, y: Int, color: Int) {
+		text(font, text, x, y, color, true)
+	}
+
+	private fun GuiGraphicsExtractor.drawCenteredTextWithShadow(font: Font, text: String, x: Int, y: Int, color: Int) {
+		centeredText(font, text, x, y, color)
+	}
+
+	private fun GuiGraphicsExtractor.drawCenteredTextWithShadow(font: Font, text: Component, x: Int, y: Int, color: Int) {
+		centeredText(font, text, x, y, color)
+	}
+
+	private fun GuiGraphicsExtractor.drawTooltip(font: Font, text: Component, x: Int, y: Int) {
+		setTooltipForNextFrame(font, text, x, y)
+	}
+
 	private var workingCopy: BridgeConfig = copyOf(mod.config())
 	private var workingAutoCroesusConfig: AcConfig = copyOf(AcDataStore.config)
 	private var selectedSection = ConfigSection.SETUP
@@ -37,45 +64,45 @@ class XclipsenConfigScreen(
 	private var slayerBlazeExpanded = true
 	private var slayerMiscExpanded = true
 	private var awaitingHideonleafResetConfirmation = false
-	private var statusMessage: Text = Text.empty()
+	private var statusMessage: Component = Component.empty()
 	private val colorPickerOpen: Boolean
 		get() = openColorField != null
 
-	private lateinit var searchField: TextFieldWidget
-	private lateinit var ircServerBaseUrlField: TextFieldWidget
-	private lateinit var backendAuthTokenField: TextFieldWidget
-	private lateinit var backendPollIntervalField: TextFieldWidget
-	private lateinit var ircFormatField: TextFieldWidget
-	private lateinit var autoExperimentsClickDelayField: TextFieldWidget
-	private lateinit var autoExperimentsDelayVarietyField: TextFieldWidget
-	private lateinit var autoExperimentsSerumCountField: TextFieldWidget
-	private lateinit var autoCroesusClickDelayField: TextFieldWidget
-	private lateinit var autoCroesusKismetProfitField: TextFieldWidget
-	private lateinit var autoCroesusKismetFloorsField: TextFieldWidget
-	private lateinit var autoCroesusChestKeyProfitField: TextFieldWidget
-	private lateinit var shulkerGlowColorHexField: TextFieldWidget
-	private lateinit var shulkerProjectileGlowColorHexField: TextFieldWidget
-	private lateinit var shulkerTracerLineColorHexField: TextFieldWidget
-	private lateinit var purpleTerracottaHighlightColorHexField: TextFieldWidget
-	private lateinit var pestEspColorHexField: TextFieldWidget
-	private lateinit var fireFreezeCircleColorHexField: TextFieldWidget
-	private lateinit var mobModelEntityTypeField: TextFieldWidget
-	private lateinit var mobModelVariantField: TextFieldWidget
-	private lateinit var pickaxeAlertTextField: TextFieldWidget
-	private lateinit var slayerAnnouncerTextField: TextFieldWidget
-	private lateinit var mineshaftAutoWarpRuleField: TextFieldWidget
-	private lateinit var mineshaftAutoWarpDelayField: TextFieldWidget
-	private lateinit var mineshaftAutoWarpWindowField: TextFieldWidget
-	private lateinit var dungeonAutoKickMaxPbField: TextFieldWidget
-	private lateinit var dungeonAutoKickMinSecretsField: TextFieldWidget
-	private lateinit var dungeonAutoKickMinMpField: TextFieldWidget
-	private lateinit var lostFightSoundSearchField: TextFieldWidget
-	private lateinit var pickaxeAlertSoundSearchField: TextFieldWidget
-	private lateinit var fireFreezeAlertSoundSearchField: TextFieldWidget
-	private lateinit var chimeraDropSoundSearchField: TextFieldWidget
-	private lateinit var slayerAnnouncerSoundSearchField: TextFieldWidget
+	private lateinit var searchField: EditBox
+	private lateinit var ircServerBaseUrlField: EditBox
+	private lateinit var backendAuthTokenField: EditBox
+	private lateinit var backendPollIntervalField: EditBox
+	private lateinit var ircFormatField: EditBox
+	private lateinit var autoExperimentsClickDelayField: EditBox
+	private lateinit var autoExperimentsDelayVarietyField: EditBox
+	private lateinit var autoExperimentsSerumCountField: EditBox
+	private lateinit var autoCroesusClickDelayField: EditBox
+	private lateinit var autoCroesusKismetProfitField: EditBox
+	private lateinit var autoCroesusKismetFloorsField: EditBox
+	private lateinit var autoCroesusChestKeyProfitField: EditBox
+	private lateinit var shulkerGlowColorHexField: EditBox
+	private lateinit var shulkerProjectileGlowColorHexField: EditBox
+	private lateinit var shulkerTracerLineColorHexField: EditBox
+	private lateinit var purpleTerracottaHighlightColorHexField: EditBox
+	private lateinit var pestEspColorHexField: EditBox
+	private lateinit var fireFreezeCircleColorHexField: EditBox
+	private lateinit var mobModelEntityTypeField: EditBox
+	private lateinit var mobModelVariantField: EditBox
+	private lateinit var pickaxeAlertTextField: EditBox
+	private lateinit var slayerAnnouncerTextField: EditBox
+	private lateinit var mineshaftAutoWarpRuleField: EditBox
+	private lateinit var mineshaftAutoWarpDelayField: EditBox
+	private lateinit var mineshaftAutoWarpWindowField: EditBox
+	private lateinit var dungeonAutoKickMaxPbField: EditBox
+	private lateinit var dungeonAutoKickMinSecretsField: EditBox
+	private lateinit var dungeonAutoKickMinMpField: EditBox
+	private lateinit var lostFightSoundSearchField: EditBox
+	private lateinit var pickaxeAlertSoundSearchField: EditBox
+	private lateinit var fireFreezeAlertSoundSearchField: EditBox
+	private lateinit var chimeraDropSoundSearchField: EditBox
+	private lateinit var slayerAnnouncerSoundSearchField: EditBox
 
-	private val fields = mutableMapOf<ConfigField, TextFieldWidget>()
+	private val fields = mutableMapOf<ConfigField, EditBox>()
 	private val sectionRows = listOf(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.CHAT, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE, ConfigSection.SLAYER)),
 		ConfigPanel("MISC", listOf(ConfigSection.CHIMERA_DROP, ConfigSection.DEPLOYBLE, ConfigSection.WORMHOLE_FINDER, ConfigSection.AUTO_SPRINT, ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.FIRE_FREEZE, ConfigSection.MINESHAFT_AUTOWARP)),
@@ -126,7 +153,7 @@ class XclipsenConfigScreen(
 		layoutWidgets()
 	}
 
-	override fun close() {
+	override fun onClose() {
 		readWorkingCopyFromFields(updateStatus = false)?.let {
 			try {
 				mod.saveAndApplyConfig(it)
@@ -134,12 +161,12 @@ class XclipsenConfigScreen(
 			}
 		}
 		persistAutoCroesusConfig()
-		client?.setScreen(parent)
+		minecraft.setScreen(parent)
 	}
 
-	override fun shouldPause(): Boolean = false
+	override fun isPauseScreen(): Boolean = false
 
-	override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
+	override fun extractRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
 		context.fillGradient(0, 0, width, height, 0x88000000.toInt(), 0xCC000000.toInt())
 
 		drawPanels(context, mouseX, mouseY)
@@ -147,10 +174,10 @@ class XclipsenConfigScreen(
 		drawSettingsMenu(context, mouseX, mouseY)
 		drawTooltip(context, mouseX, mouseY)
 
-		super.render(context, mouseX, mouseY, delta)
+		super.extractRenderState(context, mouseX, mouseY, delta)
 	}
 
-	override fun mouseClicked(click: Click, doubled: Boolean): Boolean {
+	override fun mouseClicked(click: MouseButtonEvent, doubled: Boolean): Boolean {
 		val mouseX = click.x().toInt()
 		val mouseY = click.y().toInt()
 		val button = click.button()
@@ -177,7 +204,7 @@ class XclipsenConfigScreen(
 		if (clickedSection != null) {
 			readWorkingCopyFromFields(updateStatus = false)
 			selectedSection = clickedSection
-			statusMessage = Text.empty()
+			statusMessage = Component.empty()
 			if (button == LEFT_MOUSE_BUTTON && clickedSection.toggleable) {
 				toggleModule(clickedSection)
 			} else if (button == LEFT_MOUSE_BUTTON && !clickedSection.toggleable) {
@@ -206,7 +233,7 @@ class XclipsenConfigScreen(
 		return super.mouseClicked(click, doubled)
 	}
 
-	override fun keyPressed(input: KeyInput): Boolean {
+	override fun keyPressed(input: KeyEvent): Boolean {
 		if (input.key() == GLFW.GLFW_KEY_ESCAPE && openedSection != null) {
 			closeOpenedSection()
 			return true
@@ -215,7 +242,7 @@ class XclipsenConfigScreen(
 		return super.keyPressed(input)
 	}
 
-	override fun mouseDragged(click: Click, offsetX: Double, offsetY: Double): Boolean {
+	override fun mouseDragged(click: MouseButtonEvent, offsetX: Double, offsetY: Double): Boolean {
 		if (click.button() < 0) {
 			return false
 		}
@@ -235,7 +262,7 @@ class XclipsenConfigScreen(
 		return super.mouseDragged(click, offsetX, offsetY)
 	}
 
-	override fun mouseReleased(click: Click): Boolean {
+	override fun mouseReleased(click: MouseButtonEvent): Boolean {
 		draggingColorPicker = null
 		draggingSlider = null
 		if (click.button() < 0) {
@@ -322,7 +349,7 @@ class XclipsenConfigScreen(
 		try {
 			mod.saveAndApplyConfig(workingCopy)
 		} catch (_: IOException) {
-			statusMessage = Text.literal("Failed to save module state.")
+			statusMessage = Component.literal("Failed to save module state.")
 		}
 	}
 
@@ -354,10 +381,10 @@ class XclipsenConfigScreen(
 		try {
 			mod.saveAndApplyConfig(workingCopy)
 			persistAutoCroesusConfig()
-			statusMessage = Text.literal("Saved.")
-			close()
+			statusMessage = Component.literal("Saved.")
+			onClose()
 		} catch (_: IOException) {
-			statusMessage = Text.literal("Failed to save config.")
+			statusMessage = Component.literal("Failed to save config.")
 		}
 	}
 
@@ -365,7 +392,7 @@ class XclipsenConfigScreen(
 		val candidate = readWorkingCopyFromFields(updateStatus = true) ?: run {
 			return
 		}
-		statusMessage = Text.literal(XclipsenIrcBridgeClient.formatStatus(mod.testBackendConnection(candidate)))
+		statusMessage = Component.literal(XclipsenIrcBridgeClient.formatStatus(mod.testBackendConnection(candidate)))
 	}
 
 	private fun checkForUpdatesNow() {
@@ -373,12 +400,12 @@ class XclipsenConfigScreen(
 		try {
 			mod.saveAndApplyConfig(candidate)
 			statusMessage = if (ModUpdateChecker.requestCheckNow()) {
-				Text.literal("Started update check.")
+				Component.literal("Started update check.")
 			} else {
-				Text.literal("Update check already running or disabled.")
+				Component.literal("Update check already running or disabled.")
 			}
 		} catch (_: IOException) {
-			statusMessage = Text.literal("Failed to save config.")
+			statusMessage = Component.literal("Failed to save config.")
 		}
 	}
 
@@ -420,10 +447,6 @@ class XclipsenConfigScreen(
 		candidate.slayerSpawnAnnouncerEnabled = workingCopy.slayerSpawnAnnouncerEnabled
 		candidate.slayerBlazePhaseDisplayEnabled = workingCopy.slayerBlazePhaseDisplayEnabled
 		candidate.slayerBlazeColoredMobsEnabled = workingCopy.slayerBlazeColoredMobsEnabled
-		candidate.slayerBlazeAutoDaggerEnabled = workingCopy.slayerBlazeAutoDaggerEnabled
-		candidate.slayerBlazeAutoDaggerDelayMaxTicks = workingCopy.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(2, 5)
-		candidate.slayerBlazeAutoDaggerResetAfterBossEnabled = workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled
-		candidate.slayerBlazeAutoDaggerDebugEnabled = workingCopy.slayerBlazeAutoDaggerDebugEnabled
 		candidate.slayerRngMeterDisplayEnabled = workingCopy.slayerRngMeterDisplayEnabled
 		candidate.slayerRngMeterOptimalRemovalEnabled = workingCopy.slayerRngMeterOptimalRemovalEnabled
 		candidate.slayerRngMeterCompactMode = workingCopy.slayerRngMeterCompactMode
@@ -519,27 +542,27 @@ class XclipsenConfigScreen(
 		candidate.mineshaftAutoWarpCorpseRule = mineshaftAutoWarpRuleField.text.trim()
 		candidate.hudElements = mod.config().hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		candidate.shulkerGlowColorHex = normalizedHexColor(shulkerGlowColorHexField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Glow color must be #RRGGBB.")
+			if (updateStatus) statusMessage = Component.literal("Glow color must be #RRGGBB.")
 			return null
 		}
 		candidate.shulkerProjectileGlowColorHex = normalizedHexColor(shulkerProjectileGlowColorHexField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Projectile color must be #RRGGBB.")
+			if (updateStatus) statusMessage = Component.literal("Projectile color must be #RRGGBB.")
 			return null
 		}
 		candidate.shulkerTracerLineColorHex = normalizedHexColor(shulkerTracerLineColorHexField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Line color must be #RRGGBB.")
+			if (updateStatus) statusMessage = Component.literal("Line color must be #RRGGBB.")
 			return null
 		}
 		candidate.purpleTerracottaHighlightColorHex = normalizedHexColor(purpleTerracottaHighlightColorHexField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Purple terracotta color must be #RRGGBB.")
+			if (updateStatus) statusMessage = Component.literal("Purple terracotta color must be #RRGGBB.")
 			return null
 		}
 		candidate.pestEspColorHex = normalizedHexColor(pestEspColorHexField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Pest ESP color must be #RRGGBB.")
+			if (updateStatus) statusMessage = Component.literal("Pest ESP color must be #RRGGBB.")
 			return null
 		}
 		candidate.fireFreezeCircleColorHex = normalizedHexColor(fireFreezeCircleColorHexField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Fire Freeze circle color must be #RRGGBB.")
+			if (updateStatus) statusMessage = Component.literal("Fire Freeze circle color must be #RRGGBB.")
 			return null
 		}
 		candidate.fireFreezeCircleLineWidth = candidate.fireFreezeCircleLineWidth.coerceIn(1.0f, 8.0f)
@@ -548,11 +571,11 @@ class XclipsenConfigScreen(
 		candidate.mobModelEntityType = when {
 			resolvedMobModelEntityType != null -> normalizedMobModelEntityType
 			candidate.mobModelModuleEnabled && normalizedMobModelEntityType == null -> {
-				if (updateStatus) statusMessage = Text.literal("Mob model id must be a valid entity like minecraft:zombie.")
+				if (updateStatus) statusMessage = Component.literal("Mob model id must be a valid entity like minecraft:zombie.")
 				return null
 			}
 			candidate.mobModelModuleEnabled -> {
-				if (updateStatus) statusMessage = Text.literal("Mob model entity must be a living mob on this client.")
+				if (updateStatus) statusMessage = Component.literal("Mob model entity must be a living mob on this client.")
 				return null
 			}
 			else -> "minecraft:zombie"
@@ -560,52 +583,52 @@ class XclipsenConfigScreen(
 		candidate.mobModelVariant = MobModelVariantCatalog.normalize(candidate.mobModelVariant)
 		candidate.mobModelScale = candidate.mobModelScale.coerceIn(0.25f, 4.0f)
 		MobModelVariantCatalog.validate(candidate.mobModelEntityType, candidate.mobModelVariant)?.let { variantError ->
-			if (updateStatus) statusMessage = Text.literal(variantError)
+			if (updateStatus) statusMessage = Component.literal(variantError)
 			return null
 		}
 
 		try {
 			candidate.backendPollIntervalMs = backendPollIntervalField.text.trim().toLong()
 		} catch (_: NumberFormatException) {
-			if (updateStatus) statusMessage = Text.literal("Poll interval must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Poll interval must be a number.")
 			return null
 		}
 
 		if (candidate.backendPollIntervalMs < 500L) {
-			if (updateStatus) statusMessage = Text.literal("Poll interval must be at least 500 ms.")
+			if (updateStatus) statusMessage = Component.literal("Poll interval must be at least 500 ms.")
 			return null
 		}
 
 		try {
 			candidate.autoExperimentsClickDelayMs = autoExperimentsClickDelayField.text.trim().toInt()
 		} catch (_: NumberFormatException) {
-			if (updateStatus) statusMessage = Text.literal("Auto Experiments click delay must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Auto Experiments click delay must be a number.")
 			return null
 		}
 		if (candidate.autoExperimentsClickDelayMs < 50) {
-			if (updateStatus) statusMessage = Text.literal("Auto Experiments click delay must be at least 50 ms.")
+			if (updateStatus) statusMessage = Component.literal("Auto Experiments click delay must be at least 50 ms.")
 			return null
 		}
 
 		try {
 			candidate.autoExperimentsDelayVarietyMs = autoExperimentsDelayVarietyField.text.trim().toInt()
 		} catch (_: NumberFormatException) {
-			if (updateStatus) statusMessage = Text.literal("Auto Experiments delay variety must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Auto Experiments delay variety must be a number.")
 			return null
 		}
 		if (candidate.autoExperimentsDelayVarietyMs < 0) {
-			if (updateStatus) statusMessage = Text.literal("Auto Experiments delay variety must be at least 0 ms.")
+			if (updateStatus) statusMessage = Component.literal("Auto Experiments delay variety must be at least 0 ms.")
 			return null
 		}
 
 		try {
 			candidate.autoExperimentsSerumCount = autoExperimentsSerumCountField.text.trim().toInt()
 		} catch (_: NumberFormatException) {
-			if (updateStatus) statusMessage = Text.literal("Auto Experiments serum count must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Auto Experiments serum count must be a number.")
 			return null
 		}
 		if (candidate.autoExperimentsSerumCount !in 0..3) {
-			if (updateStatus) statusMessage = Text.literal("Auto Experiments serum count must be between 0 and 3.")
+			if (updateStatus) statusMessage = Component.literal("Auto Experiments serum count must be between 0 and 3.")
 			return null
 		}
 
@@ -617,56 +640,56 @@ class XclipsenConfigScreen(
 		}
 		val mineshaftRuleError = MineshaftAutoWarpFeature.validateCorpseRule(candidate.mineshaftAutoWarpCorpseRule)
 		if (mineshaftRuleError != null) {
-			if (updateStatus) statusMessage = Text.literal(mineshaftRuleError)
+			if (updateStatus) statusMessage = Component.literal(mineshaftRuleError)
 			return null
 		}
 
 		try {
 			candidate.mineshaftAutoWarpDelayMs = mineshaftAutoWarpDelayField.text.trim().toLong()
 		} catch (_: NumberFormatException) {
-			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp delay must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Mineshaft AutoWarp delay must be a number.")
 			return null
 		}
 		if (candidate.mineshaftAutoWarpDelayMs < 500L) {
-			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp delay must be at least 500 ms.")
+			if (updateStatus) statusMessage = Component.literal("Mineshaft AutoWarp delay must be at least 500 ms.")
 			return null
 		}
 
 		try {
 			candidate.mineshaftAutoWarpWindowMs = mineshaftAutoWarpWindowField.text.trim().toLong()
 		} catch (_: NumberFormatException) {
-			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp window must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Mineshaft AutoWarp window must be a number.")
 			return null
 		}
 		if (candidate.mineshaftAutoWarpWindowMs !in 5_000L..60_000L) {
-			if (updateStatus) statusMessage = Text.literal("Mineshaft AutoWarp window must be between 5000 and 60000 ms.")
+			if (updateStatus) statusMessage = Component.literal("Mineshaft AutoWarp window must be between 5000 and 60000 ms.")
 			return null
 		}
 
 		candidate.dungeonAutoKickMaxPbSeconds = parseDurationSeconds(dungeonAutoKickMaxPbField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick PB must be seconds or m:ss.")
+			if (updateStatus) statusMessage = Component.literal("Dungeon AutoKick PB must be seconds or m:ss.")
 			return null
 		}
 		if (candidate.dungeonAutoKickMaxPbSeconds !in 60..900) {
-			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick PB must be between 60 and 900 seconds.")
+			if (updateStatus) statusMessage = Component.literal("Dungeon AutoKick PB must be between 60 and 900 seconds.")
 			return null
 		}
 
 		candidate.dungeonAutoKickMinSecretsThousands = dungeonAutoKickMinSecretsField.text.trim().toIntOrNull() ?: run {
-			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick secrets must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Dungeon AutoKick secrets must be a number.")
 			return null
 		}
 		if (candidate.dungeonAutoKickMinSecretsThousands !in 0..200) {
-			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick secrets must be between 0 and 200k.")
+			if (updateStatus) statusMessage = Component.literal("Dungeon AutoKick secrets must be between 0 and 200k.")
 			return null
 		}
 
 		candidate.dungeonAutoKickMinMagicalPower = dungeonAutoKickMinMpField.text.trim().toIntOrNull() ?: run {
-			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick MP must be a number.")
+			if (updateStatus) statusMessage = Component.literal("Dungeon AutoKick MP must be a number.")
 			return null
 		}
 		if (candidate.dungeonAutoKickMinMagicalPower !in 0..2500) {
-			if (updateStatus) statusMessage = Text.literal("Dungeon AutoKick MP must be between 0 and 2500.")
+			if (updateStatus) statusMessage = Component.literal("Dungeon AutoKick MP must be between 0 and 2500.")
 			return null
 		}
 
@@ -674,24 +697,24 @@ class XclipsenConfigScreen(
 		try {
 			autoCroesusCandidate.minClickDelay = autoCroesusClickDelayField.text.trim().toInt()
 		} catch (_: NumberFormatException) {
-			if (updateStatus) statusMessage = Text.literal("AutoCroesus click delay must be a number.")
+			if (updateStatus) statusMessage = Component.literal("AutoCroesus click delay must be a number.")
 			return null
 		}
 		if (autoCroesusCandidate.minClickDelay < 0) {
-			if (updateStatus) statusMessage = Text.literal("AutoCroesus click delay must be at least 0.")
+			if (updateStatus) statusMessage = Component.literal("AutoCroesus click delay must be at least 0.")
 			return null
 		}
 
 		autoCroesusCandidate.kismetMinProfit = parseNonNegativeLong(autoCroesusKismetProfitField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("AutoCroesus kismet profit must be a number.")
+			if (updateStatus) statusMessage = Component.literal("AutoCroesus kismet profit must be a number.")
 			return null
 		}
 		autoCroesusCandidate.chestKeyMinProfit = parseNonNegativeLong(autoCroesusChestKeyProfitField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("AutoCroesus chest key profit must be a number.")
+			if (updateStatus) statusMessage = Component.literal("AutoCroesus chest key profit must be a number.")
 			return null
 		}
 		autoCroesusCandidate.kismetFloors = parseAutoCroesusFloors(autoCroesusKismetFloorsField.text) ?: run {
-			if (updateStatus) statusMessage = Text.literal("Kismet floors must be comma-separated floors like M7, F7.")
+			if (updateStatus) statusMessage = Component.literal("Kismet floors must be comma-separated floors like M7, F7.")
 			return null
 		}
 
@@ -700,19 +723,19 @@ class XclipsenConfigScreen(
 		return candidate
 	}
 
-	private fun registerField(field: ConfigField, value: String, placeholder: String): TextFieldWidget {
+	private fun registerField(field: ConfigField, value: String, placeholder: String): EditBox {
 		val widget = addField(0, 0, 260, value, placeholder)
 		fields[field] = widget
 		return widget
 	}
 
-	private fun addField(x: Int, y: Int, width: Int, value: String, placeholder: String): TextFieldWidget {
-		val field = TextFieldWidget(textRenderer, x, y, width, 20, Text.empty())
+	private fun addField(x: Int, y: Int, width: Int, value: String, placeholder: String): EditBox {
+		val field = EditBox(font, x, y, width, 20, Component.empty())
 		field.setMaxLength(512)
-		field.text = value
-		field.setPlaceholder(Text.literal(placeholder))
-		field.setDrawsBackground(false)
-		addDrawableChild(field)
+		field.value = value
+		field.setHint(Component.literal(placeholder))
+		field.setBordered(false)
+		addRenderableWidget(field)
 		return field
 	}
 
@@ -724,7 +747,7 @@ class XclipsenConfigScreen(
 			val row = section?.let { textFieldBounds(it, field, menu) }
 			if (row != null) {
 				val inputWidth = if (field == ConfigField.SHULKER_GLOW_COLOR) COLOR_INPUT_WIDTH else TEXT_INPUT_WIDTH
-				widget.setDimensionsAndPosition(inputWidth, 20, row.left + 8, row.top + 15)
+				widget.setRectangle(inputWidth, 20, row.left + 8, row.top + 15)
 				setVisible(widget, true)
 			} else {
 				setVisible(widget, false)
@@ -734,7 +757,7 @@ class XclipsenConfigScreen(
 		val slayerSoundDropdownVisible = section == ConfigSection.SLAYER && slayerMiscExpanded
 		if ((section == ConfigSection.HIDEONLEAF_HELPER || section == ConfigSection.PICKAXE_COOLDOWN || section == ConfigSection.FIRE_FREEZE || section == ConfigSection.CHIMERA_DROP || slayerSoundDropdownVisible) && soundDropdownOpen) {
 			val search = soundSearchBounds(menu)
-			activeSoundSearchField().setDimensionsAndPosition(search.width(), 18, search.left, search.top)
+			activeSoundSearchField().setRectangle(search.width(), 18, search.left, search.top)
 			setVisible(activeSoundSearchField(), true)
 		} else {
 			setVisible(lostFightSoundSearchField, false)
@@ -746,7 +769,7 @@ class XclipsenConfigScreen(
 
 		if (section == ConfigSection.MOB_MODEL && mobModelDropdownOpen) {
 			val search = mobModelSearchBounds(menu)
-			mobModelEntityTypeField.setDimensionsAndPosition(search.width(), 18, search.left, search.top)
+			mobModelEntityTypeField.setRectangle(search.width(), 18, search.left, search.top)
 			setVisible(mobModelEntityTypeField, true)
 		} else if (section != ConfigSection.MOB_MODEL) {
 			setVisible(mobModelEntityTypeField, false)
@@ -754,16 +777,16 @@ class XclipsenConfigScreen(
 
 		if (section == ConfigSection.MOB_MODEL && mobModelVariantDropdownOpen) {
 			val search = mobModelVariantSearchBounds(menu)
-			mobModelVariantField.setDimensionsAndPosition(search.width(), 18, search.left, search.top)
+			mobModelVariantField.setRectangle(search.width(), 18, search.left, search.top)
 			setVisible(mobModelVariantField, true)
 		} else if (section != ConfigSection.MOB_MODEL) {
 			setVisible(mobModelVariantField, false)
 		}
 
-		searchField.setDimensionsAndPosition(SEARCH_WIDTH, 22, (width / 2) - (SEARCH_WIDTH / 2), height - 40)
+		searchField.setRectangle(SEARCH_WIDTH, 22, (width / 2) - (SEARCH_WIDTH / 2), height - 40)
 	}
 
-	private fun drawPanels(context: DrawContext, mouseX: Int, mouseY: Int) {
+	private fun drawPanels(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
 		var x = 20
 		sectionRows.forEach { panel ->
 			drawPanel(context, panel, x, 20, mouseX, mouseY)
@@ -771,7 +794,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawPanel(context: DrawContext, panel: ConfigPanel, x: Int, y: Int, mouseX: Int, mouseY: Int) {
+	private fun drawPanel(context: GuiGraphics, panel: ConfigPanel, x: Int, y: Int, mouseX: Int, mouseY: Int) {
 		val visibleRows = filteredSections(panel.sections)
 		if (visibleRows.isEmpty() && searchField.text.isNotBlank()) {
 			return
@@ -834,14 +857,14 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawSearch(context: DrawContext) {
+	private fun drawSearch(context: GuiGraphics) {
 		val x = (width / 2) - (SEARCH_WIDTH / 2)
 		val y = height - 40
 		context.fill(x, y, x + SEARCH_WIDTH, y + 22, 0xC80F0F0F.toInt())
 		context.fill(x, y + 20, x + SEARCH_WIDTH, y + 22, if (searchField.isFocused) ACCENT else 0x1EFFFFFF)
 	}
 
-	private fun drawSettingsMenu(context: DrawContext, mouseX: Int, mouseY: Int) {
+	private fun drawSettingsMenu(context: GuiGraphics, mouseX: Int, mouseY: Int) {
 		val section = openedSection ?: return
 		val menu = settingsBounds()
 		context.fill(menu.left, menu.top, menu.right, menu.bottom, POPUP_BACKGROUND)
@@ -887,16 +910,16 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawSetupSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawSetupSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Mod API", BridgeConfigManager.MOD_BACKEND_BASE_URL, mouseX, mouseY)
 	}
 
-	private fun drawFloorDropEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawFloorDropEspSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, floorDropEspTracerBounds(menu), "Tracer to nearest", workingCopy.floorDropEspTracerEnabled, mouseX, mouseY)
 		drawInfoSetting(context, floorDropEspDetectionBounds(menu), "Detection", "3 grouped string displays", mouseX, mouseY)
 	}
 
-	private fun drawIrcBridgeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawIrcBridgeSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawTextInputSetting(context, menu, 0, "IRC Server URL", ircServerBaseUrlField, mouseX, mouseY)
 		drawTextInputSetting(context, menu, 1, "IRC Auth Token", backendAuthTokenField, mouseX, mouseY)
 		drawTextInputSetting(context, menu, 2, "Poll Interval (ms)", backendPollIntervalField, mouseX, mouseY)
@@ -905,12 +928,12 @@ class XclipsenConfigScreen(
 		drawButtonSetting(context, ircTestConnectionBounds(menu), "Test IRC Server", mouseX, mouseY)
 	}
 
-	private fun drawChatSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawChatSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, chatImplosionHiderBounds(menu), "Implosion Hider", workingCopy.chatImplosionHiderEnabled, mouseX, mouseY)
 		drawInfoSetting(context, chatImplosionExampleBounds(menu), "Hides", "Your Implosion hit ... damage.", mouseX, mouseY)
 	}
 
-	private fun drawHideonleafHelperSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawHideonleafHelperSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Shulker Glow", workingCopy.shulkerGlowEnabled, mouseX, mouseY)
 		drawColorSetting(context, shulkerGlowColorBounds(menu), "Shulker Color", ConfigField.SHULKER_GLOW_COLOR, mouseX, mouseY)
 		drawColorSetting(context, projectileGlowColorBounds(menu), "Projectile Color", ConfigField.SHULKER_PROJECTILE_GLOW_COLOR, mouseX, mouseY)
@@ -938,7 +961,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawPurpleTerracottaSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawPurpleTerracottaSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawColorSetting(context, purpleTerracottaColorBounds(menu), "Outline Color", ConfigField.PURPLE_TERRACOTTA_HIGHLIGHT_COLOR, mouseX, mouseY)
 		drawInfoSetting(context, purpleTerracottaBlockIdBounds(menu), "Block ID", "minecraft:purple_terracotta", mouseX, mouseY)
 		if (colorPickerOpen) {
@@ -946,7 +969,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawWormholeFinderSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawWormholeFinderSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Departure Alert", workingCopy.wormholeDepartureAlertEnabled, mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Message", "Your Wormhole closed up...", mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Render", "Water-surface ring with tracer until arrival.", mouseX, mouseY)
@@ -954,13 +977,13 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, settingRowBounds(menu, 4, TEXT_INPUT_SETTING_HEIGHT), "Source", "SkyHanni wormhole graph positions", mouseX, mouseY)
 	}
 
-	private fun drawAutoSprintSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawAutoSprintSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Disable Fully Underwater", workingCopy.autoSprintDisableWhenFullySubmerged, mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Condition", "Feet and head must both be underwater.", mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Input", "Sprints while holding forward.", mouseX, mouseY)
 	}
 
-	private fun drawStatusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawStatusSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Check for Updates", workingCopy.checkForUpdatesEnabled, mouseX, mouseY)
 		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Auto-Update", workingCopy.autoUpdateEnabled, mouseX, mouseY)
 		drawButtonSetting(context, updateCheckNowBounds(menu), "Check Now", mouseX, mouseY)
@@ -968,13 +991,13 @@ class XclipsenConfigScreen(
 		drawButtonSetting(context, hudEditorBounds(menu), "Open HUD Editor", mouseX, mouseY)
 	}
 
-	private fun drawSilentDisconnectSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawSilentDisconnectSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "State", SilentDisconnectFeature.statusLine(workingCopy), mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Behavior", "Sets /status offline on disconnect and restores it on rejoin.", mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Scope", "Hypixel only", mouseX, mouseY)
 	}
 
-	private fun drawChimeraDropSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawChimeraDropSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Status", ChimeraBookDropEffectsFeature.statusLine(), mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Trigger", "RARE DROP! Enchanted Book (Chimera I)", mouseX, mouseY)
 		drawSoundSetting(context, chimeraDropSoundBounds(menu), "Sound", workingCopy.chimeraBookDropEffectsSoundId, mouseX, mouseY)
@@ -986,24 +1009,20 @@ class XclipsenConfigScreen(
 		drawButtonSetting(context, chimeraDropTestBounds(menu), "Test Effect", mouseX, mouseY)
 	}
 
-	private fun drawTimeChangerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawTimeChangerSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawOptionSetting(context, timeChangerModeBounds(menu), "Time", ClientTimeChanger.displayName(workingCopy.timeChangerMode), mouseX, mouseY)
 	}
 
-	private fun drawAuctionHouseSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawAuctionHouseSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, auctionHouseAutoCopyBounds(menu), "Auto Copy Underbid", workingCopy.auctionHouseAutoCopyUnderbidEnabled, mouseX, mouseY)
 		drawToggleSetting(context, highClassDiceTrackerBounds(menu), "High Class Dice Sell Tracker", workingCopy.highClassDiceTrackerEnabled, mouseX, mouseY)
 	}
 
-	private fun drawSlayerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawSlayerSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawDisclosureSetting(context, slayerBlazeHeaderBounds(menu), "Blaze", slayerBlazeExpanded, mouseX, mouseY)
 		if (slayerBlazeExpanded) {
 			drawToggleSetting(context, slayerBlazePhaseDisplayBounds(menu), "Phase Display", workingCopy.slayerBlazePhaseDisplayEnabled, mouseX, mouseY)
 			drawToggleSetting(context, slayerBlazeColoredMobsBounds(menu), "Colored Mobs", workingCopy.slayerBlazeColoredMobsEnabled, mouseX, mouseY)
-			drawToggleSetting(context, slayerBlazeAutoDaggerBounds(menu), "Auto Dagger", workingCopy.slayerBlazeAutoDaggerEnabled, mouseX, mouseY)
-			drawOptionSetting(context, slayerBlazeAutoDaggerDelayBounds(menu), "Delay", autoDaggerDelayDisplay(workingCopy.slayerBlazeAutoDaggerDelayMaxTicks), mouseX, mouseY)
-			drawToggleSetting(context, slayerBlazeAutoDaggerResetAfterBossBounds(menu), "Reset After Boss", workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled, mouseX, mouseY)
-			drawToggleSetting(context, slayerBlazeAutoDaggerDebugBounds(menu), "Debug", workingCopy.slayerBlazeAutoDaggerDebugEnabled, mouseX, mouseY)
 		}
 
 		drawDisclosureSetting(context, slayerMiscHeaderBounds(menu), "Misc", slayerMiscExpanded, mouseX, mouseY)
@@ -1025,12 +1044,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun autoDaggerDelayDisplay(maxTicks: Int): String {
-		val normalized = maxTicks.coerceIn(2, 5)
-		return if (normalized <= 2) "2 ticks" else "2-$normalized ticks"
-	}
-
-	private fun drawPestEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawPestEspSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, pestEspTracerBounds(menu), "Tracer Line", workingCopy.pestEspTracerEnabled, mouseX, mouseY)
 		drawColorSetting(context, pestEspColorBounds(menu), "Highlight Color", ConfigField.PEST_ESP_COLOR, mouseX, mouseY)
 		if (colorPickerOpen) {
@@ -1038,7 +1052,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawCorpseEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawCorpseEspSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, corpseEspLapisBounds(menu), "Lapis ESP", workingCopy.corpseEspLapisEnabled, mouseX, mouseY)
 		drawInfoSetting(context, corpseEspLapisColorBounds(menu), "Lapis Color", "#2563EB", mouseX, mouseY)
 		drawToggleSetting(context, corpseEspTungstenBounds(menu), "Tungsten ESP", workingCopy.corpseEspTungstenEnabled, mouseX, mouseY)
@@ -1049,7 +1063,7 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, corpseEspVanguardColorBounds(menu), "Vanguard Color", "#7DD3FC", mouseX, mouseY)
 	}
 
-	private fun drawMobModelSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawMobModelSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawMobModelSetting(context, mobModelEntityTypeBounds(menu), mouseX, mouseY)
 		if (mobModelDropdownOpen) {
 			drawMobModelDropdown(context, menu, mouseX, mouseY)
@@ -1065,19 +1079,19 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, mobModelStatusBounds(menu), "Status", mobModelStatusLine(), mouseX, mouseY)
 	}
 
-	private fun drawInventoryPreviewSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawInventoryPreviewSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, inventoryPreviewShowArmorBounds(menu), "Show Armor", workingCopy.inventoryPreviewShowArmor, mouseX, mouseY)
 		drawInfoSetting(context, inventoryPreviewHudInfoBounds(menu), "Move / Scale", "Use the HUD Editor in Status.", mouseX, mouseY)
 	}
 
-	private fun drawCrosshairSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawCrosshairSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, crosshairShowInFirstPersonBounds(menu), "Custom Crosshair", workingCopy.customCrosshairShowInFirstPerson, mouseX, mouseY)
 		drawToggleSetting(context, crosshairVisibleInF5Bounds(menu), "Visible In F5", workingCopy.customCrosshairVisibleInF5, mouseX, mouseY)
 		drawButtonSetting(context, crosshairResetBounds(menu), "Reset Grid", mouseX, mouseY)
 		drawCrosshairGridSetting(context, crosshairGridBounds(menu), mouseX, mouseY)
 	}
 
-	private fun drawM5Settings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawM5Settings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, m5LividFinderBounds(menu), "Livid Finder", workingCopy.m5LividFinderEnabled, mouseX, mouseY)
 		drawToggleSetting(context, m5TracerBounds(menu), "Tracer", workingCopy.m5TracerEnabled, mouseX, mouseY)
 		drawToggleSetting(context, m5IceSprayBounds(menu), "Ice Spray Timer", workingCopy.m5IceSprayTimerEnabled, mouseX, mouseY)
@@ -1085,7 +1099,7 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, m5StatusBounds(menu), "Current State", M5Feature.statusLine(), mouseX, mouseY)
 	}
 
-	private fun drawDungeonAutoKickSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawDungeonAutoKickSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, dungeonAutoKickStatsDisplayBounds(menu), "Stats Display", workingCopy.dungeonAutoKickStatsDisplayEnabled, mouseX, mouseY)
 		drawToggleSetting(context, dungeonAutoKickKickLineBounds(menu), "Send Kick Line", workingCopy.dungeonAutoKickSendKickLineEnabled, mouseX, mouseY)
 		drawToggleSetting(context, dungeonAutoKickAutoKickBounds(menu), "Auto Kick", workingCopy.dungeonAutoKickAutoKickEnabled, mouseX, mouseY)
@@ -1107,7 +1121,7 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, dungeonAutoKickStatusBounds(menu), "Current State", DungeonAutoKickFeature.statusLine(), mouseX, mouseY)
 	}
 
-	private fun drawPickaxeCooldownSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawPickaxeCooldownSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, pickaxeShowReadyBounds(menu), "Show When Ready", workingCopy.pickaxeAbilityCooldownShowReady, mouseX, mouseY)
 		drawOptionSetting(context, pickaxeAlertDisclosureBounds(menu), "Alert", if (pickaxeAlertExpanded) "Expanded" else "Collapsed", mouseX, mouseY)
 		if (pickaxeAlertExpanded) {
@@ -1124,7 +1138,7 @@ class XclipsenConfigScreen(
 		drawInfoSetting(context, pickaxeCurrentStateBounds(menu), "Current State", PickaxeAbilityCooldownFeature.statusLine(), mouseX, mouseY)
 	}
 
-	private fun drawFireFreezeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawFireFreezeSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, fireFreezeMobTimerBounds(menu), "Mob Timer", workingCopy.fireFreezeMobTimerEnabled, mouseX, mouseY)
 		drawToggleSetting(context, fireFreezeFreezeTimerBounds(menu), "Freeze Timer", workingCopy.fireFreezeFreezeTimerEnabled, mouseX, mouseY)
 		drawToggleSetting(context, fireFreezeStrongMobsOnlyBounds(menu), "Strong Mobs Only", workingCopy.fireFreezeStrongMobsOnly, mouseX, mouseY)
@@ -1145,20 +1159,20 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawMineshaftAutoWarpSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawMineshaftAutoWarpSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawTextInputSetting(context, mineshaftAutoWarpRuleBounds(menu), "Corpse Rule", mineshaftAutoWarpRuleField, mouseX, mouseY)
 		drawTextInputSetting(context, mineshaftAutoWarpDelayBounds(menu), "Warp Delay (ms)", mineshaftAutoWarpDelayField, mouseX, mouseY)
 		drawTextInputSetting(context, mineshaftAutoWarpWindowBounds(menu), "Warp Window (ms)", mineshaftAutoWarpWindowField, mouseX, mouseY)
 		drawInfoSetting(context, mineshaftAutoWarpStatusBounds(menu), "Current State", MineshaftAutoWarpFeature.statusLine(), mouseX, mouseY)
 	}
 
-	private fun drawDeploybleSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawDeploybleSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Alert", "Shows a HUD alert and sound at 10 seconds.", mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 1, TEXT_INPUT_SETTING_HEIGHT), "Types", "Totem, Black Hole, Umberella, Flare, Lantern", mouseX, mouseY)
 		drawInfoSetting(context, settingRowBounds(menu, 2, TEXT_INPUT_SETTING_HEIGHT), "Status", DeploybleFeature.statusLine(), mouseX, mouseY)
 	}
 
-	private fun drawExperimentationSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawExperimentationSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, autoExperimentsAutoPairsBounds(menu), "Keep Items Visible", workingCopy.autoExperimentsAutoPairs, mouseX, mouseY)
 		drawToggleSetting(context, autoExperimentsAutoCloseBounds(menu), "Auto Close", workingCopy.autoExperimentsAutoClose, mouseX, mouseY)
 		drawToggleSetting(context, autoExperimentsGetMaxXpBounds(menu), "Get Max XP", workingCopy.autoExperimentsGetMaxXp, mouseX, mouseY)
@@ -1167,7 +1181,7 @@ class XclipsenConfigScreen(
 		drawTextInputSetting(context, autoExperimentsSerumCountBounds(menu), "Serum Count", autoExperimentsSerumCountField, mouseX, mouseY)
 	}
 
-	private fun drawAutoCroesusSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawAutoCroesusSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, autoCroesusEnabledBounds(menu), "AutoCroesus Enabled", workingCopy.autoCroesusModuleEnabled, mouseX, mouseY)
 		drawToggleSetting(context, autoCroesusNoClickBounds(menu), "No Click", workingAutoCroesusConfig.noClick, mouseX, mouseY)
 		drawToggleSetting(context, autoCroesusUseKismetsBounds(menu), "Use Kismets", workingAutoCroesusConfig.useKismets, mouseX, mouseY)
@@ -1178,21 +1192,21 @@ class XclipsenConfigScreen(
 		drawTextInputSetting(context, autoCroesusClickDelayBounds(menu), "Click Delay (ms)", autoCroesusClickDelayField, mouseX, mouseY)
 	}
 
-	private fun drawDoorSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawDoorSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Mort Door Barrier", workingCopy.dungeonDoorEnabled, mouseX, mouseY)
 		drawToggleSetting(context, settingRowBounds(menu, 1, SETTING_HEIGHT), "Debug", workingCopy.dungeonDoorDebugEnabled, mouseX, mouseY)
 		drawOptionSetting(context, settingRowBounds(menu, 2, SETTING_HEIGHT), "Mode", MortDoorBarrierFeature.displayName(workingCopy.dungeonDoorMode), mouseX, mouseY)
 	}
 
-	private fun drawRedVignetteSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawRedVignetteSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, settingRowBounds(menu, 0, SETTING_HEIGHT), "Fix Red Vignette", workingCopy.dungeonRedVignetteEnabled, mouseX, mouseY)
 	}
 
 	private fun drawTextInputSetting(
-		context: DrawContext,
+		context: GuiGraphics,
 		row: Bounds,
 		label: String,
-		field: TextFieldWidget,
+		field: EditBox,
 		mouseX: Int,
 		mouseY: Int,
 	) {
@@ -1210,18 +1224,18 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawTextInputSetting(
-		context: DrawContext,
+		context: GuiGraphics,
 		menu: Bounds,
 		rowIndex: Int,
 		label: String,
-		field: TextFieldWidget,
+		field: EditBox,
 		mouseX: Int,
 		mouseY: Int,
 	) {
 		drawTextInputSetting(context, settingRowBounds(menu, rowIndex, TEXT_INPUT_SETTING_HEIGHT), label, field, mouseX, mouseY)
 	}
 
-	private fun drawToggleSetting(context: DrawContext, row: Bounds, label: String, enabled: Boolean, mouseX: Int, mouseY: Int) {
+	private fun drawToggleSetting(context: GuiGraphics, row: Bounds, label: String, enabled: Boolean, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
 		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 6, TEXT_WHITE)
@@ -1237,7 +1251,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawSliderSetting(
-		context: DrawContext,
+		context: GuiGraphics,
 		row: Bounds,
 		label: String,
 		value: Float,
@@ -1262,7 +1276,7 @@ class XclipsenConfigScreen(
 	}
 
 	private fun drawIntSliderSetting(
-		context: DrawContext,
+		context: GuiGraphics,
 		row: Bounds,
 		label: String,
 		value: Int,
@@ -1286,7 +1300,7 @@ class XclipsenConfigScreen(
 		context.fill(fillRight - 2, barY - 2, fillRight + 2, barY + 5, TEXT_WHITE)
 	}
 
-	private fun drawSoundSetting(context: DrawContext, row: Bounds, label: String, soundId: String, mouseX: Int, mouseY: Int) {
+	private fun drawSoundSetting(context: GuiGraphics, row: Bounds, label: String, soundId: String, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered || soundDropdownOpen)
 		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
@@ -1296,7 +1310,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawSoundDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawSoundDropdown(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		val searchField = activeSoundSearchField()
 		val selectedSoundId = activeSelectedSoundId()
 		val search = soundSearchBounds(menu)
@@ -1323,7 +1337,7 @@ class XclipsenConfigScreen(
 		context.disableScissor()
 	}
 
-	private fun drawMobModelSetting(context: DrawContext, row: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawMobModelSetting(context: GuiGraphics, row: Bounds, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered || mobModelDropdownOpen)
 		context.drawTextWithShadow(textRenderer, "Mob Model", row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
@@ -1339,7 +1353,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawMobModelDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawMobModelDropdown(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		val search = mobModelSearchBounds(menu)
 		val list = mobModelListBounds(menu)
 		context.fill(search.left - 4, search.top - 4, search.right + 4, list.bottom + 4, INPUT_BACKGROUND)
@@ -1364,7 +1378,7 @@ class XclipsenConfigScreen(
 		context.disableScissor()
 	}
 
-	private fun drawMobModelVariantSetting(context: DrawContext, row: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawMobModelVariantSetting(context: GuiGraphics, row: Bounds, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered || mobModelVariantDropdownOpen)
 		context.drawTextWithShadow(textRenderer, "Variant", row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
@@ -1381,7 +1395,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawMobModelVariantDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawMobModelVariantDropdown(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		val search = mobModelVariantSearchBounds(menu)
 		val list = mobModelVariantListBounds(menu)
 		context.fill(search.left - 4, search.top - 4, search.right + 4, list.bottom + 4, INPUT_BACKGROUND)
@@ -1411,7 +1425,7 @@ class XclipsenConfigScreen(
 		context.disableScissor()
 	}
 
-	private fun drawDungeonAutoKickFloorDropdown(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawDungeonAutoKickFloorDropdown(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		val list = dungeonAutoKickFloorListBounds(menu)
 		context.fill(list.left - 4, list.top - 4, list.right + 4, list.bottom + 4, INPUT_BACKGROUND)
 		val maxScroll = (DUNGEON_AUTOKICK_FLOOR_OPTIONS.size - DUNGEON_AUTOKICK_FLOOR_VISIBLE_ROWS).coerceAtLeast(0)
@@ -1435,7 +1449,7 @@ class XclipsenConfigScreen(
 		context.disableScissor()
 	}
 
-	private fun drawButtonSetting(context: DrawContext, row: Bounds, label: String, mouseX: Int, mouseY: Int) {
+	private fun drawButtonSetting(context: GuiGraphics, row: Bounds, label: String, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
 		if (hovered) {
@@ -1443,13 +1457,13 @@ class XclipsenConfigScreen(
 		}
 		context.drawCenteredTextWithShadow(textRenderer, label, (row.left + row.right) / 2, row.top + 6, TEXT_WHITE)
 		if (hovered) {
-			val lineWidth = textRenderer.getWidth(label) + 10
+			val lineWidth = textRenderer.width(label) + 10
 			val lineLeft = ((row.left + row.right) / 2) - (lineWidth / 2)
 			context.fill(lineLeft, row.top + 16, lineLeft + lineWidth, row.top + 17, ACCENT)
 		}
 	}
 
-	private fun drawDisclosureSetting(context: DrawContext, row: Bounds, label: String, expanded: Boolean, mouseX: Int, mouseY: Int) {
+	private fun drawDisclosureSetting(context: GuiGraphics, row: Bounds, label: String, expanded: Boolean, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
 		context.fill(row.left, row.top, row.left + 3, row.bottom, ACCENT)
@@ -1458,14 +1472,14 @@ class XclipsenConfigScreen(
 		context.drawTextWithShadow(textRenderer, label, row.left + 24 + if (hovered) 2 else 0, row.top + 6, TEXT_WHITE)
 	}
 
-	private fun drawInfoSetting(context: DrawContext, row: Bounds, label: String, value: String, mouseX: Int, mouseY: Int) {
+	private fun drawInfoSetting(context: GuiGraphics, row: Bounds, label: String, value: String, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
 		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
 		context.drawTextWithShadow(textRenderer, trimToWidth(value, TEXT_INPUT_WIDTH), row.left + 8, row.top + 20, TEXT_MUTED)
 	}
 
-	private fun drawCrosshairGridSetting(context: DrawContext, row: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawCrosshairGridSetting(context: GuiGraphics, row: Bounds, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
 		context.drawTextWithShadow(textRenderer, "Crosshair Grid", row.left + 8 + if (hovered) 2 else 0, row.top + 4, TEXT_WHITE)
@@ -1492,7 +1506,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawOptionSetting(context: DrawContext, row: Bounds, label: String, value: String, mouseX: Int, mouseY: Int) {
+	private fun drawOptionSetting(context: GuiGraphics, row: Bounds, label: String, value: String, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		drawSettingBackground(context, row, hovered)
 		context.drawTextWithShadow(textRenderer, label, row.left + 8 + if (hovered) 2 else 0, row.top + 6, TEXT_WHITE)
@@ -1502,7 +1516,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawColorSetting(context: DrawContext, row: Bounds, label: String, field: ConfigField, mouseX: Int, mouseY: Int) {
+	private fun drawColorSetting(context: GuiGraphics, row: Bounds, label: String, field: ConfigField, mouseX: Int, mouseY: Int) {
 		val hovered = row.contains(mouseX, mouseY)
 		val active = openColorField == field
 		drawSettingBackground(context, row, hovered || active)
@@ -1513,7 +1527,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun colorFieldWidget(field: ConfigField): TextFieldWidget {
+	private fun colorFieldWidget(field: ConfigField): EditBox {
 		return when (field) {
 			ConfigField.SHULKER_GLOW_COLOR -> shulkerGlowColorHexField
 			ConfigField.SHULKER_PROJECTILE_GLOW_COLOR -> shulkerProjectileGlowColorHexField
@@ -1525,7 +1539,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawColorPreview(context: DrawContext, row: Bounds, hex: String) {
+	private fun drawColorPreview(context: GuiGraphics, row: Bounds, hex: String) {
 		val color = normalizedHexColor(hex)?.removePrefix("#")?.toInt(16) ?: return
 		val swatchRight = row.right - 10
 		val swatchLeft = swatchRight - 14
@@ -1534,7 +1548,7 @@ class XclipsenConfigScreen(
 		context.fill(swatchLeft, swatchTop, swatchRight, swatchTop + 14, 0xFF000000.toInt() or color)
 	}
 
-	private fun drawColorPicker(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+	private fun drawColorPicker(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		val field = openColorField ?: return
 		val widget = colorFieldWidget(field)
 		val currentColor = normalizedHexColor(widget.text)?.removePrefix("#")?.toInt(16) ?: DEFAULT_GLOW_COLOR
@@ -1561,7 +1575,7 @@ class XclipsenConfigScreen(
 		context.drawTextWithShadow(textRenderer, "Hex: ${normalizedHexColor(widget.text) ?: "#36C5F0"}", menu.left + 18, colorHexY(menu), TEXT_WHITE)
 	}
 
-	private fun drawSaturationBrightnessBox(context: DrawContext, bounds: Bounds, hue: Float) {
+	private fun drawSaturationBrightnessBox(context: GuiGraphics, bounds: Bounds, hue: Float) {
 		val baseColor = Color.HSBtoRGB(hue, 1f, 1f) and 0xFFFFFF
 		val width = bounds.width().coerceAtLeast(1)
 		val height = bounds.height().coerceAtLeast(1)
@@ -1588,7 +1602,7 @@ class XclipsenConfigScreen(
 		context.fill(bounds.right - 14, bounds.top + 4, bounds.right - 4, bounds.top + 14, 0xFF000000.toInt() or baseColor)
 	}
 
-	private fun drawHueBar(context: DrawContext, bounds: Bounds) {
+	private fun drawHueBar(context: GuiGraphics, bounds: Bounds) {
 		val height = bounds.height().coerceAtLeast(1)
 		for (yOffset in 0 until height step COLOR_PICKER_STEP) {
 			val hue = yOffset.toFloat() / (height - 1).coerceAtLeast(1)
@@ -1603,7 +1617,7 @@ class XclipsenConfigScreen(
 		}
 	}
 
-	private fun drawPickerCursor(context: DrawContext, centerX: Int, centerY: Int, radius: Int) {
+	private fun drawPickerCursor(context: GuiGraphics, centerX: Int, centerY: Int, radius: Int) {
 		context.fill(centerX - radius, centerY - radius, centerX + radius + 1, centerY - radius + 1, TEXT_WHITE)
 		context.fill(centerX - radius, centerY + radius, centerX + radius + 1, centerY + radius + 1, TEXT_WHITE)
 		context.fill(centerX - radius, centerY - radius, centerX - radius + 1, centerY + radius + 1, TEXT_WHITE)
@@ -1611,19 +1625,19 @@ class XclipsenConfigScreen(
 		context.fill(centerX - 1, centerY - 1, centerX + 2, centerY + 2, 0xFF202020.toInt())
 	}
 
-	private fun drawSettingBackground(context: DrawContext, row: Bounds, hovered: Boolean) {
+	private fun drawSettingBackground(context: GuiGraphics, row: Bounds, hovered: Boolean) {
 		context.fill(row.left, row.top, row.right, row.bottom, SETTING_BACKGROUND)
 		if (hovered) {
 			context.fill(row.left, row.top + 3, row.left + 2, row.bottom - 3, ACCENT)
 		}
 	}
 
-	private fun drawTooltip(context: DrawContext, mouseX: Int, mouseY: Int) {
+	private fun drawTooltip(context: GuiGraphics, mouseX: Int, mouseY: Int) {
 		if (openedSection != null) {
 			return
 		}
 		val section = sectionAt(mouseX, mouseY) ?: return
-		context.drawTooltip(textRenderer, Text.literal(section.description), mouseX, mouseY)
+		context.drawTooltip(textRenderer, Component.literal(section.description), mouseX, mouseY)
 	}
 
 	private fun sectionAt(mouseX: Int, mouseY: Int): ConfigSection? {
@@ -1831,11 +1845,11 @@ class XclipsenConfigScreen(
 				readWorkingCopyFromFields(updateStatus = false)
 				if (!awaitingHideonleafResetConfirmation) {
 					awaitingHideonleafResetConfirmation = true
-					statusMessage = Text.literal("Click again to reset Hideonleaf total data.")
+					statusMessage = Component.literal("Click again to reset Hideonleaf total data.")
 				} else {
 					awaitingHideonleafResetConfirmation = false
 					HideonleafShardTracker.resetTotal()
-					statusMessage = Text.literal("Hideonleaf total data reset.")
+					statusMessage = Component.literal("Hideonleaf total data reset.")
 				}
 				return true
 			}
@@ -1952,31 +1966,6 @@ class XclipsenConfigScreen(
 			if (slayerBlazeExpanded && slayerBlazeColoredMobsBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				workingCopy.slayerBlazeColoredMobsEnabled = !workingCopy.slayerBlazeColoredMobsEnabled
-				return true
-			}
-
-			if (slayerBlazeExpanded && slayerBlazeAutoDaggerBounds(menu).contains(mouseX, mouseY)) {
-				readWorkingCopyFromFields(updateStatus = false)
-				workingCopy.slayerBlazeAutoDaggerEnabled = !workingCopy.slayerBlazeAutoDaggerEnabled
-				return true
-			}
-
-			if (slayerBlazeExpanded && slayerBlazeAutoDaggerDelayBounds(menu).contains(mouseX, mouseY)) {
-				readWorkingCopyFromFields(updateStatus = false)
-				workingCopy.slayerBlazeAutoDaggerDelayMaxTicks =
-					if (workingCopy.slayerBlazeAutoDaggerDelayMaxTicks >= 5) 2 else workingCopy.slayerBlazeAutoDaggerDelayMaxTicks + 1
-				return true
-			}
-
-			if (slayerBlazeExpanded && slayerBlazeAutoDaggerResetAfterBossBounds(menu).contains(mouseX, mouseY)) {
-				readWorkingCopyFromFields(updateStatus = false)
-				workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled = !workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled
-				return true
-			}
-
-			if (slayerBlazeExpanded && slayerBlazeAutoDaggerDebugBounds(menu).contains(mouseX, mouseY)) {
-				readWorkingCopyFromFields(updateStatus = false)
-				workingCopy.slayerBlazeAutoDaggerDebugEnabled = !workingCopy.slayerBlazeAutoDaggerDebugEnabled
 				return true
 			}
 
@@ -2198,7 +2187,7 @@ class XclipsenConfigScreen(
 			readWorkingCopyFromFields(updateStatus = false)
 			val options = mobModelVariantOptions()
 			if (options.isEmpty()) {
-				statusMessage = Text.literal("This mob has no configurable variants.")
+				statusMessage = Component.literal("This mob has no configurable variants.")
 				return true
 			}
 			soundDropdownOpen = false
@@ -2324,7 +2313,7 @@ class XclipsenConfigScreen(
 				partyFinderRightClickBounds(menu).contains(mouseX, mouseY) -> workingCopy.partyFinderRightClickEnabled = !workingCopy.partyFinderRightClickEnabled
 				dungeonAutoKickClearCacheBounds(menu).contains(mouseX, mouseY) -> {
 					DungeonAutoKickFeature.clearKickCache()
-					statusMessage = Text.literal("Dungeon AutoKick cache cleared.")
+					statusMessage = Component.literal("Dungeon AutoKick cache cleared.")
 				}
 				else -> return false
 			}
@@ -2441,9 +2430,9 @@ class XclipsenConfigScreen(
 			if (chimeraDropTestBounds(menu).contains(mouseX, mouseY)) {
 				readWorkingCopyFromFields(updateStatus = false)
 				statusMessage = if (ChimeraBookDropEffectsFeature.runTest(workingCopy)) {
-					Text.literal("Triggered Chimera book effect test.")
+					Component.literal("Triggered Chimera book effect test.")
 				} else {
-					Text.literal("Module is disabled.")
+					Component.literal("Module is disabled.")
 				}
 				return true
 			}
@@ -3476,24 +3465,8 @@ class XclipsenConfigScreen(
 		return slayerRowAfter(slayerBlazePhaseDisplayBounds(menu), SETTING_HEIGHT)
 	}
 
-	private fun slayerBlazeAutoDaggerBounds(menu: Bounds): Bounds {
-		return slayerRowAfter(slayerBlazeColoredMobsBounds(menu), SETTING_HEIGHT)
-	}
-
-	private fun slayerBlazeAutoDaggerDelayBounds(menu: Bounds): Bounds {
-		return slayerRowAfter(slayerBlazeAutoDaggerBounds(menu), SETTING_HEIGHT)
-	}
-
-	private fun slayerBlazeAutoDaggerResetAfterBossBounds(menu: Bounds): Bounds {
-		return slayerRowAfter(slayerBlazeAutoDaggerDelayBounds(menu), SETTING_HEIGHT)
-	}
-
-	private fun slayerBlazeAutoDaggerDebugBounds(menu: Bounds): Bounds {
-		return slayerRowAfter(slayerBlazeAutoDaggerResetAfterBossBounds(menu), SETTING_HEIGHT)
-	}
-
 	private fun slayerMiscHeaderBounds(menu: Bounds): Bounds {
-		val previous = if (slayerBlazeExpanded) slayerBlazeAutoDaggerDebugBounds(menu) else slayerBlazeHeaderBounds(menu)
+		val previous = if (slayerBlazeExpanded) slayerBlazeColoredMobsBounds(menu) else slayerBlazeHeaderBounds(menu)
 		return slayerRowAfter(previous, SETTING_HEIGHT)
 	}
 
@@ -3607,18 +3580,18 @@ class XclipsenConfigScreen(
 	}
 
 	private fun trimToWidth(value: String, maxWidth: Int): String {
-		if (textRenderer.getWidth(value) <= maxWidth) {
+		if (textRenderer.width(value) <= maxWidth) {
 			return value
 		}
 
 		var trimmed = value
-		while (trimmed.length > 3 && textRenderer.getWidth("$trimmed...") > maxWidth) {
+		while (trimmed.length > 3 && textRenderer.width("$trimmed...") > maxWidth) {
 			trimmed = trimmed.dropLast(1)
 		}
 		return "$trimmed..."
 	}
 
-	private fun activeSoundSearchField(): TextFieldWidget {
+	private fun activeSoundSearchField(): EditBox {
 		return when (openedSection) {
 			ConfigSection.PICKAXE_COOLDOWN -> pickaxeAlertSoundSearchField
 			ConfigSection.CHIMERA_DROP -> chimeraDropSoundSearchField
@@ -3656,10 +3629,10 @@ class XclipsenConfigScreen(
 			}
 	}
 
-	private fun setVisible(widget: TextFieldWidget, visible: Boolean) {
+	private fun setVisible(widget: EditBox, visible: Boolean) {
 		widget.visible = visible
 		widget.setEditable(visible)
-		widget.setFocusUnlocked(visible)
+		widget.setCanLoseFocus(visible)
 		if (!visible) {
 			widget.setFocused(false)
 		}

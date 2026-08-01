@@ -1,11 +1,11 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.text.Text
+import net.minecraft.network.chat.Component
 
 object ChatFeature {
 	private val implosionMessagePattern = Regex("^Your Implosion hit \\d+ (?:enemy|enemies) for [\\d,.]+ damage\\.$")
 
-	fun shouldSuppressMessage(message: Text?): Boolean {
+	fun shouldSuppressMessage(message: Component?): Boolean {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return false
 		if (!config.chatModuleEnabled || !config.chatImplosionHiderEnabled) {
 			return false

@@ -182,10 +182,6 @@ class BridgeConfig {
 	@JvmField var slayerSpawnAnnouncerEnabled: Boolean = true
 	@JvmField var slayerBlazePhaseDisplayEnabled: Boolean = true
 	@JvmField var slayerBlazeColoredMobsEnabled: Boolean = false
-	@JvmField var slayerBlazeAutoDaggerEnabled: Boolean = false
-	@JvmField var slayerBlazeAutoDaggerDelayMaxTicks: Int = 2
-	@JvmField var slayerBlazeAutoDaggerResetAfterBossEnabled: Boolean = false
-	@JvmField var slayerBlazeAutoDaggerDebugEnabled: Boolean = false
 	@JvmField var slayerRngMeterDisplayEnabled: Boolean = true
 	@JvmField var slayerRngMeterOptimalRemovalEnabled: Boolean = true
 	@JvmField var slayerRngMeterCompactMode: Boolean = false
@@ -340,10 +336,6 @@ class BridgeConfig {
 		it.slayerSpawnAnnouncerEnabled = slayerSpawnAnnouncerEnabled
 		it.slayerBlazePhaseDisplayEnabled = slayerBlazePhaseDisplayEnabled
 		it.slayerBlazeColoredMobsEnabled = slayerBlazeColoredMobsEnabled
-		it.slayerBlazeAutoDaggerEnabled = slayerBlazeAutoDaggerEnabled
-		it.slayerBlazeAutoDaggerDelayMaxTicks = slayerBlazeAutoDaggerDelayMaxTicks
-		it.slayerBlazeAutoDaggerResetAfterBossEnabled = slayerBlazeAutoDaggerResetAfterBossEnabled
-		it.slayerBlazeAutoDaggerDebugEnabled = slayerBlazeAutoDaggerDebugEnabled
 		it.slayerRngMeterDisplayEnabled = slayerRngMeterDisplayEnabled
 		it.slayerRngMeterOptimalRemovalEnabled = slayerRngMeterOptimalRemovalEnabled
 		it.slayerRngMeterCompactMode = slayerRngMeterCompactMode

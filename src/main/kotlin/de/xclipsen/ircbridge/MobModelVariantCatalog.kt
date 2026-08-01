@@ -4,26 +4,26 @@ import de.xclipsen.ircbridge.mixin.EntityComponentInvoker
 import de.xclipsen.ircbridge.mixin.FoxEntityInvoker
 import de.xclipsen.ircbridge.mixin.HorseEntityInvoker
 import de.xclipsen.ircbridge.mixin.MooshroomEntityInvoker
-import net.minecraft.component.ComponentType
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.entity.LivingEntity
-import net.minecraft.entity.passive.AxolotlEntity
-import net.minecraft.entity.passive.FoxEntity
-import net.minecraft.entity.passive.HorseColor
-import net.minecraft.entity.passive.HorseEntity
-import net.minecraft.entity.passive.HorseMarking
-import net.minecraft.entity.passive.LlamaEntity
-import net.minecraft.entity.passive.MooshroomEntity
-import net.minecraft.entity.passive.PandaEntity
-import net.minecraft.entity.passive.ParrotEntity
-import net.minecraft.entity.passive.RabbitEntity
-import net.minecraft.entity.passive.TropicalFishEntity
-import net.minecraft.registry.Registry
-import net.minecraft.registry.RegistryKey
-import net.minecraft.registry.RegistryKeys
-import net.minecraft.registry.entry.RegistryEntry
-import net.minecraft.util.DyeColor
-import net.minecraft.util.Identifier
+import net.minecraft.core.component.DataComponentType
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.animal.axolotl.Axolotl
+import net.minecraft.world.entity.animal.fox.Fox
+import net.minecraft.world.entity.animal.equine.Variant
+import net.minecraft.world.entity.animal.equine.Horse
+import net.minecraft.world.entity.animal.equine.Markings
+import net.minecraft.world.entity.animal.equine.Llama
+import net.minecraft.world.entity.animal.cow.MushroomCow
+import net.minecraft.world.entity.animal.panda.Panda
+import net.minecraft.world.entity.animal.parrot.Parrot
+import net.minecraft.world.entity.animal.rabbit.Rabbit
+import net.minecraft.world.entity.animal.fish.TropicalFish
+import net.minecraft.core.Registry
+import net.minecraft.resources.ResourceKey
+import net.minecraft.core.registries.Registries
+import net.minecraft.core.Holder
+import net.minecraft.world.item.DyeColor
+import net.minecraft.resources.Identifier
 import org.slf4j.LoggerFactory
 import java.util.Locale
 
@@ -31,60 +31,60 @@ object MobModelVariantCatalog {
 	private val LOGGER = LoggerFactory.getLogger("xclipsen_mob_model_variants")
 	const val DEFAULT_OPTION = "default"
 
-	private val dyeColors: Map<String, DyeColor> = enumValues<DyeColor>().associateBy { it.asString() }
-	private val horseColors: Map<String, HorseColor> = enumValues<HorseColor>().associateBy { it.asString() }
-	private val horseMarkings: Map<String, HorseMarking> = enumValues<HorseMarking>().associateBy { it.name.lowercase(Locale.ROOT) }
-	private val axolotlVariants: Map<String, AxolotlEntity.Variant> = enumValues<AxolotlEntity.Variant>().associateBy { it.asString() }
-	private val foxVariants: Map<String, FoxEntity.Variant> = enumValues<FoxEntity.Variant>().associateBy { it.asString() }
-	private val llamaVariants: Map<String, LlamaEntity.Variant> = enumValues<LlamaEntity.Variant>().associateBy { it.asString() }
-	private val rabbitVariants: Map<String, RabbitEntity.Variant> = enumValues<RabbitEntity.Variant>().associateBy { it.asString() }
-	private val parrotVariants: Map<String, ParrotEntity.Variant> = enumValues<ParrotEntity.Variant>().associateBy { it.asString() }
-	private val mooshroomVariants: Map<String, MooshroomEntity.Variant> = enumValues<MooshroomEntity.Variant>().associateBy { it.asString() }
-	private val pandaGenes: Map<String, PandaEntity.Gene> = enumValues<PandaEntity.Gene>().associateBy { it.asString() }
-	private val tropicalFishPatterns: Map<String, TropicalFishEntity.Pattern> = enumValues<TropicalFishEntity.Pattern>().associateBy { it.asString() }
+	private val dyeColors: Map<String, DyeColor> = enumValues<DyeColor>().associateBy { it.serializedName }
+	private val horseColors: Map<String, Variant> = enumValues<Variant>().associateBy { it.serializedName }
+	private val horseMarkings: Map<String, Markings> = enumValues<Markings>().associateBy { it.name.lowercase(Locale.ROOT) }
+	private val axolotlVariants: Map<String, Axolotl.Variant> = enumValues<Axolotl.Variant>().associateBy { it.serializedName }
+	private val foxVariants: Map<String, Fox.Variant> = enumValues<Fox.Variant>().associateBy { it.serializedName }
+	private val llamaVariants: Map<String, Llama.Variant> = enumValues<Llama.Variant>().associateBy { it.serializedName }
+	private val rabbitVariants: Map<String, Rabbit.Variant> = enumValues<Rabbit.Variant>().associateBy { it.serializedName }
+	private val parrotVariants: Map<String, Parrot.Variant> = enumValues<Parrot.Variant>().associateBy { it.serializedName }
+	private val mooshroomVariants: Map<String, MushroomCow.Variant> = enumValues<MushroomCow.Variant>().associateBy { it.serializedName }
+	private val pandaGenes: Map<String, Panda.Gene> = enumValues<Panda.Gene>().associateBy { it.serializedName }
+	private val tropicalFishPatterns: Map<String, TropicalFish.Pattern> = enumValues<TropicalFish.Pattern>().associateBy { it.serializedName }
 
 	private val handlers: Map<String, VariantHandler> = linkedMapOf(
 		"minecraft:cat" to registryEntryHandler(
 			ids = listOf("tabby", "black", "red", "siamese", "british_shorthair", "calico", "persian", "ragdoll", "white", "jellie", "all_black"),
-			lookup = { entity, variantId -> registryEntry(entity, RegistryKeys.CAT_VARIANT, variantId) },
-			apply = { entity, entry -> applyComponent(entity, DataComponentTypes.CAT_VARIANT, entry) },
+			lookup = { entity, variantId -> registryEntry(entity, Registries.CAT_VARIANT, variantId) },
+			apply = { entity, entry -> applyComponent(entity, DataComponents.CAT_VARIANT, entry) },
 		),
 		"minecraft:frog" to registryEntryHandler(
 			ids = listOf("temperate", "warm", "cold"),
-			lookup = { entity, variantId -> registryEntry(entity, RegistryKeys.FROG_VARIANT, variantId) },
-			apply = { entity, entry -> applyComponent(entity, DataComponentTypes.FROG_VARIANT, entry) },
+			lookup = { entity, variantId -> registryEntry(entity, Registries.FROG_VARIANT, variantId) },
+			apply = { entity, entry -> applyComponent(entity, DataComponents.FROG_VARIANT, entry) },
 		),
 		"minecraft:wolf" to registryEntryHandler(
 			ids = listOf("pale", "spotted", "snowy", "black", "ashen", "rusty", "woods", "chestnut", "striped"),
-			lookup = { entity, variantId -> registryEntry(entity, RegistryKeys.WOLF_VARIANT, variantId) },
-			apply = { entity, entry -> applyComponent(entity, DataComponentTypes.WOLF_VARIANT, entry) },
+			lookup = { entity, variantId -> registryEntry(entity, Registries.WOLF_VARIANT, variantId) },
+			apply = { entity, entry -> applyComponent(entity, DataComponents.WOLF_VARIANT, entry) },
 		),
 		"minecraft:axolotl" to enumHandler(axolotlVariants) { entity, variant ->
-			applyComponent(entity, DataComponentTypes.AXOLOTL_VARIANT, variant)
+			applyComponent(entity, DataComponents.AXOLOTL_VARIANT, variant)
 		},
 		"minecraft:fox" to enumHandler(foxVariants) { entity, variant ->
 			(entity as FoxEntityInvoker).`xclipsen$setVariant`(variant)
 		},
 		"minecraft:llama" to enumHandler(llamaVariants) { entity, variant ->
-			applyComponent(entity, DataComponentTypes.LLAMA_VARIANT, variant)
+			applyComponent(entity, DataComponents.LLAMA_VARIANT, variant)
 		},
 		"minecraft:rabbit" to enumHandler(rabbitVariants) { entity, variant ->
-			applyComponent(entity, DataComponentTypes.RABBIT_VARIANT, variant)
+			applyComponent(entity, DataComponents.RABBIT_VARIANT, variant)
 		},
 		"minecraft:parrot" to enumHandler(parrotVariants) { entity, variant ->
-			applyComponent(entity, DataComponentTypes.PARROT_VARIANT, variant)
+			applyComponent(entity, DataComponents.PARROT_VARIANT, variant)
 		},
 		"minecraft:mooshroom" to enumHandler(mooshroomVariants) { entity, variant ->
 			(entity as MooshroomEntityInvoker).`xclipsen$setVariant`(variant)
 		},
 		"minecraft:sheep" to enumHandler(dyeColors) { entity, variant ->
-			applyComponent(entity, DataComponentTypes.SHEEP_COLOR, variant)
+			applyComponent(entity, DataComponents.SHEEP_COLOR, variant)
 		},
 		"minecraft:shulker" to enumHandler(dyeColors) { entity, variant ->
-			applyComponent(entity, DataComponentTypes.SHULKER_COLOR, variant)
+			applyComponent(entity, DataComponents.SHULKER_COLOR, variant)
 		},
 		"minecraft:panda" to enumHandler(pandaGenes) { entity, variant ->
-			val panda = entity as PandaEntity
+			val panda = entity as Panda
 			panda.setMainGene(variant)
 			panda.setHiddenGene(variant)
 		},
@@ -162,14 +162,14 @@ object MobModelVariantCatalog {
 			},
 			apply = { entity, raw ->
 				val parts = splitParts(raw)
-				val horse = entity as? HorseEntity
+				val horse = entity as? Horse
 				val color = horseColors[parts.firstOrNull()]
 				if (horse != null && color != null) {
 					val marking = horseMarkings[parts.getOrNull(1)]
 					if (marking != null) {
 						(horse as HorseEntityInvoker).`xclipsen$setHorseVariant`(color, marking)
 					} else {
-						applyComponent(horse, DataComponentTypes.HORSE_VARIANT, color)
+						applyComponent(horse, DataComponents.HORSE_VARIANT, color)
 					}
 				}
 			},
@@ -210,9 +210,9 @@ object MobModelVariantCatalog {
 				val baseColor = dyeColors[parts.getOrNull(1)]
 				val patternColor = dyeColors[parts.getOrNull(2)]
 				if (pattern != null && baseColor != null && patternColor != null) {
-					applyComponent(entity, DataComponentTypes.TROPICAL_FISH_PATTERN, pattern)
-					applyComponent(entity, DataComponentTypes.TROPICAL_FISH_BASE_COLOR, baseColor)
-					applyComponent(entity, DataComponentTypes.TROPICAL_FISH_PATTERN_COLOR, patternColor)
+					applyComponent(entity, DataComponents.TROPICAL_FISH_PATTERN, pattern)
+					applyComponent(entity, DataComponents.TROPICAL_FISH_BASE_COLOR, baseColor)
+					applyComponent(entity, DataComponents.TROPICAL_FISH_PATTERN_COLOR, patternColor)
 				}
 			},
 		)
@@ -235,8 +235,8 @@ object MobModelVariantCatalog {
 
 	private fun <T : Any> registryEntryHandler(
 		ids: List<String>,
-		lookup: (LivingEntity, String) -> RegistryEntry.Reference<T>?,
-		apply: (LivingEntity, RegistryEntry.Reference<T>) -> Unit,
+		lookup: (LivingEntity, String) -> Holder.Reference<T>?,
+		apply: (LivingEntity, Holder.Reference<T>) -> Unit,
 	): VariantHandler {
 		return VariantHandler(
 			options = ids,
@@ -261,14 +261,14 @@ object MobModelVariantCatalog {
 
 	private fun <T : Any> registryEntry(
 		entity: LivingEntity,
-		registryKey: RegistryKey<Registry<T>>,
+		registryKey: ResourceKey<Registry<T>>,
 		variantId: String,
-	): RegistryEntry.Reference<T>? {
-		val registry = entity.entityWorld.registryManager.getOrThrow(registryKey)
-		return registry.getEntry(Identifier.ofVanilla(variantId)).orElse(null)
+	): Holder.Reference<T>? {
+		val registry = entity.registryAccess().lookupOrThrow(registryKey)
+		return registry.get(Identifier.withDefaultNamespace(variantId)).orElse(null)
 	}
 
-	private fun applyComponent(entity: LivingEntity, type: ComponentType<*>, value: Any) {
+	private fun applyComponent(entity: LivingEntity, type: DataComponentType<*>, value: Any) {
 		(entity as EntityComponentInvoker).`xclipsen$setApplicableComponent`(type, value)
 	}
 

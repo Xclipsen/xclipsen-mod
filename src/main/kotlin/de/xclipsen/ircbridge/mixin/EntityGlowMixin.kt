@@ -4,7 +4,7 @@ import de.xclipsen.ircbridge.CorpseEspFeature
 import de.xclipsen.ircbridge.BlazeSlayerFeature
 import de.xclipsen.ircbridge.M5Feature
 import de.xclipsen.ircbridge.ShulkerGlowFeature
-import net.minecraft.entity.Entity
+import net.minecraft.world.entity.Entity
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable
 
 @Mixin(Entity::class)
 abstract class EntityGlowMixin {
-	@Inject(method = ["isGlowing"], at = [At("HEAD")], cancellable = true)
+	@Inject(method = ["isCurrentlyGlowing"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlow(cir: CallbackInfoReturnable<Boolean>) {
 		val entity = this as Entity
 		if (ShulkerGlowFeature.shouldGlow(entity) || CorpseEspFeature.shouldGlow(entity) || M5Feature.shouldGlow(entity) || BlazeSlayerFeature.shouldGlow(entity)) {
@@ -20,7 +20,7 @@ abstract class EntityGlowMixin {
 		}
 	}
 
-	@Inject(method = ["getTeamColorValue"], at = [At("HEAD")], cancellable = true)
+	@Inject(method = ["getTeamColor"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlowColor(cir: CallbackInfoReturnable<Int>) {
 		val entity = this as Entity
 		ShulkerGlowFeature.colorValue(entity)?.let {
@@ -40,7 +40,7 @@ abstract class EntityGlowMixin {
 		}
 	}
 
-	@Inject(method = ["shouldRender(D)Z"], at = [At("HEAD")], cancellable = true)
+	@Inject(method = ["shouldRenderAtSqrDistance(D)Z"], at = [At("HEAD")], cancellable = true)
 	private fun forceShulkerGlowRenderDistance(distance: Double, cir: CallbackInfoReturnable<Boolean>) {
 		val entity = this as Entity
 		if (ShulkerGlowFeature.shouldGlow(entity) || CorpseEspFeature.shouldGlow(entity) || M5Feature.shouldGlow(entity) || BlazeSlayerFeature.shouldGlow(entity)) {

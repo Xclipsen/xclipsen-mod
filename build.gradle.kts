@@ -2,8 +2,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 plugins {
-	id("fabric-loom") version "1.14-SNAPSHOT"
-	id("org.jetbrains.kotlin.jvm") version "2.1.20"
+	id("net.fabricmc.fabric-loom") version "1.17.17"
+	id("org.jetbrains.kotlin.jvm") version "2.4.10"
 	`maven-publish`
 }
 
@@ -21,10 +21,9 @@ repositories {
 
 dependencies {
 	minecraft("com.mojang:minecraft:${property("minecraft_version")}")
-	mappings("net.fabricmc:yarn:${property("yarn_mappings_version")}:v2")
-	modImplementation("net.fabricmc:fabric-loader:${property("loader_version")}")
-	modImplementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_version")}")
-	modImplementation("net.fabricmc:fabric-language-kotlin:${property("fabric_kotlin_version")}")
+	implementation("net.fabricmc:fabric-loader:${property("loader_version")}")
+	implementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_version")}")
+	implementation("net.fabricmc:fabric-language-kotlin:${property("fabric_kotlin_version")}")
 }
 
 tasks.processResources {
@@ -42,49 +41,26 @@ tasks.processResources {
 }
 
 tasks.withType<JavaCompile>().configureEach {
-	options.release.set(21)
+	options.release.set(25)
 }
 
 tasks.withType<KotlinJvmCompile>().configureEach {
-	compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
+	compilerOptions.jvmTarget.set(JvmTarget.JVM_25)
 }
 
 kotlin {
-	jvmToolchain(21)
+	jvmToolchain(25)
 }
 
 java {
 	withSourcesJar()
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
-}
-
-tasks.jar {
-	archiveClassifier.set("dev")
-}
-
-tasks.named("remapJar") {
-	doFirst {
-		val remappedJar = layout.buildDirectory.file("libs/${base.archivesName.get()}-${project.version}.jar").get().asFile
-		val remapTempJar = file("${remappedJar.path}.tmp")
-
-		if (remappedJar.exists()) {
-			remappedJar.delete()
-		}
-		if (remapTempJar.exists()) {
-			remapTempJar.delete()
-		}
-	}
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
 }
 
 val prismTargetDirs: List<String> = listOf(
-	// """C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\1.21.11""",
-	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 skyhanni + sbo/minecraft/mods",
-	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 Polar/minecraft/mods",
-	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 skyhanni + sbo/minecraft/mods",
-	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 testing 1/minecraft/mods",
-	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 testing 2/minecraft/mods"
-	"/home/la/.local/share/PrismLauncher/instances/1.21.11 Dungeons für clippy/minecraft/mods",
+	// """C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\26.1.2""",
+	"/home/la/.local/share/PrismLauncher/instances/26.1.2 Dungeons für clippy/minecraft/mods",
 )
 
 fun Project.findRemappedModJar(): File {
@@ -142,8 +118,8 @@ fun Project.copyRemappedModToPrismTargets() {
 
 tasks.register("copyPrismMods") {
 	group = "distribution"
-	description = "Copies the remapped mod jar to the configured PrismLauncher test instances."
-	dependsOn("remapJar")
+	description = "Copies the mod jar to the configured PrismLauncher test instances."
+	dependsOn("jar")
 
 	doLast {
 		copyRemappedModToPrismTargets()

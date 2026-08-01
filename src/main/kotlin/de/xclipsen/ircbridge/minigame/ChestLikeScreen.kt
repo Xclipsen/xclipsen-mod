@@ -1,21 +1,21 @@
 package de.xclipsen.ircbridge.minigame
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.component.type.LoreComponent
-import net.minecraft.inventory.SimpleInventory
-import net.minecraft.item.Item
-import net.minecraft.item.ItemStack
-import net.minecraft.item.Items
-import net.minecraft.screen.GenericContainerScreenHandler
-import net.minecraft.screen.slot.Slot
-import net.minecraft.screen.slot.SlotActionType
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.inventory.ContainerScreen
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.item.component.ItemLore
+import net.minecraft.world.SimpleContainer
+import net.minecraft.world.item.Item
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
+import net.minecraft.world.inventory.ChestMenu
+import net.minecraft.world.inventory.Slot
+import net.minecraft.world.inventory.ContainerInput
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 
-abstract class ChestLikeScreen(title: Text) : GenericContainerScreen(createHandler(), playerInventory(), title) {
+abstract class ChestLikeScreen(title: Component) : ContainerScreen(createHandler(), playerInventory(), title) {
 	protected data class MenuSlot(
 		val item: Item = Items.GRAY_STAINED_GLASS_PANE,
 		val name: String = "",
@@ -25,18 +25,18 @@ abstract class ChestLikeScreen(title: Text) : GenericContainerScreen(createHandl
 		val action: (Int) -> Unit = {},
 	)
 
-	private val menuInventory: SimpleInventory
-		get() = screenHandler.inventory as SimpleInventory
+	private val menuInventory: SimpleContainer
+		get() = menu.container as SimpleContainer
 
 	protected abstract fun slots(): Map<Int, MenuSlot>
 
-	override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
+	override fun extractRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
 		refreshMenuInventory()
-		super.render(context, mouseX, mouseY, delta)
+		super.extractRenderState(context, mouseX, mouseY, delta)
 	}
 
-	override fun onMouseClick(slot: Slot?, slotId: Int, button: Int, actionType: SlotActionType) {
-		if (slotId !in 0 until MENU_SIZE || actionType != SlotActionType.PICKUP || button !in LEFT_BUTTON..RIGHT_BUTTON) {
+	override fun slotClicked(slot: Slot, slotId: Int, button: Int, actionType: ContainerInput) {
+		if (slotId !in 0 until MENU_SIZE || actionType != ContainerInput.PICKUP || button !in LEFT_BUTTON..RIGHT_BUTTON) {
 			return
 		}
 
@@ -46,8 +46,8 @@ abstract class ChestLikeScreen(title: Text) : GenericContainerScreen(createHandl
 		}
 	}
 
-	override fun close() {
-		client?.setScreen(null)
+	override fun onClose() {
+		minecraft.setScreen(null)
 	}
 
 	override fun removed() {
@@ -58,10 +58,10 @@ abstract class ChestLikeScreen(title: Text) : GenericContainerScreen(createHandl
 		val configured = slots()
 		for (slot in 0 until MENU_SIZE) {
 			val entry = configured[slot] ?: MenuSlot()
-			val current = menuInventory.getStack(slot)
+			val current = menuInventory.getItem(slot)
 			val updated = stackFor(entry)
-			if (!ItemStack.areEqual(current, updated)) {
-				menuInventory.setStack(slot, updated)
+			if (!ItemStack.matches(current, updated)) {
+				menuInventory.setItem(slot, updated)
 			}
 		}
 	}
@@ -69,13 +69,13 @@ abstract class ChestLikeScreen(title: Text) : GenericContainerScreen(createHandl
 	private fun stackFor(entry: MenuSlot): ItemStack {
 		val stack = ItemStack(entry.item)
 		if (entry.name.isNotBlank()) {
-			stack.set(DataComponentTypes.CUSTOM_NAME, Text.literal(entry.name).formatted(if (entry.enabled) Formatting.YELLOW else Formatting.GRAY))
+			stack.set(DataComponents.CUSTOM_NAME, Component.literal(entry.name).withStyle(if (entry.enabled) ChatFormatting.YELLOW else ChatFormatting.GRAY))
 		}
 		if (entry.lore.isNotEmpty()) {
-			stack.set(DataComponentTypes.LORE, LoreComponent(entry.lore.map { Text.literal(it).formatted(Formatting.GRAY) }))
+			stack.set(DataComponents.LORE, ItemLore(entry.lore.map { Component.literal(it).withStyle(ChatFormatting.GRAY) }))
 		}
 		if (entry.highlighted) {
-			stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true)
+			stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true)
 		}
 		return stack
 	}
@@ -86,9 +86,9 @@ abstract class ChestLikeScreen(title: Text) : GenericContainerScreen(createHandl
 		private const val MENU_SIZE = 27
 		private const val LOCAL_SYNC_ID = -24761
 
-		private fun playerInventory() = requireNotNull(MinecraftClient.getInstance().player).inventory
+		private fun playerInventory() = requireNotNull(Minecraft.getInstance().player).inventory
 
-		private fun createHandler(): GenericContainerScreenHandler =
-			GenericContainerScreenHandler.createGeneric9x3(LOCAL_SYNC_ID, playerInventory(), SimpleInventory(MENU_SIZE))
+		private fun createHandler(): ChestMenu =
+			ChestMenu.threeRows(LOCAL_SYNC_ID, playerInventory(), SimpleContainer(MENU_SIZE))
 	}
 }

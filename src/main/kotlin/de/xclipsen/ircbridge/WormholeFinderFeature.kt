@@ -1,16 +1,16 @@
 package de.xclipsen.ircbridge
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.font.TextRenderer
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.render.VertexConsumer
-import net.minecraft.client.render.VertexConsumerProvider
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Font
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import com.mojang.blaze3d.vertex.VertexConsumer
 import net.minecraft.client.render.XclipsenRenderLayers
-import net.minecraft.entity.decoration.DisplayEntity
-import net.minecraft.text.Text
-import net.minecraft.util.math.BlockPos
-import net.minecraft.util.math.Vec3d
+import net.minecraft.world.entity.Display
+import net.minecraft.world.level.entity.EntityTypeTest
+import net.minecraft.network.chat.Component
+import net.minecraft.core.BlockPos
+import net.minecraft.world.phys.Vec3
 import org.joml.Vector3f
 import kotlin.math.PI
 import kotlin.math.cos
@@ -46,9 +46,9 @@ object WormholeFinderFeature {
 	private var alertVisibleUntil = 0L
 	private var lastDepartureAlertAt = 0L
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config()
-		val world = client.world
+		val world = client.level
 		val player = client.player
 		if (
 			config == null ||
@@ -66,14 +66,14 @@ object WormholeFinderFeature {
 		}
 
 		ticksUntilRescan = RESCAN_INTERVAL_TICKS
-		val candidates = candidateWormholes(Vec3d(player.x, player.y, player.z))
+		val candidates = candidateWormholes(Vec3(player.x, player.y, player.z))
 		if (candidates.isEmpty()) {
 			return
 		}
 
-		val arrows = world.getEntitiesByClass(
-			DisplayEntity.TextDisplayEntity::class.java,
-			player.boundingBox.expand(ARROW_SCAN_RADIUS),
+		val arrows = world.getEntities(
+			EntityTypeTest.forClass(Display.TextDisplay::class.java),
+			player.boundingBox.inflate(ARROW_SCAN_RADIUS),
 		) { true }
 		if (arrows.isEmpty()) {
 			return
@@ -88,7 +88,7 @@ object WormholeFinderFeature {
 		}
 		if (nearest != null) {
 			activeWormhole = nearest
-			if (isArrivedAt(playerPos = Vec3d(player.x, player.y, player.z), target = nearest)) {
+			if (isArrivedAt(playerPos = Vec3(player.x, player.y, player.z), target = nearest)) {
 				tracerTarget = null
 				arrivedTarget = nearest.blockPos
 			} else if (arrivedTarget != nearest.blockPos) {
@@ -97,7 +97,7 @@ object WormholeFinderFeature {
 		}
 	}
 
-	fun onIncomingMessage(message: Text?) {
+	fun onIncomingMessage(message: Component?) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.wormholeFinderModuleEnabled) {
 			return
@@ -129,7 +129,7 @@ object WormholeFinderFeature {
 
 	fun triggerDepartureAlert(config: BridgeConfig? = null) {
 		val value = config ?: XclipsenIrcBridgeClient.instance?.config() ?: return
-		val client = MinecraftClient.getInstance()
+		val client = Minecraft.getInstance()
 		client.execute {
 			alertVisibleUntil = System.currentTimeMillis() + ALERT_VISIBLE_MS
 			client.soundManager.play(
@@ -153,7 +153,7 @@ object WormholeFinderFeature {
 		ticksUntilRescan = 0
 	}
 
-	fun render(context: WorldRenderContext) {
+	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		val active = activeWormhole
 		val target = tracerTarget
@@ -161,13 +161,13 @@ object WormholeFinderFeature {
 			return
 		}
 
-		val cameraPos = context.gameRenderer().camera.cameraPos
-		val matrices = context.matrices()
-		val consumers = context.consumers()
+		val cameraPos = context.levelState().cameraRenderState.pos
+		val matrices = context.poseStack()
+		val consumers = context.bufferSource()
 
-		matrices.push()
+		matrices.pushPose()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-		val entry = matrices.peek()
+		val entry = matrices.last()
 		val shadowRingLayer = XclipsenRenderLayers.getXrayLine(RING_SHADOW_LINE_WIDTH)
 		val ringLayer = XclipsenRenderLayers.getXrayLine(RING_LINE_WIDTH)
 		val shadowTracerLayer = XclipsenRenderLayers.getXrayLine(TRACER_SHADOW_LINE_WIDTH)
@@ -190,11 +190,11 @@ object WormholeFinderFeature {
 			}
 		}
 
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(shadowRingLayer)
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(ringLayer)
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(shadowTracerLayer)
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(tracerLayer)
-		matrices.pop()
+		consumers.endBatch(shadowRingLayer)
+		consumers.endBatch(ringLayer)
+		consumers.endBatch(shadowTracerLayer)
+		consumers.endBatch(tracerLayer)
+		matrices.popPose()
 	}
 
 	private fun clear() {
@@ -212,46 +212,46 @@ object WormholeFinderFeature {
 			.trim()
 	}
 
-	private fun matchArrow(arrow: DisplayEntity.TextDisplayEntity, candidates: List<WormholeNode>): WormholeNode? {
-		val origin = Vec3d(arrow.x, arrow.y, arrow.z)
+	private fun matchArrow(arrow: Display.TextDisplay, candidates: List<WormholeNode>): WormholeNode? {
+		val origin = Vec3(arrow.x, arrow.y, arrow.z)
 		val forward = arrowForwardVec(arrow)
 		return candidates.asSequence()
 			.mapNotNull { node ->
-				val horizontal = Vec3d(node.x - origin.x, 0.0, node.z - origin.z).normalizeOrNull() ?: return@mapNotNull null
-				node to forward.dotProduct(horizontal)
+				val horizontal = Vec3(node.x - origin.x, 0.0, node.z - origin.z).normalizeOrNull() ?: return@mapNotNull null
+				node to forward.dot(horizontal)
 			}
 			.filter { (_, score) -> score >= DIRECTION_TOLERANCE }
 			.maxByOrNull { (_, score) -> score }
 			?.first
 	}
 
-	private fun arrowForwardVec(arrow: DisplayEntity.TextDisplayEntity): Vec3d {
+	private fun arrowForwardVec(arrow: Display.TextDisplay): Vec3 {
 		return try {
-			val renderState = arrow.renderState ?: return yawForwardVec(arrow.yaw)
-			val transformation = renderState.transformation.interpolate(0.0f)
+			val renderState = arrow.renderState() ?: return yawForwardVec(arrow.yRot)
+			val transformation = renderState.transformation().get(0.0f)
 			val localY = Vector3f(0.0f, 1.0f, 0.0f)
-			transformation.leftRotation.transform(localY)
-			Vec3d(localY.x.toDouble(), 0.0, localY.z.toDouble()).normalizeOrNull()
+			transformation.leftRotation().transform(localY)
+			Vec3(localY.x.toDouble(), 0.0, localY.z.toDouble()).normalizeOrNull()
 		} catch (_: RuntimeException) {
 			null
-		} ?: yawForwardVec(arrow.yaw)
+		} ?: yawForwardVec(arrow.yRot)
 	}
 
-	private fun yawForwardVec(yawDegrees: Float): Vec3d {
+	private fun yawForwardVec(yawDegrees: Float): Vec3 {
 		val yaw = Math.toRadians(yawDegrees.toDouble())
-		return Vec3d(-kotlin.math.sin(yaw), 0.0, kotlin.math.cos(yaw)).normalizeOrNull() ?: Vec3d(0.0, 0.0, 1.0)
+		return Vec3(-kotlin.math.sin(yaw), 0.0, kotlin.math.cos(yaw)).normalizeOrNull() ?: Vec3(0.0, 0.0, 1.0)
 	}
 
-	private fun Vec3d.normalizeOrNull(): Vec3d? {
-		val lengthSquared = lengthSquared()
+	private fun Vec3.normalizeOrNull(): Vec3? {
+		val lengthSquared = lengthSqr()
 		if (!x.isFinite() || !y.isFinite() || !z.isFinite() || lengthSquared < 0.000001) {
 			return null
 		}
 		val length = sqrt(lengthSquared)
-		return Vec3d(x / length, y / length, z / length)
+		return Vec3(x / length, y / length, z / length)
 	}
 
-	private fun candidateWormholes(playerPos: Vec3d): List<WormholeNode> {
+	private fun candidateWormholes(playerPos: Vec3): List<WormholeNode> {
 		val area = LocationTracker.currentArea
 		if (area.contains("lotus", ignoreCase = true) || isNearAny(playerPos, LOTUS_ATOLL_WORMHOLES, 180.0)) {
 			return LOTUS_ATOLL_WORMHOLES
@@ -263,20 +263,20 @@ object WormholeFinderFeature {
 	}
 
 	private fun nearestWormholeAfterClose(closedWormholes: Set<BlockPos>): WormholeNode? {
-		val player = MinecraftClient.getInstance().player ?: return null
-		val playerPos = Vec3d(player.x, player.y, player.z)
+		val player = Minecraft.getInstance().player ?: return null
+		val playerPos = Vec3(player.x, player.y, player.z)
 		val candidates = candidateWormholes(playerPos)
 			.filterNot { it.blockPos in closedWormholes }
-		return candidates.minByOrNull { it.center.squaredDistanceTo(playerPos) }
+		return candidates.minByOrNull { it.center.distanceToSqr(playerPos) }
 	}
 
-	private fun isArrivedAt(playerPos: Vec3d, target: WormholeNode): Boolean {
+	private fun isArrivedAt(playerPos: Vec3, target: WormholeNode): Boolean {
 		val dx = playerPos.x - target.middleBlockCenter.x
 		val dz = playerPos.z - target.middleBlockCenter.z
 		return dx * dx + dz * dz <= ARRIVAL_RADIUS * ARRIVAL_RADIUS
 	}
 
-	private fun isNearAny(playerPos: Vec3d, nodes: List<WormholeNode>, maxHorizontalDistance: Double): Boolean {
+	private fun isNearAny(playerPos: Vec3, nodes: List<WormholeNode>, maxHorizontalDistance: Double): Boolean {
 		val maxDistanceSq = maxHorizontalDistance * maxHorizontalDistance
 		return nodes.any { node ->
 			val dx = playerPos.x - node.x
@@ -287,8 +287,8 @@ object WormholeFinderFeature {
 
 	private fun drawWaterSurfaceRing(
 		lineConsumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		center: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		center: Vec3,
 		color: Int,
 		alpha: Int,
 		lineWidth: Float,
@@ -301,8 +301,8 @@ object WormholeFinderFeature {
 
 	private fun drawCircleRing(
 		consumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		center: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		center: Vec3,
 		radius: Double,
 		red: Int,
 		green: Int,
@@ -321,37 +321,37 @@ object WormholeFinderFeature {
 
 	private fun drawLineSegment(
 		consumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		start: Vec3d,
-		end: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		start: Vec3,
+		end: Vec3,
 		red: Int,
 		green: Int,
 		blue: Int,
 		alpha: Int,
 		lineWidth: Float,
 	) {
-		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
-			.color(red, green, blue, alpha)
-			.normal(entry, 0.0f, 1.0f, 0.0f)
-			.lineWidth(lineWidth)
-		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
-			.color(red, green, blue, alpha)
-			.normal(entry, 0.0f, 1.0f, 0.0f)
-			.lineWidth(lineWidth)
+		consumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
+			.setColor(red, green, blue, alpha)
+			.setNormal(entry, 0.0f, 1.0f, 0.0f)
+			.setLineWidth(lineWidth)
+		consumer.addVertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
+			.setColor(red, green, blue, alpha)
+			.setNormal(entry, 0.0f, 1.0f, 0.0f)
+			.setLineWidth(lineWidth)
 	}
 
 	private fun drawTracer(
 		consumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		cameraPos: Vec3d,
-		target: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		cameraPos: Vec3,
+		target: Vec3,
 		color: Int,
 		alpha: Int,
 		lineWidth: Float,
 	) {
 		val start = crosshairStart(cameraPos)
 		val delta = target.subtract(start)
-		val lengthSquared = delta.lengthSquared()
+		val lengthSquared = delta.lengthSqr()
 		if (!delta.x.isFinite() || !delta.y.isFinite() || !delta.z.isFinite() || lengthSquared < 0.0001) {
 			return
 		}
@@ -362,23 +362,23 @@ object WormholeFinderFeature {
 		val red = color shr 16 and 0xFF
 		val green = color shr 8 and 0xFF
 		val blue = color and 0xFF
-		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
-			.color(red, green, blue, alpha)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(lineWidth)
-		consumer.vertex(entry, target.x.toFloat(), target.y.toFloat(), target.z.toFloat())
-			.color(red, green, blue, alpha)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(lineWidth)
+		consumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
+			.setColor(red, green, blue, alpha)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(lineWidth)
+		consumer.addVertex(entry, target.x.toFloat(), target.y.toFloat(), target.z.toFloat())
+			.setColor(red, green, blue, alpha)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(lineWidth)
 	}
 
-	private fun crosshairStart(cameraPos: Vec3d): Vec3d {
-		val client = MinecraftClient.getInstance()
+	private fun crosshairStart(cameraPos: Vec3): Vec3 {
+		val client = Minecraft.getInstance()
 		val viewEntity = client.cameraEntity ?: client.player ?: return cameraPos
-		val yawRadians = Math.toRadians(viewEntity.yaw.toDouble())
-		val pitchRadians = Math.toRadians(viewEntity.pitch.toDouble())
+		val yawRadians = Math.toRadians(viewEntity.yRot.toDouble())
+		val pitchRadians = Math.toRadians(viewEntity.xRot.toDouble())
 		val horizontalScale = cos(pitchRadians)
-		val look = Vec3d(
+		val look = Vec3(
 			-sin(yawRadians) * horizontalScale,
 			-sin(pitchRadians),
 			cos(yawRadians) * horizontalScale,
@@ -392,9 +392,9 @@ object WormholeFinderFeature {
 
 	private data class WormholeNode(val x: Double, val y: Double, val z: Double) {
 		val blockPos: BlockPos = BlockPos(floor(x).toInt(), floor(y).toInt(), floor(z).toInt())
-		val center: Vec3d = Vec3d(x + 0.5, y + 0.5, z + 0.5)
-		val middleBlockCenter: Vec3d = Vec3d(blockPos.x + 0.5, blockPos.y + 0.5, blockPos.z + 0.5)
-		val waterSurfaceCenter: Vec3d = Vec3d(blockPos.x + 0.5, blockPos.y + 1.0 + WATER_SURFACE_OFFSET, blockPos.z + 0.5)
+		val center: Vec3 = Vec3(x + 0.5, y + 0.5, z + 0.5)
+		val middleBlockCenter: Vec3 = Vec3(blockPos.x + 0.5, blockPos.y + 0.5, blockPos.z + 0.5)
+		val waterSurfaceCenter: Vec3 = Vec3(blockPos.x + 0.5, blockPos.y + 1.0 + WATER_SURFACE_OFFSET, blockPos.z + 0.5)
 	}
 
 	private val LOTUS_ATOLL_WORMHOLES = listOf(
@@ -455,32 +455,32 @@ object WormholeDepartureAlertHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		WormholeFinderFeature.shouldDrawAlert(config)
 
-	override fun defaultX(context: DrawContext): Float =
-		((context.scaledWindowWidth - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
+	override fun defaultX(context: GuiGraphicsExtractor): Float =
+		((context.guiWidth() - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
 
-	override fun defaultY(context: DrawContext): Float =
-		(context.scaledWindowHeight * 0.26f).coerceAtLeast(24f)
+	override fun defaultY(context: GuiGraphicsExtractor): Float =
+		(context.guiHeight() * 0.26f).coerceAtLeast(24f)
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val renderer = MinecraftClient.getInstance().textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val renderer = Minecraft.getInstance().font
 		val message = alertMessage()
-		val width = (renderer.getWidth(message) + (PADDING_X * 2)).coerceAtLeast(DEFAULT_WIDTH)
-		val height = PADDING_Y + renderer.fontHeight + PADDING_Y
+		val width = (renderer.width(message) + (PADDING_X * 2)).coerceAtLeast(DEFAULT_WIDTH)
+		val height = PADDING_Y + renderer.lineHeight + PADDING_Y
 		drawPanel(context, renderer, message, width, height)
 		return width.toFloat() to height.toFloat()
 	}
 
-	private fun alertMessage(): Text {
-		return Text.literal("Your ")
+	private fun alertMessage(): Component {
+		return Component.literal("Your ")
 			.withColor(0xAA55AA)
-			.append(Text.literal("Wormhole").withColor(0xFF55FF))
-			.append(Text.literal(" closed up...").withColor(0xAA55AA))
+			.append(Component.literal("Wormhole").withColor(0xFF55FF))
+			.append(Component.literal(" closed up...").withColor(0xAA55AA))
 	}
 
 	private fun drawPanel(
-		context: DrawContext,
-		renderer: TextRenderer,
-		text: Text,
+		context: GuiGraphicsExtractor,
+		renderer: Font,
+		text: Component,
 		width: Int,
 		height: Int,
 	) {
@@ -490,7 +490,7 @@ object WormholeDepartureAlertHudElement : XclipsenHudElement(
 		context.fill(0, 0, 1, height, 0xFFFF55FF.toInt())
 		context.fill(width - 1, 0, width, height, 0xFFFF55FF.toInt())
 		context.fill(3, 3, width - 3, height - 3, 0x45AA55AA)
-		context.drawCenteredTextWithShadow(renderer, text, width / 2, PADDING_Y, 0xFFFFFFFF.toInt())
+		context.centeredText(renderer, text, width / 2, PADDING_Y, 0xFFFFFFFF.toInt())
 	}
 
 	private const val DEFAULT_WIDTH = 210

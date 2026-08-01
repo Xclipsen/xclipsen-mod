@@ -1,8 +1,8 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.font.TextRenderer
-import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Font
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.max
@@ -23,7 +23,7 @@ object PickaxeAbilityCooldownFeature {
 	private var tickCounter = 0
 	private var pendingReadyAlertAbility: String? = null
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		if (++tickCounter < UPDATE_INTERVAL_TICKS) {
 			return
 		}
@@ -38,7 +38,7 @@ object PickaxeAbilityCooldownFeature {
 			return
 		}
 
-		if (client.world == null || client.player == null || !LocationTracker.isOnHypixelSkyBlock) {
+		if (client.level == null || client.player == null || !LocationTracker.isOnHypixelSkyBlock) {
 			trackedStatus = null
 			currentStatus = null
 			clearAlert()
@@ -84,10 +84,10 @@ object PickaxeAbilityCooldownFeature {
 		}
 	}
 
-	private fun readStatus(client: MinecraftClient): ServerAbilityStatus? {
-		val playerList = client.player?.networkHandler?.playerList ?: return null
+	private fun readStatus(client: Minecraft): ServerAbilityStatus? {
+		val playerList = client.connection?.onlinePlayers ?: return null
 		for (entry in playerList) {
-			val raw = entry.displayName?.string ?: continue
+			val raw = entry.tabListDisplayName?.string ?: continue
 			val line = stripFormatting(raw)
 			if (line.isBlank()) {
 				continue
@@ -149,7 +149,7 @@ object PickaxeAbilityCooldownFeature {
 		}
 	}
 
-	private fun handleReadyAlert(client: MinecraftClient, config: BridgeConfig, nextStatus: AbilityStatus?) {
+	private fun handleReadyAlert(client: Minecraft, config: BridgeConfig, nextStatus: AbilityStatus?) {
 		when {
 			nextStatus == null -> return
 			!nextStatus.ready -> {
@@ -164,7 +164,7 @@ object PickaxeAbilityCooldownFeature {
 		}
 	}
 
-	private fun triggerReadyAlert(client: MinecraftClient, config: BridgeConfig, status: AbilityStatus) {
+	private fun triggerReadyAlert(client: Minecraft, config: BridgeConfig, status: AbilityStatus) {
 		playAlertSound(config)
 		val renderedText = renderAlertText(config.pickaxeAbilityCooldownAlertText, status)
 		if (renderedText.isNotBlank()) {
@@ -183,7 +183,7 @@ object PickaxeAbilityCooldownFeature {
 	}
 
 	private fun playAlertSound(config: BridgeConfig) {
-		MinecraftClient.getInstance().soundManager.play(
+		Minecraft.getInstance().soundManager.play(
 			SoundCatalog.masterSound(
 				config.pickaxeAbilityCooldownAlertSoundId,
 				config.pickaxeAbilityCooldownAlertSoundPitch.coerceIn(0.1f, 2.0f),
@@ -376,26 +376,26 @@ object PickaxeAbilityCooldownFeature {
 
 object PickaxeAbilityCooldownHudElement : XclipsenHudElement(
 	id = "pickaxe_ability_cooldown",
-	displayName = "Pickaxe Cooldown",
+	displayName = "Pickaxe TickThrottler",
 ) {
 	override fun isEnabled(config: BridgeConfig): Boolean = config.pickaxeAbilityCooldownModuleEnabled
 
 	override fun shouldDraw(config: BridgeConfig): Boolean = isEnabled(config) && PickaxeAbilityCooldownFeature.shouldRender(config)
 
-	override fun defaultX(context: DrawContext): Float = 20f
+	override fun defaultX(context: GuiGraphicsExtractor): Float = 20f
 
-	override fun defaultY(context: DrawContext): Float = 80f
+	override fun defaultY(context: GuiGraphicsExtractor): Float = 80f
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
 		val status = if (example) PickaxeAbilityCooldownFeature.exampleStatus() else PickaxeAbilityCooldownFeature.currentStatus()
 			?: return 96f to 26f
-		val client = MinecraftClient.getInstance()
-		val textRenderer = client.textRenderer
+		val client = Minecraft.getInstance()
+		val textRenderer = client.font
 		val title = status.name.uppercase(Locale.ROOT)
 		val value = status.stateText
-		val contentWidth = max(textRenderer.getWidth(title), textRenderer.getWidth(value))
+		val contentWidth = max(textRenderer.width(title), textRenderer.width(value))
 		val boxWidth = max(MIN_WIDTH, contentWidth + (PADDING_X * 2))
-		val boxHeight = PADDING_Y + textRenderer.fontHeight + LINE_GAP + textRenderer.fontHeight + PADDING_Y
+		val boxHeight = PADDING_Y + textRenderer.lineHeight + LINE_GAP + textRenderer.lineHeight + PADDING_Y
 		val accent = if (status.ready) READY_ACCENT else COOLDOWN_ACCENT
 		val valueColor = if (status.ready) READY_TEXT else COOLDOWN_TEXT
 
@@ -405,8 +405,8 @@ object PickaxeAbilityCooldownHudElement : XclipsenHudElement(
 		context.fill(0, 0, 1, boxHeight, accent)
 		context.fill(boxWidth - 1, 0, boxWidth, boxHeight, accent)
 		context.fill(3, 3, boxWidth - 3, boxHeight - 3, INNER_BACKGROUND)
-		context.drawTextWithShadow(textRenderer, title, PADDING_X, PADDING_Y, LABEL_TEXT)
-		context.drawTextWithShadow(textRenderer, value, PADDING_X, PADDING_Y + textRenderer.fontHeight + LINE_GAP, valueColor)
+		context.text(textRenderer, title, PADDING_X, PADDING_Y, LABEL_TEXT, true)
+		context.text(textRenderer, value, PADDING_X, PADDING_Y + textRenderer.lineHeight + LINE_GAP, valueColor, true)
 
 		return boxWidth.toFloat() to boxHeight.toFloat()
 	}
@@ -434,28 +434,28 @@ object PickaxeAbilityReadyAlertHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		isEnabled(config) && PickaxeAbilityCooldownFeature.shouldDrawAlert(config)
 
-	override fun defaultX(context: DrawContext): Float {
-		return ((context.scaledWindowWidth - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
+	override fun defaultX(context: GuiGraphicsExtractor): Float {
+		return ((context.guiWidth() - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
 	}
 
-	override fun defaultY(context: DrawContext): Float {
-		return (context.scaledWindowHeight * 0.24f).coerceAtLeast(24f)
+	override fun defaultY(context: GuiGraphicsExtractor): Float {
+		return (context.guiHeight() * 0.24f).coerceAtLeast(24f)
 	}
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val client = MinecraftClient.getInstance()
-		val textRenderer = client.textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val client = Minecraft.getInstance()
+		val textRenderer = client.font
 		val text = if (example) "Pickobulus is ready!" else PickaxeAbilityCooldownFeature.currentAlertText()
-		val width = max(DEFAULT_WIDTH, textRenderer.getWidth(text) + (PADDING_X * 2))
-		val height = PADDING_Y + textRenderer.fontHeight + PADDING_Y
+		val width = max(DEFAULT_WIDTH, textRenderer.width(text) + (PADDING_X * 2))
+		val height = PADDING_Y + textRenderer.lineHeight + PADDING_Y
 
 		drawAlertPanel(context, textRenderer, text, width, height)
 		return width.toFloat() to height.toFloat()
 	}
 
 	private fun drawAlertPanel(
-		context: DrawContext,
-		textRenderer: TextRenderer,
+		context: GuiGraphicsExtractor,
+		textRenderer: Font,
 		text: String,
 		width: Int,
 		height: Int,
@@ -466,7 +466,7 @@ object PickaxeAbilityReadyAlertHudElement : XclipsenHudElement(
 		context.fill(0, 0, 1, height, ACCENT)
 		context.fill(width - 1, 0, width, height, ACCENT)
 		context.fill(3, 3, width - 3, height - 3, INNER_BACKGROUND)
-		context.drawCenteredTextWithShadow(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
+		context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
 	}
 
 	private const val DEFAULT_WIDTH = 180

@@ -1,19 +1,17 @@
 package de.xclipsen.ircbridge
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
-import net.minecraft.block.Block
-import net.minecraft.block.Blocks
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.font.TextRenderer
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.render.VertexConsumerProvider
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext
+import net.minecraft.world.level.block.Blocks
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Font
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.render.XclipsenRenderLayers
-import net.minecraft.client.world.ClientWorld
-import net.minecraft.entity.Entity
-import net.minecraft.entity.player.PlayerEntity
-import net.minecraft.text.Text
-import net.minecraft.util.math.BlockPos
-import net.minecraft.util.math.Vec3d
+import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.player.Player
+import net.minecraft.network.chat.Component
+import net.minecraft.core.BlockPos
+import net.minecraft.world.phys.Vec3
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.ceil
@@ -35,7 +33,7 @@ object M5Feature {
 		Blocks.WHITE_WOOL to "Vendetta Livid",
 	)
 
-	private var lastWorld: ClientWorld? = null
+	private var lastWorld: ClientLevel? = null
 	private var tickCounter = 0
 	private var bossEncounterActive = false
 	private var ragAxeTriggered = false
@@ -48,9 +46,9 @@ object M5Feature {
 	private var lastNormalizedMessage = ""
 	private var lastNormalizedMessageAt = 0L
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config()
-		val world = client.world
+		val world = client.level
 		val player = client.player
 		if (config?.m5ModuleEnabled != true || world == null || player == null || !LocationTracker.isOnHypixelSkyBlock) {
 			clearRuntimeState(clearAlert = true)
@@ -100,7 +98,7 @@ object M5Feature {
 		lastWorld = null
 	}
 
-	fun onIncomingMessage(message: Text?) {
+	fun onIncomingMessage(message: Component?) {
 		val normalized = normalizeMessage(message?.string ?: return)
 		if (normalized.isBlank()) {
 			return
@@ -126,7 +124,7 @@ object M5Feature {
 			ragAxeTriggered = true
 			val config = XclipsenIrcBridgeClient.instance?.config()
 			if (config?.m5ModuleEnabled == true && config.m5RagAxeAlertEnabled) {
-				MinecraftClient.getInstance().player?.sendMessage(Text.literal(RAG_AXE_CHAT_MESSAGE), false)
+				Minecraft.getInstance().player?.sendSystemMessage(Component.literal(RAG_AXE_CHAT_MESSAGE))
 				showAlert(RAG_AXE_ALERT)
 			}
 		}
@@ -144,15 +142,15 @@ object M5Feature {
 		return if (shouldGlow(entity)) LIVID_GLOW_COLOR else null
 	}
 
-	fun render(context: WorldRenderContext) {
+	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.m5ModuleEnabled || !config.m5TracerEnabled) {
 			return
 		}
 
-		val client = MinecraftClient.getInstance()
-		val world = client.world ?: return
-		if (client.player == null || client.options.hudHidden) {
+		val client = Minecraft.getInstance()
+		val world = client.level ?: return
+		if (client.player == null || client.options.hideGui) {
 			return
 		}
 
@@ -161,9 +159,9 @@ object M5Feature {
 			return
 		}
 
-		val cameraPos = context.gameRenderer().camera.cameraPos
+		val cameraPos = context.levelState().cameraRenderState.pos
 		val start = crosshairStart(cameraPos)
-		val end = livid.boundingBox.center.add(0.0, livid.height * 0.2, 0.0)
+		val end = livid.boundingBox.center.add(0.0, livid.bbHeight * 0.2, 0.0)
 		drawLine(context, cameraPos, start, end, TRACER_COLOR, TRACER_WIDTH)
 	}
 
@@ -203,7 +201,7 @@ object M5Feature {
 		return if (bossEncounterActive) "Waiting for Livid split" else "Idle"
 	}
 
-	private fun updateCurrentLivid(client: MinecraftClient, world: ClientWorld) {
+	private fun updateCurrentLivid(client: Minecraft, world: ClientLevel) {
 		val targetLividName = resolveTargetLividName(world) ?: run {
 			currentLividId = null
 			currentLividName = ""
@@ -216,36 +214,33 @@ object M5Feature {
 			return
 		}
 
-		currentLividId = world.entities
+		currentLividId = world.players()
 			.asSequence()
-			.filterIsInstance<PlayerEntity>()
 			.filter { it !== client.player }
 			.filter { it.isAlive && !it.isRemoved }
 			.firstOrNull { entityName(it).equals(targetLividName, ignoreCase = true) }
 			?.uuid
 	}
 
-	private fun detectBossRoom(world: ClientWorld): Boolean {
+	private fun detectBossRoom(world: ClientLevel): Boolean {
 		if (!isDungeonArea()) {
 			return false
 		}
 
 		val targetName = resolveTargetLividName(world) ?: return false
-		return world.entities.asSequence()
-			.filterIsInstance<PlayerEntity>()
+		return world.players().asSequence()
 			.any { it.isAlive && !it.isRemoved && entityName(it).equals(targetName, ignoreCase = true) }
 	}
 
-	private fun resolveTargetLividName(world: ClientWorld): String? {
+	private fun resolveTargetLividName(world: ClientLevel): String? {
 		val block = world.getBlockState(CEILING_WOOL_BLOCK).block
 		return lividMap[block]
 	}
 
-	private fun currentLividEntity(world: ClientWorld): PlayerEntity? {
+	private fun currentLividEntity(world: ClientLevel): Player? {
 		val currentId = currentLividId ?: return null
-		return world.entities
+		return world.players()
 			.asSequence()
-			.filterIsInstance<PlayerEntity>()
 			.firstOrNull { it.uuid == currentId }
 	}
 
@@ -316,13 +311,13 @@ object M5Feature {
 		return "${ticks}t ($secondsText)"
 	}
 
-	private fun crosshairStart(cameraPos: Vec3d): Vec3d {
-		val client = MinecraftClient.getInstance()
+	private fun crosshairStart(cameraPos: Vec3): Vec3 {
+		val client = Minecraft.getInstance()
 		val viewEntity = client.cameraEntity ?: client.player ?: return cameraPos
-		val yawRadians = Math.toRadians(viewEntity.yaw.toDouble())
-		val pitchRadians = Math.toRadians(viewEntity.pitch.toDouble())
+		val yawRadians = Math.toRadians(viewEntity.yRot.toDouble())
+		val pitchRadians = Math.toRadians(viewEntity.xRot.toDouble())
 		val horizontalScale = cos(pitchRadians)
-		val look = Vec3d(
+		val look = Vec3(
 			-sin(yawRadians) * horizontalScale,
 			-sin(pitchRadians),
 			cos(yawRadians) * horizontalScale,
@@ -334,10 +329,10 @@ object M5Feature {
 		)
 	}
 
-	private fun drawLine(context: WorldRenderContext, cameraPos: Vec3d, start: Vec3d, end: Vec3d, color: Int, width: Float) {
-		val matrices = context.matrices()
+	private fun drawLine(context: LevelRenderContext, cameraPos: Vec3, start: Vec3, end: Vec3, color: Int, width: Float) {
+		val matrices = context.poseStack()
 		val delta = end.subtract(start)
-		val lengthSquared = delta.lengthSquared()
+		val lengthSquared = delta.lengthSqr()
 		if (!delta.x.isFinite() || !delta.y.isFinite() || !delta.z.isFinite() || lengthSquared < 0.0001) {
 			return
 		}
@@ -350,21 +345,21 @@ object M5Feature {
 		val green = color shr 8 and 0xFF
 		val blue = color and 0xFF
 
-		matrices.push()
+		matrices.pushPose()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-		val entry = matrices.peek()
+		val entry = matrices.last()
 		val renderLayer = XclipsenRenderLayers.getXrayLine(width.toDouble())
-		val consumer = context.consumers().getBuffer(renderLayer)
-		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
-			.color(red, green, blue, 230)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(width)
-		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
-			.color(red, green, blue, 230)
-			.normal(entry, normalX, normalY, normalZ)
-			.lineWidth(width)
-		(context.consumers() as? VertexConsumerProvider.Immediate)?.draw(renderLayer)
-		matrices.pop()
+		val consumer = context.bufferSource().getBuffer(renderLayer)
+		consumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
+			.setColor(red, green, blue, 230)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(width)
+		consumer.addVertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat())
+			.setColor(red, green, blue, 230)
+			.setNormal(entry, normalX, normalY, normalZ)
+			.setLineWidth(width)
+		context.bufferSource().endBatch(renderLayer)
+		matrices.popPose()
 	}
 
 	private fun Double.isFinite(): Boolean = !isNaN() && this != Double.POSITIVE_INFINITY && this != Double.NEGATIVE_INFINITY
@@ -389,7 +384,7 @@ object M5Feature {
 
 object M5IceSprayHudElement : XclipsenHudElement(
 	id = "m5_ice_spray_timer",
-	displayName = "M5 Ice Spray Timer",
+	displayName = "M5 Ice Spray TimerQueue",
 ) {
 	override fun isEnabled(config: BridgeConfig): Boolean =
 		config.m5ModuleEnabled && config.m5IceSprayTimerEnabled
@@ -397,18 +392,18 @@ object M5IceSprayHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		M5Feature.shouldDrawTimer(config)
 
-	override fun defaultX(context: DrawContext): Float = 20f
+	override fun defaultX(context: GuiGraphicsExtractor): Float = 20f
 
-	override fun defaultY(context: DrawContext): Float = 120f
+	override fun defaultY(context: GuiGraphicsExtractor): Float = 120f
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val client = MinecraftClient.getInstance()
-		val textRenderer = client.textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val client = Minecraft.getInstance()
+		val textRenderer = client.font
 		val title = "ICE SPRAY"
 		val value = if (example) "390t (19.5s)" else M5Feature.timerLine()
-		val contentWidth = max(textRenderer.getWidth(title), textRenderer.getWidth(value))
+		val contentWidth = max(textRenderer.width(title), textRenderer.width(value))
 		val boxWidth = max(MIN_WIDTH, contentWidth + (PADDING_X * 2))
-		val boxHeight = PADDING_Y + textRenderer.fontHeight + LINE_GAP + textRenderer.fontHeight + PADDING_Y
+		val boxHeight = PADDING_Y + textRenderer.lineHeight + LINE_GAP + textRenderer.lineHeight + PADDING_Y
 
 		context.fill(0, 0, boxWidth, boxHeight, BACKGROUND)
 		context.fill(0, 0, boxWidth, 1, ACCENT)
@@ -416,8 +411,8 @@ object M5IceSprayHudElement : XclipsenHudElement(
 		context.fill(0, 0, 1, boxHeight, ACCENT)
 		context.fill(boxWidth - 1, 0, boxWidth, boxHeight, ACCENT)
 		context.fill(3, 3, boxWidth - 3, boxHeight - 3, INNER_BACKGROUND)
-		context.drawTextWithShadow(textRenderer, title, PADDING_X, PADDING_Y, LABEL_TEXT)
-		context.drawTextWithShadow(textRenderer, value, PADDING_X, PADDING_Y + textRenderer.fontHeight + LINE_GAP, VALUE_TEXT)
+		context.text(textRenderer, title, PADDING_X, PADDING_Y, LABEL_TEXT, true)
+		context.text(textRenderer, value, PADDING_X, PADDING_Y + textRenderer.lineHeight + LINE_GAP, VALUE_TEXT, true)
 
 		return boxWidth.toFloat() to boxHeight.toFloat()
 	}
@@ -442,28 +437,28 @@ object M5AlertHudElement : XclipsenHudElement(
 	override fun shouldDraw(config: BridgeConfig): Boolean =
 		M5Feature.shouldDrawAlert(config)
 
-	override fun defaultX(context: DrawContext): Float {
-		return ((context.scaledWindowWidth - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
+	override fun defaultX(context: GuiGraphicsExtractor): Float {
+		return ((context.guiWidth() - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
 	}
 
-	override fun defaultY(context: DrawContext): Float {
-		return (context.scaledWindowHeight * 0.28f).coerceAtLeast(28f)
+	override fun defaultY(context: GuiGraphicsExtractor): Float {
+		return (context.guiHeight() * 0.28f).coerceAtLeast(28f)
 	}
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val client = MinecraftClient.getInstance()
-		val textRenderer = client.textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val client = Minecraft.getInstance()
+		val textRenderer = client.font
 		val text = if (example) "Rag Axe now!" else M5Feature.currentAlertText()
-		val width = max(DEFAULT_WIDTH, textRenderer.getWidth(text) + (PADDING_X * 2))
-		val height = PADDING_Y + textRenderer.fontHeight + PADDING_Y
+		val width = max(DEFAULT_WIDTH, textRenderer.width(text) + (PADDING_X * 2))
+		val height = PADDING_Y + textRenderer.lineHeight + PADDING_Y
 
 		drawAlertPanel(context, textRenderer, text, width, height)
 		return width.toFloat() to height.toFloat()
 	}
 
 	private fun drawAlertPanel(
-		context: DrawContext,
-		textRenderer: TextRenderer,
+		context: GuiGraphicsExtractor,
+		textRenderer: Font,
 		text: String,
 		width: Int,
 		height: Int,
@@ -474,7 +469,7 @@ object M5AlertHudElement : XclipsenHudElement(
 		context.fill(0, 0, 1, height, ACCENT)
 		context.fill(width - 1, 0, width, height, ACCENT)
 		context.fill(3, 3, width - 3, height - 3, INNER_BACKGROUND)
-		context.drawCenteredTextWithShadow(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
+		context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
 	}
 
 	private const val DEFAULT_WIDTH = 180

@@ -3,11 +3,11 @@
  * 
  * Could not load the following classes:
  *  net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
- *  net.minecraft.text.HoverEvent
- *  net.minecraft.text.HoverEvent$ShowText
- *  net.minecraft.text.MutableText
- *  net.minecraft.text.Style
- *  net.minecraft.text.Text
+ *  net.minecraft.network.chat.HoverEvent
+ *  net.minecraft.network.chat.HoverEvent$ShowText
+ *  net.minecraft.network.chat.MutableComponent
+ *  net.minecraft.network.chat.Style
+ *  net.minecraft.network.chat.Component
  */
 package com.autocroesus.command;
 
@@ -30,10 +30,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.Component;
 
 public class AcCommand {
     private static final Pattern FLOOR_PATTERN = Pattern.compile("^[FfMm][1-7]$");
@@ -175,7 +175,7 @@ public class AcCommand {
             int ms;
             AcDataStore.config.minClickDelay = ms = Integer.parseInt(args[1]);
             AcDataStore.saveConfig();
-            ChatUtil.msg("Min Click Delay is now \u00a76" + ms + "ms");
+            ChatUtil.msg("Min MouseButtonEvent Delay is now \u00a76" + ms + "ms");
             if (ms < 150) {
                 ChatUtil.msg("\u00a7cWarning: Setting the delay to a low value with low ping will claim chests so quickly that people in chat might notice. Be careful setting this so low.");
             }
@@ -188,7 +188,7 @@ public class AcCommand {
     private static void cmdNoClick() {
         AcDataStore.config.noClick = !AcDataStore.config.noClick;
         AcDataStore.saveConfig();
-        ChatUtil.msg("No Click is now set to " + ColorUtil.formattedBool(AcDataStore.config.noClick));
+        ChatUtil.msg("No MouseButtonEvent is now set to " + ColorUtil.formattedBool(AcDataStore.config.noClick));
     }
 
     private static void cmdKey(String arg) {
@@ -420,10 +420,10 @@ public class AcCommand {
         hover.append("\u00a7eTotal Profit: \u00a76").append(ColorUtil.formatNumber(totalProfit)).append("\n");
         hover.append("\u00a7bProfit/Run: \u00a76").append(ColorUtil.formatNumber(profitPerRun));
         ChatUtil.msg("\u00a7aAverage profit from \u00a7e" + ColorUtil.formatNumber(dungeons) + " \u00a7aruns on " + floorLabel + "\u00a7a: \u00a76" + ColorUtil.formatNumber(profitPerRun));
-        MutableText hoverText = Text.literal((String)hover.toString());
-        MutableText totalLine = Text.literal((String)("\u00a7aTotal Profit: \u00a76" + ColorUtil.formatNumber(totalProfit) + " \u00a77(hover for details)"));
-        totalLine.styled(arg_0 -> AcCommand.lambda$cmdLoot$6((Text)hoverText, arg_0));
-        ChatUtil.msg((Text)totalLine);
+        MutableComponent hoverText = Component.literal((String)hover.toString());
+        MutableComponent totalLine = Component.literal((String)("\u00a7aTotal Profit: \u00a76" + ColorUtil.formatNumber(totalProfit) + " \u00a77(hover for details)"));
+        totalLine.withStyle(arg_0 -> AcCommand.lambda$cmdLoot$6((Component)hoverText, arg_0));
+        ChatUtil.msg((Component)totalLine);
     }
 
     private static String fmtFloor(String floor) {
@@ -473,7 +473,7 @@ public class AcCommand {
         }
         ChatUtil.msg("\u00a7b\u00a7lAutoCroesus \u00a7aSettings");
         ChatUtil.msg("\u00a77Commands to change settings are shown in brackets.");
-        ChatUtil.msg("  Min Click Delay: \u00a76" + AcDataStore.config.minClickDelay + "ms \u00a78(//ac delay <ms>)");
+        ChatUtil.msg("  Min MouseButtonEvent Delay: \u00a76" + AcDataStore.config.minClickDelay + "ms \u00a78(//ac delay <ms>)");
         ChatUtil.msg("  \u00a7cWarning: Low values with low ping will make this module ZOOM. Be safe!");
         ChatUtil.msg("");
         ChatUtil.msg("  Use Chest Keys: " + ColorUtil.formattedBool(AcDataStore.config.useChestKeys) + " \u00a78(//ac key)");
@@ -484,7 +484,7 @@ public class AcCommand {
         ChatUtil.msg("  Kismet Floors: " + kismetFloors + " \u00a78(//ac kismet <floor>)");
     }
 
-    private static /* synthetic */ Style lambda$cmdLoot$6(Text hoverText, Style s) {
+    private static /* synthetic */ Style lambda$cmdLoot$6(Component hoverText, Style s) {
         return s.withHoverEvent((HoverEvent)new HoverEvent.ShowText(hoverText));
     }
 }

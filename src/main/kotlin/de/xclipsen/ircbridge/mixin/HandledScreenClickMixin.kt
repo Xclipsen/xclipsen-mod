@@ -1,24 +1,24 @@
 package de.xclipsen.ircbridge.mixin
 
 import de.xclipsen.ircbridge.PartyFinderFeature
-import net.minecraft.client.gui.screen.ingame.HandledScreen
-import net.minecraft.screen.ScreenHandler
-import net.minecraft.screen.slot.Slot
-import net.minecraft.screen.slot.SlotActionType
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
+import net.minecraft.world.inventory.AbstractContainerMenu
+import net.minecraft.world.inventory.Slot
+import net.minecraft.world.inventory.ContainerInput
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 
-@Mixin(HandledScreen::class)
-abstract class HandledScreenClickMixin<T : ScreenHandler> {
+@Mixin(AbstractContainerScreen::class)
+abstract class HandledScreenClickMixin<T : AbstractContainerMenu> {
 	@Inject(
-		method = ["onMouseClick(Lnet/minecraft/screen/slot/Slot;IILnet/minecraft/screen/slot/SlotActionType;)V"],
+		method = ["slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V"],
 		at = [At("HEAD")],
 		cancellable = true,
 	)
-	private fun xclipsenOnMouseClick(slot: Slot?, slotId: Int, button: Int, actionType: SlotActionType, ci: CallbackInfo) {
-		if (PartyFinderFeature.onSlotClick(this as HandledScreen<*>, slot, button, actionType)) {
+	private fun xclipsenOnMouseClick(slot: Slot?, slotId: Int, button: Int, actionType: ContainerInput, ci: CallbackInfo) {
+		if (PartyFinderFeature.onSlotClick(this as AbstractContainerScreen<*>, slot, button, actionType)) {
 			ci.cancel()
 		}
 	}

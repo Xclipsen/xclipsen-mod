@@ -1,8 +1,8 @@
 package de.xclipsen.ircbridge
 
 import de.xclipsen.ircbridge.FrozenCorpseDetector.FrozenCorpseType
-import net.minecraft.entity.Entity
-import net.minecraft.entity.decoration.ArmorStandEntity
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.decoration.ArmorStand
 
 object CorpseEspFeature {
 	fun shouldGlow(entity: Entity): Boolean {
@@ -13,18 +13,18 @@ object CorpseEspFeature {
 		return matchingCorpseType(entity)?.colorRgb
 	}
 
-	fun onTick(client: net.minecraft.client.MinecraftClient) = Unit
+	fun onTick(client: net.minecraft.client.Minecraft) = Unit
 
 	fun onDisconnect() = Unit
 
-	fun render(context: net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext) = Unit
+	fun render(context: net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext) = Unit
 
 	private fun matchingCorpseType(entity: Entity): FrozenCorpseType? {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return null
 		if (!config.corpseEspModuleEnabled || !FrozenCorpseDetector.isInMineshaftArea()) {
 			return null
 		}
-		val stand = entity as? ArmorStandEntity ?: return null
+		val stand = entity as? ArmorStand ?: return null
 		if (!FrozenCorpseDetector.looksLikeCorpseStand(stand)) {
 			return null
 		}

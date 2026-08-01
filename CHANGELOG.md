@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.23
+
+- Ported the client target from Minecraft `1.21.11` to `26.1.2` with Java 25 and unobfuscated Mojang names.
+- Added Floor Drop ESP, high-class dice tracking, and related tracker updates.
+- Removed Blaze Auto Dagger and its automatic weapon-swapping configuration while retaining Blaze phase displays and colored mobs.
+
 ## v0.5.22
 
 - Added Odin-style Party Finder join stats cards with hoverable cata, secrets, class, floor PB, MP, armor, and missing-item details.

@@ -3,26 +3,26 @@
  * 
  * Could not load the following classes:
  *  net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
- *  net.minecraft.client.MinecraftClient
- *  net.minecraft.client.network.AbstractClientPlayerEntity
- *  net.minecraft.client.network.ClientPlayerEntity
- *  net.minecraft.client.util.InputUtil
- *  net.minecraft.client.util.Window
- *  net.minecraft.client.world.ClientWorld
- *  net.minecraft.component.DataComponentTypes
- *  net.minecraft.component.type.LoreComponent
- *  net.minecraft.entity.Entity
- *  net.minecraft.entity.decoration.ArmorStandEntity
- *  net.minecraft.entity.player.PlayerEntity
- *  net.minecraft.item.ItemStack
- *  net.minecraft.item.Items
- *  net.minecraft.screen.ScreenHandler
- *  net.minecraft.screen.slot.Slot
- *  net.minecraft.screen.slot.SlotActionType
- *  net.minecraft.text.Text
- *  net.minecraft.util.Hand
- *  net.minecraft.util.collection.DefaultedList
- *  net.minecraft.util.math.Box
+ *  net.minecraft.client.Minecraft
+ *  net.minecraft.client.player.AbstractClientPlayer
+ *  net.minecraft.client.player.LocalPlayer
+ *  com.mojang.blaze3d.platform.InputConstants
+ *  com.mojang.blaze3d.platform.Window
+ *  net.minecraft.client.multiplayer.ClientLevel
+ *  net.minecraft.core.component.DataComponents
+ *  net.minecraft.world.item.component.ItemLore
+ *  net.minecraft.world.entity.Entity
+ *  net.minecraft.world.entity.decoration.ArmorStand
+ *  net.minecraft.world.entity.player.Player
+ *  net.minecraft.world.item.ItemStack
+ *  net.minecraft.world.item.Items
+ *  net.minecraft.world.inventory.AbstractContainerMenu
+ *  net.minecraft.world.inventory.Slot
+ *  net.minecraft.world.inventory.ClickType
+ *  net.minecraft.network.chat.Component
+ *  net.minecraft.world.InteractionHand
+ *  net.minecraft.core.NonNullList
+ *  net.minecraft.world.phys.AABB
  */
 package com.autocroesus.feature;
 
@@ -42,26 +42,28 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.util.Window;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.text.Text;
-import net.minecraft.util.Hand;
-import net.minecraft.util.collection.DefaultedList;
-import net.minecraft.util.math.Box;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.player.LocalPlayer;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.Window;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.level.entity.EntityTypeTest;
 
 public class CroesusClaimer {
     public static boolean autoClaiming = false;
@@ -101,15 +103,15 @@ public class CroesusClaimer {
         ClientTickEvents.END_CLIENT_TICK.register(CroesusClaimer::onTick);
     }
 
-    private static void onTick(MinecraftClient mc) {
+    private static void onTick(Minecraft mc) {
         if (!XclipsenAutoCroesusModule.isEnabled()) {
             if (autoClaiming) {
                 CroesusClaimer.reset();
             }
             return;
         }
-        ClientPlayerEntity player = mc.player;
-        if (player == null || mc.world == null) {
+        LocalPlayer player = mc.player;
+        if (player == null || mc.level == null) {
             return;
         }
         CroesusClaimer.tickKillSwitch(mc, player);
@@ -120,17 +122,17 @@ public class CroesusClaimer {
         CroesusClaimer.tickChestScreen(mc, player);
     }
 
-    private static void tickKillSwitch(MinecraftClient mc, ClientPlayerEntity player) {
+    private static void tickKillSwitch(Minecraft mc, LocalPlayer player) {
         String title;
         if (!autoClaiming) {
             return;
         }
-        if (InputUtil.isKeyPressed((Window)mc.getWindow(), (int)340) || InputUtil.isKeyPressed((Window)mc.getWindow(), (int)344) || InputUtil.isKeyPressed((Window)mc.getWindow(), (int)256)) {
+        if (InputConstants.isKeyDown((Window)mc.getWindow(), 340) || InputConstants.isKeyDown((Window)mc.getWindow(), 344) || InputConstants.isKeyDown((Window)mc.getWindow(), 256)) {
             CroesusClaimer.reset();
             ChatUtil.msg("Kill switch activated!");
             return;
         }
-        String string = title = mc.currentScreen != null ? CroesusClaimer.getScreenTitle(mc) : "";
+        String string = title = mc.screen != null ? CroesusClaimer.getScreenTitle(mc) : "";
         if (title.isEmpty() && !prevScreenTitle.isEmpty()) {
             boolean prevWasOurs;
             boolean bl = prevWasOurs = prevScreenTitle.equals("Croesus") || RUN_GUI_PATTERN.matcher(prevScreenTitle).matches();
@@ -142,15 +144,15 @@ public class CroesusClaimer {
         prevScreenTitle = title;
     }
 
-    private static void tickExecuteClick(MinecraftClient mc, ClientPlayerEntity player) {
+    private static void tickExecuteClick(Minecraft mc, LocalPlayer player) {
         if (indexToClick < 0) {
             return;
         }
         if (System.currentTimeMillis() - lastClick < (long)AcDataStore.config.minClickDelay) {
             return;
         }
-        ScreenHandler menu = player.currentScreenHandler;
-        if (menu.getStacks().size() <= indexToClick) {
+        AbstractContainerMenu menu = player.containerMenu;
+        if (menu.getItems().size() <= indexToClick) {
             return;
         }
         lastClick = System.currentTimeMillis();
@@ -159,17 +161,17 @@ public class CroesusClaimer {
             indexToClick = -1;
             return;
         }
-        if (mc.interactionManager != null) {
-            mc.interactionManager.clickSlot(menu.syncId, indexToClick, 1, SlotActionType.PICKUP, (PlayerEntity)player);
+        if (mc.gameMode != null) {
+            mc.gameMode.handleContainerInput(menu.containerId, indexToClick, 1, ContainerInput.PICKUP, player);
         }
         indexToClick = -1;
     }
 
-    private static void tickStartClaiming(MinecraftClient mc, ClientPlayerEntity player) {
+    private static void tickStartClaiming(Minecraft mc, LocalPlayer player) {
         if (!autoClaiming || waitingForCroesus) {
             return;
         }
-        if (player.currentScreenHandler != player.playerScreenHandler) {
+        if (player.containerMenu != player.inventoryMenu) {
             return;
         }
         if (waitingOnPage >= 0) {
@@ -186,7 +188,7 @@ public class CroesusClaimer {
         CroesusClaimer.startClaiming(mc, player);
     }
 
-    private static void tickCroesusMenu(MinecraftClient mc, ClientPlayerEntity player) {
+    private static void tickCroesusMenu(Minecraft mc, LocalPlayer player) {
         boolean nowInCroesus = CroesusClaimer.inCroesus(mc);
         if (nowInCroesus && !prevWasInCroesus) {
             croesusEnteredAt = System.currentTimeMillis();
@@ -205,7 +207,7 @@ public class CroesusClaimer {
         if (claimRunSlot < 0) {
             CroesusClaimer.resetClaimInfo();
         }
-        ScreenHandler menu = player.currentScreenHandler;
+        AbstractContainerMenu menu = player.containerMenu;
         int page = CroesusClaimer.getCurrPage(menu);
         if (waitingOnPage >= 0) {
             if (page != waitingOnPage) {
@@ -253,7 +255,7 @@ public class CroesusClaimer {
             return;
         }
         ItemStack nextArrow = CroesusClaimer.getSlot(menu, 53);
-        if (!nextArrow.isEmpty() && ColorUtil.stripColors(nextArrow.getName().getString()).contains("Next Page")) {
+        if (!nextArrow.isEmpty() && ColorUtil.stripColors(nextArrow.getHoverName().getString()).contains("Next Page")) {
             if (lastPageOn == page) {
                 return;
             }
@@ -281,12 +283,12 @@ public class CroesusClaimer {
             ChatUtil.msg("\u00a7aAll chests looted!");
         }
         CroesusClaimer.reset();
-        if (mc.currentScreen != null) {
-            mc.currentScreen.close();
+        if (mc.screen != null) {
+            mc.screen.onClose();
         }
     }
 
-    private static void tickRunGui(MinecraftClient mc, ClientPlayerEntity player) {
+    private static void tickRunGui(Minecraft mc, LocalPlayer player) {
         int runIndex;
         boolean hasAlwaysBuyItem;
         if (!autoClaiming && claimRunSlot < 0) {
@@ -315,14 +317,14 @@ public class CroesusClaimer {
             claimChestSlot = -1;
             return;
         }
-        ScreenHandler menu = player.currentScreenHandler;
+        AbstractContainerMenu menu = player.containerMenu;
         ArrayList<ItemParser.ChestInfo> chestData = new ArrayList<ItemParser.ChestInfo>();
         int totalChestCount = 0;
         for (int i = 0; i < 27; ++i) {
             String itemName;
             Matcher m;
             ItemStack stack = CroesusClaimer.getSlot(menu, i);
-            if (stack.isEmpty() || !(m = CHEST_NAME_PATTERN.matcher(itemName = ColorUtil.stripColors(stack.getName().getString()))).matches()) continue;
+            if (stack.isEmpty() || !(m = CHEST_NAME_PATTERN.matcher(itemName = ColorUtil.stripColors(stack.getHoverName().getString()))).matches()) continue;
             ++totalChestCount;
             String chestName = m.group(1);
             List<String> tooltip = CroesusClaimer.getTooltip(stack);
@@ -406,12 +408,12 @@ public class CroesusClaimer {
         failedIndexes.add(runIndex);
     }
 
-    private static void tickChestScreen(MinecraftClient mc, ClientPlayerEntity player) {
+    private static void tickChestScreen(Minecraft mc, LocalPlayer player) {
         if (!waitingForChestToOpen) {
             return;
         }
-        ScreenHandler menu = player.currentScreenHandler;
-        if (!CroesusClaimer.isInvLoaded(mc, player) || menu.getStacks().size() < 32) {
+        AbstractContainerMenu menu = player.containerMenu;
+        if (!CroesusClaimer.isInvLoaded(mc, player) || menu.getItems().size() < 32) {
             return;
         }
         String title = CroesusClaimer.getScreenTitle(mc);
@@ -425,7 +427,7 @@ public class CroesusClaimer {
             boolean noKismet;
             tryingToKismet = false;
             ItemStack kismetSlot = CroesusClaimer.getSlot(menu, 50);
-            boolean bl = noKismet = kismetSlot.isEmpty() || !ColorUtil.stripColors(kismetSlot.getName().getString()).equals("Reroll Chest");
+            boolean bl = noKismet = kismetSlot.isEmpty() || !ColorUtil.stripColors(kismetSlot.getHoverName().getString()).equals("Reroll Chest");
             if (!noKismet) {
                 noKismet = CroesusClaimer.getLorePlain(kismetSlot).contains("Bring a Kismet Feather");
             }
@@ -497,7 +499,7 @@ public class CroesusClaimer {
         claimSkipKismet = false;
     }
 
-    private static void startClaiming(MinecraftClient mc, ClientPlayerEntity player) {
+    private static void startClaiming(Minecraft mc, LocalPlayer player) {
         autoClaiming = true;
         if (!CroesusClaimer.tryClickCroesus(mc, player)) {
             autoClaiming = false;
@@ -508,18 +510,18 @@ public class CroesusClaimer {
         waitingForCroesus = true;
     }
 
-    private static boolean tryClickCroesus(MinecraftClient mc, ClientPlayerEntity player) {
-        ClientWorld level = mc.world;
+    private static boolean tryClickCroesus(Minecraft mc, LocalPlayer player) {
+        ClientLevel level = mc.level;
         if (level == null) {
             return false;
         }
-        Box box = new Box(player.getX() - 5.0, player.getY() - 3.0, player.getZ() - 5.0, player.getX() + 5.0, player.getY() + 3.0, player.getZ() + 5.0);
-        List stands = level.getEntitiesByClass(ArmorStandEntity.class, box, stand -> ColorUtil.stripColors(stand.getName().getString()).equals("Croesus"));
+        AABB box = new AABB(player.getX() - 5.0, player.getY() - 3.0, player.getZ() - 5.0, player.getX() + 5.0, player.getY() + 3.0, player.getZ() + 5.0);
+        List<ArmorStand> stands = level.getEntities(EntityTypeTest.forClass(ArmorStand.class), box, stand -> ColorUtil.stripColors(stand.getName().getString()).equals("Croesus"));
         if (stands.isEmpty()) {
             return false;
         }
-        ArmorStandEntity displayStand = (ArmorStandEntity)stands.getFirst();
-        List npcs = level.getEntitiesByClass(AbstractClientPlayerEntity.class, box, p -> p != player && p.getUuid().version() == 2 && Math.abs(p.getX() - displayStand.getX()) < 0.01 && Math.abs(p.getZ() - displayStand.getZ()) < 0.01);
+        ArmorStand displayStand = (ArmorStand)stands.getFirst();
+        List<AbstractClientPlayer> npcs = level.getEntities(EntityTypeTest.forClass(AbstractClientPlayer.class), box, p -> p != player && p.getUUID().version() == 2 && Math.abs(p.getX() - displayStand.getX()) < 0.01 && Math.abs(p.getZ() - displayStand.getZ()) < 0.01);
         if (npcs.isEmpty()) {
             return false;
         }
@@ -527,50 +529,50 @@ public class CroesusClaimer {
             ChatUtil.msg("\u00a7c[Error 102] \u00a7fFound multiple possible Croesus entities. \u00a77DM 22yrs on Discord");
             return false;
         }
-        AbstractClientPlayerEntity croesus = (AbstractClientPlayerEntity)npcs.getFirst();
-        double distSq = player.squaredDistanceTo((Entity)croesus);
+        AbstractClientPlayer croesus = (AbstractClientPlayer)npcs.getFirst();
+        double distSq = player.distanceToSqr(croesus);
         if (distSq > 16.0) {
             ChatUtil.msg("\u00a7c[Error 101] \u00a7fCroesus is too far away! \u00a77DM 22yrs on Discord");
             return false;
         }
-        if (mc.interactionManager != null) {
-            mc.interactionManager.interactEntity((PlayerEntity)player, (Entity)croesus, Hand.MAIN_HAND);
+        if (mc.gameMode != null) {
+            mc.gameMode.interact(player, croesus, new EntityHitResult(croesus), InteractionHand.MAIN_HAND);
         }
         return true;
     }
 
-    private static String getScreenTitle(MinecraftClient mc) {
-        if (mc.currentScreen == null) {
+    private static String getScreenTitle(Minecraft mc) {
+        if (mc.screen == null) {
             return "";
         }
-        return ColorUtil.stripColors(mc.currentScreen.getTitle().getString());
+        return ColorUtil.stripColors(mc.screen.getTitle().getString());
     }
 
-    private static boolean inCroesus(MinecraftClient mc) {
+    private static boolean inCroesus(Minecraft mc) {
         return CroesusClaimer.getScreenTitle(mc).equals("Croesus");
     }
 
-    private static boolean inRunGui(MinecraftClient mc) {
+    private static boolean inRunGui(Minecraft mc) {
         return RUN_GUI_PATTERN.matcher(CroesusClaimer.getScreenTitle(mc)).matches();
     }
 
-    private static boolean isInvLoaded(MinecraftClient mc, ClientPlayerEntity player) {
-        if (mc.currentScreen == null) {
+    private static boolean isInvLoaded(Minecraft mc, LocalPlayer player) {
+        if (mc.screen == null) {
             return false;
         }
-        ScreenHandler menu = player.currentScreenHandler;
-        if (menu == player.playerScreenHandler) {
+        AbstractContainerMenu menu = player.containerMenu;
+        if (menu == player.inventoryMenu) {
             return false;
         }
-        DefaultedList items = menu.getStacks();
+        NonNullList<ItemStack> items = menu.getItems();
         return items.size() > 45 && !((ItemStack)items.get(items.size() - 45)).isEmpty();
     }
 
-    private static int getCurrPage(ScreenHandler menu) {
+    private static int getCurrPage(AbstractContainerMenu menu) {
         String prevName;
         ItemStack next = CroesusClaimer.getSlot(menu, 53);
         ItemStack prev = CroesusClaimer.getSlot(menu, 45);
-        String nextName = ColorUtil.stripColors(next.getName().getString());
+        String nextName = ColorUtil.stripColors(next.getHoverName().getString());
         if (nextName.contains("Next Page")) {
             for (String line : CroesusClaimer.getLoreLines(next)) {
                 Matcher m = PAGE_NUM_PATTERN.matcher(ColorUtil.stripColors(line));
@@ -578,7 +580,7 @@ public class CroesusClaimer {
                 return Integer.parseInt(m.group(1)) - 1;
             }
         }
-        if ((prevName = ColorUtil.stripColors(prev.getName().getString())).contains("Previous Page")) {
+        if ((prevName = ColorUtil.stripColors(prev.getHoverName().getString())).contains("Previous Page")) {
             for (String line : CroesusClaimer.getLoreLines(prev)) {
                 Matcher m = PAGE_NUM_PATTERN.matcher(ColorUtil.stripColors(line));
                 if (!m.find()) continue;
@@ -588,7 +590,7 @@ public class CroesusClaimer {
         return 1;
     }
 
-    private static int[] findUnopenedChest(ScreenHandler menu, int page) {
+    private static int[] findUnopenedChest(AbstractContainerMenu menu, int page) {
         for (int slotIdx : CHEST_SLOTS) {
             int floorNum;
             String lorePlain;
@@ -598,8 +600,8 @@ public class CroesusClaimer {
             if (stack.isEmpty()) {
                 return null;
             }
-            if (!stack.isOf(Items.PLAYER_HEAD) || !(lorePlain = CroesusClaimer.getLorePlain(stack)).contains("No chests opened yet!")) continue;
-            String dungeonType = ColorUtil.stripColors(stack.getName().getString());
+            if (!stack.is(Items.PLAYER_HEAD) || !(lorePlain = CroesusClaimer.getLorePlain(stack)).contains("No chests opened yet!")) continue;
+            String dungeonType = ColorUtil.stripColors(stack.getHoverName().getString());
             boolean isMaster = dungeonType.contains("Master Mode");
             List<String> loreLines = CroesusClaimer.getLoreLines(stack);
             if (loreLines.isEmpty()) continue;
@@ -648,32 +650,32 @@ public class CroesusClaimer {
         return floor.startsWith("M") ? "\u00a74\u00a7l" + floor : "\u00a7a" + floor;
     }
 
-    private static ItemStack getSlot(ScreenHandler menu, int index) {
+    private static ItemStack getSlot(AbstractContainerMenu menu, int index) {
         if (index < 0 || index >= menu.slots.size()) {
             return ItemStack.EMPTY;
         }
-        return ((Slot)menu.slots.get(index)).getStack();
+        return menu.slots.get(index).getItem();
     }
 
     private static List<String> getLoreLines(ItemStack stack) {
-        LoreComponent lore = (LoreComponent)stack.get(DataComponentTypes.LORE);
+        ItemLore lore = (ItemLore)stack.get(DataComponents.LORE);
         if (lore == null) {
             return Collections.emptyList();
         }
         ArrayList<String> lines = new ArrayList<String>();
-        for (Text c : lore.styledLines()) {
+        for (Component c : lore.styledLines()) {
             lines.add(c.getString());
         }
         return lines;
     }
 
     private static String getLorePlain(ItemStack stack) {
-        LoreComponent lore = (LoreComponent)stack.get(DataComponentTypes.LORE);
+        ItemLore lore = (ItemLore)stack.get(DataComponents.LORE);
         if (lore == null) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        for (Text c : lore.styledLines()) {
+        for (Component c : lore.styledLines()) {
             sb.append(ColorUtil.stripColors(c.getString())).append(' ');
         }
         return sb.toString();
@@ -681,10 +683,10 @@ public class CroesusClaimer {
 
     private static List<String> getTooltip(ItemStack stack) {
         ArrayList<String> tooltip = new ArrayList<String>();
-        tooltip.add(stack.getName().getString());
-        LoreComponent lore = (LoreComponent)stack.get(DataComponentTypes.LORE);
+        tooltip.add(stack.getHoverName().getString());
+        ItemLore lore = (ItemLore)stack.get(DataComponents.LORE);
         if (lore != null) {
-            for (Text c : lore.styledLines()) {
+            for (Component c : lore.styledLines()) {
                 tooltip.add(c.getString());
             }
         }

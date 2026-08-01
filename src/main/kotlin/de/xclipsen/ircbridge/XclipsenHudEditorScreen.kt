@@ -1,29 +1,29 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.gui.Click
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.Screen
-import net.minecraft.client.gui.widget.ButtonWidget
-import net.minecraft.text.Text
+import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.components.Button
+import net.minecraft.network.chat.Component
 import java.io.IOException
 
 class XclipsenHudEditorScreen(
 	private val parent: Screen?,
 	private val mod: XclipsenIrcBridgeClient,
-) : Screen(Text.literal("Xclipsen HUD Editor")) {
+) : Screen(Component.literal("Xclipsen HUD Editor")) {
 	override fun init() {
 		super.init()
-		addDrawableChild(
-			ButtonWidget.builder(Text.literal("Reset HUD")) {
+		addRenderableWidget(
+			Button.builder(Component.literal("Reset HUD")) {
 				val context = MinecraftDrawContextHolder.current ?: return@builder
 				XclipsenHudManager.elements.forEach { element -> element.reset(context) }
-			}.dimensions(width / 2 - 50, height - 56, 100, 20).build(),
+			}.bounds(width / 2 - 50, height - 56, 100, 20).build(),
 		)
 	}
 
-	override fun shouldPause(): Boolean = false
+	override fun isPauseScreen(): Boolean = false
 
-	override fun render(context: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
+	override fun extractRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
 		MinecraftDrawContextHolder.current = context
 		context.fill(0, 0, width, height, 0x96000000.toInt())
 
@@ -32,19 +32,19 @@ class XclipsenHudEditorScreen(
 		}
 
 		val dragged = XclipsenHudManager.elements.firstOrNull { it.isDragging }
-		context.drawCenteredTextWithShadow(textRenderer, dragged?.displayName ?: "HUD Editor", width / 2, 10, TEXT_WHITE)
-		context.drawCenteredTextWithShadow(
-			textRenderer,
+		context.centeredText(font, dragged?.displayName ?: "HUD Editor", width / 2, 10, TEXT_WHITE)
+		context.centeredText(
+			font,
 			"Drag elements | Scroll while dragging to scale | ESC saves",
 			width / 2,
 			height - 26,
 			TEXT_MUTED,
 		)
 
-		super.render(context, mouseX, mouseY, delta)
+		super.extractRenderState(context, mouseX, mouseY, delta)
 	}
 
-	override fun mouseClicked(click: Click, doubled: Boolean): Boolean {
+	override fun mouseClicked(click: MouseButtonEvent, doubled: Boolean): Boolean {
 		if (click.button() < 0) {
 			return false
 		}
@@ -65,7 +65,7 @@ class XclipsenHudEditorScreen(
 		return false
 	}
 
-	override fun mouseReleased(click: Click): Boolean {
+	override fun mouseReleased(click: MouseButtonEvent): Boolean {
 		XclipsenHudManager.elements.forEach { element -> element.stopDragging() }
 		if (click.button() < 0) {
 			return false
@@ -84,16 +84,16 @@ class XclipsenHudEditorScreen(
 		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
 	}
 
-	override fun close() {
+	override fun onClose() {
 		try {
 			mod.saveCurrentConfig()
 		} catch (_: IOException) {
 		}
-		client?.setScreen(parent)
+		minecraft.setScreen(parent)
 	}
 
 	private object MinecraftDrawContextHolder {
-		var current: DrawContext? = null
+		var current: GuiGraphicsExtractor? = null
 	}
 
 	companion object {

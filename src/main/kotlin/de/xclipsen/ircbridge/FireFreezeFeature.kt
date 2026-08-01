@@ -1,25 +1,24 @@
 package de.xclipsen.ircbridge
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.render.entity.state.LivingEntityRenderState
-import net.minecraft.client.render.entity.state.EntityRenderState
-import net.minecraft.client.render.VertexConsumer
-import net.minecraft.client.render.VertexConsumerProvider
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState
+import net.minecraft.client.renderer.entity.state.EntityRenderState
+import com.mojang.blaze3d.vertex.VertexConsumer
 import net.minecraft.client.render.XclipsenRenderLayers
-import net.minecraft.entity.Entity
-import net.minecraft.entity.EntityType
-import net.minecraft.entity.LivingEntity
-import net.minecraft.entity.decoration.ArmorStandEntity
-import net.minecraft.entity.player.PlayerEntity
-import net.minecraft.particle.DustParticleEffect
-import net.minecraft.particle.ParticleEffect
-import net.minecraft.registry.Registries
-import net.minecraft.registry.entry.RegistryEntry
-import net.minecraft.sound.SoundCategory
-import net.minecraft.sound.SoundEvent
-import net.minecraft.util.math.Vec3d
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.EntityType
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.decoration.ArmorStand
+import net.minecraft.world.entity.player.Player
+import net.minecraft.core.particles.DustParticleOptions
+import net.minecraft.core.particles.ParticleOptions
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.core.Holder
+import net.minecraft.sounds.SoundSource
+import net.minecraft.sounds.SoundEvent
+import net.minecraft.world.phys.Vec3
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -36,9 +35,9 @@ object FireFreezeFeature {
 	private var alertVisibleUntil = 0L
 	private var tickCounter = 0
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config()
-		if (config?.fireFreezeModuleEnabled != true || client.world == null || client.player == null || !LocationTracker.isOnHypixelSkyBlock) {
+		if (config?.fireFreezeModuleEnabled != true || client.level == null || client.player == null || !LocationTracker.isOnHypixelSkyBlock) {
 			clear()
 			return
 		}
@@ -59,7 +58,7 @@ object FireFreezeFeature {
 			}
 		}
 		fireFreezes.values.removeIf { it.frozen || it.hasFinished(now) }
-		frozenMobs.values.removeIf { it.freezeEndsAtMs <= now || client.world?.getEntityById(it.entityId) == null }
+		frozenMobs.values.removeIf { it.freezeEndsAtMs <= now || client.level?.getEntity(it.entityId) == null }
 		suppressedEffectAreas.values.removeIf { it.expiresAtMs <= now }
 	}
 
@@ -69,8 +68,8 @@ object FireFreezeFeature {
 		x: Double,
 		y: Double,
 		z: Double,
-		sound: RegistryEntry<SoundEvent>,
-		category: SoundCategory,
+		sound: Holder<SoundEvent>,
+		category: SoundSource,
 		volume: Float,
 		pitch: Float,
 	) {
@@ -79,39 +78,39 @@ object FireFreezeFeature {
 			return
 		}
 
-		val soundId = Registries.SOUND_EVENT.getId(sound.value()).toString()
-		val pos = Vec3d(x, y, z)
+		val soundId = BuiltInRegistries.SOUND_EVENT.getId(sound.value()).toString()
+		val pos = Vec3(x, y, z)
 		when (soundId) {
 			"minecraft:entity.elder_guardian.ambient" -> handleActiveSound(pos, volume, pitch)
 			"minecraft:block.anvil.land" -> handleAnvilSound(pos, volume, pitch)
 		}
 	}
 
-	fun shouldSuppressParticle(effect: ParticleEffect, x: Double, y: Double, z: Double, velocityX: Double, velocityY: Double, velocityZ: Double): Boolean {
+	fun shouldSuppressParticle(effect: ParticleOptions, x: Double, y: Double, z: Double, velocityX: Double, velocityY: Double, velocityZ: Double): Boolean {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return false
 		if (!config.fireFreezeModuleEnabled || !config.fireFreezeCustomCircleEnabled || !LocationTracker.isOnHypixelSkyBlock) {
 			return false
 		}
-		if (effect !is DustParticleEffect || velocityX != PARTICLE_OFFSET || velocityY != PARTICLE_OFFSET || velocityZ != PARTICLE_OFFSET) {
+		if (effect !is DustParticleOptions || velocityX != PARTICLE_OFFSET || velocityY != PARTICLE_OFFSET || velocityZ != PARTICLE_OFFSET) {
 			return false
 		}
 
-		return isInsideSuppressedEffectArea(Vec3d(x, y, z), System.currentTimeMillis())
+		return isInsideSuppressedEffectArea(Vec3(x, y, z), System.currentTimeMillis())
 	}
 
-	fun render(context: WorldRenderContext) {
+	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
-		if (!config.fireFreezeModuleEnabled || MinecraftClient.getInstance().options.hudHidden || !LocationTracker.isOnHypixelSkyBlock) {
+		if (!config.fireFreezeModuleEnabled || Minecraft.getInstance().options.hideGui || !LocationTracker.isOnHypixelSkyBlock) {
 			return
 		}
 
 		val now = System.currentTimeMillis()
-		val cameraPos = context.gameRenderer().camera.cameraPos
-		val matrices = context.matrices()
-		val consumers = context.consumers()
-		matrices.push()
+		val cameraPos = context.gameRenderer().mainCamera.position()
+		val matrices = context.poseStack()
+		val consumers = context.bufferSource()
+		matrices.pushPose()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
-		val entry = matrices.peek()
+		val entry = matrices.last()
 		val circleLineWidth = config.fireFreezeCircleLineWidth.coerceIn(1.0f, 8.0f)
 		val circleLineLayer = XclipsenRenderLayers.getXrayLine(circleLineWidth.toDouble())
 		val boxLineLayer = XclipsenRenderLayers.getXrayLine(2.0)
@@ -129,9 +128,9 @@ object FireFreezeFeature {
 		}
 
 		if (config.fireFreezeBoxFrozenMobsEnabled) {
-			val world = MinecraftClient.getInstance().world
+			val world = Minecraft.getInstance().level
 			for (frozenMob in frozenMobs.values) {
-				val entity = world?.getEntityById(frozenMob.entityId) as? LivingEntity ?: continue
+				val entity = world?.getEntity(frozenMob.entityId) as? LivingEntity ?: continue
 				val remainingMs = frozenMob.freezeEndsAtMs - now
 				if (remainingMs <= 0L) continue
 				val color = refreezeColor(remainingMs)
@@ -139,10 +138,10 @@ object FireFreezeFeature {
 			}
 		}
 
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(XclipsenRenderLayers.getXrayFill())
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(circleLineLayer)
-		(consumers as? VertexConsumerProvider.Immediate)?.draw(boxLineLayer)
-		matrices.pop()
+		consumers.endBatch(XclipsenRenderLayers.getXrayFill())
+		consumers.endBatch(circleLineLayer)
+		consumers.endBatch(boxLineLayer)
+		matrices.popPose()
 	}
 
 	fun shouldDrawAlert(config: BridgeConfig): Boolean {
@@ -194,15 +193,15 @@ object FireFreezeFeature {
 			return false
 		}
 
-		val pos = Vec3d(state.x, state.y, state.z)
+		val pos = Vec3(state.x, state.y, state.z)
 		return isInsideSuppressedEffectArea(pos, System.currentTimeMillis())
 	}
 
 	private fun isFireFreezeVisualEntity(state: EntityRenderState): Boolean {
-		return (state.entityType == EntityType.ARMOR_STAND && state.invisible) || state.entityType == EntityType.WITHER_SKULL
+		return (state.entityType == EntityType.ARMOR_STAND && state.isInvisible) || state.entityType == EntityType.WITHER_SKULL
 	}
 
-	private fun handleActiveSound(pos: Vec3d, volume: Float, pitch: Float) {
+	private fun handleActiveSound(pos: Vec3, volume: Float, pitch: Float) {
 		if (volume != 0.2f || pitch !in 0.0f..2.0f) {
 			return
 		}
@@ -215,7 +214,7 @@ object FireFreezeFeature {
 		}
 	}
 
-	private fun handleAnvilSound(pos: Vec3d, volume: Float, pitch: Float) {
+	private fun handleAnvilSound(pos: Vec3, volume: Float, pitch: Float) {
 		if (volume != 0.6f || pitch != 0.4920635f) {
 			return
 		}
@@ -228,11 +227,11 @@ object FireFreezeFeature {
 	}
 
 	private fun freezeMobs(fireFreeze: FireFreezeArea) {
-		val world = MinecraftClient.getInstance().world ?: return
+		val world = Minecraft.getInstance().level ?: return
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		val now = System.currentTimeMillis()
-		for (entity in world.entities) {
-			if (!isFreezableMob(entity, config) || !fireFreeze.isInside(Vec3d(entity.x, entity.y, entity.z), extra = 0.0)) {
+		for (entity in world.entitiesForRendering()) {
+			if (!isFreezableMob(entity, config) || !fireFreeze.isInside(Vec3(entity.x, entity.y, entity.z), extra = 0.0)) {
 				continue
 			}
 			val living = entity as LivingEntity
@@ -245,21 +244,21 @@ object FireFreezeFeature {
 	}
 
 	private fun isFreezableMob(entity: Entity, config: BridgeConfig): Boolean {
-		if (entity !is LivingEntity || entity is ArmorStandEntity || !entity.isAlive || entity.isRemoved) {
+		if (entity !is LivingEntity || entity is ArmorStand || !entity.isAlive || entity.isRemoved) {
 			return false
 		}
-		if (entity is PlayerEntity) {
+		if (entity is Player) {
 			return if (config.fireFreezeStrongMobsOnly) isStrongMythologicalMob(entity) else isMythologicalMob(entity)
 		}
 		return !config.fireFreezeStrongMobsOnly
 	}
 
-	private fun isMythologicalMob(entity: PlayerEntity): Boolean {
+	private fun isMythologicalMob(entity: Player): Boolean {
 		val name = normalizeEntityName(entity.displayName?.string ?: entity.name.string)
 		return MYTHOLOGICAL_MOB_NAMES.any { name.contains(it) }
 	}
 
-	private fun isStrongMythologicalMob(entity: PlayerEntity): Boolean {
+	private fun isStrongMythologicalMob(entity: Player): Boolean {
 		val name = normalizeEntityName(entity.displayName?.string ?: entity.name.string)
 		return STRONG_MYTHOLOGICAL_MOB_NAMES.any { name.contains(it) }
 	}
@@ -276,16 +275,16 @@ object FireFreezeFeature {
 		entity: LivingEntity,
 		fillConsumer: VertexConsumer,
 		lineConsumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		matrices: net.minecraft.client.util.math.MatrixStack,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		matrices: com.mojang.blaze3d.vertex.PoseStack,
 		color: Int,
 	) {
 		val red = (color shr 16 and 0xFF) / 255.0f
 		val green = (color shr 8 and 0xFF) / 255.0f
 		val blue = (color and 0xFF) / 255.0f
-		val box = entity.boundingBox.expand(0.1)
+		val box = entity.boundingBox.inflate(0.1)
 		XclipsenWorldRenderUtils.drawFilledBox(
-			matrices.peek(),
+			matrices.last(),
 			fillConsumer,
 			box.minX.toFloat(),
 			box.minY.toFloat(),
@@ -303,8 +302,8 @@ object FireFreezeFeature {
 
 	private fun drawCircle(
 		consumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		center: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		center: Vec3,
 		radius: Double,
 		lineWidth: Float,
 		color: Int,
@@ -321,8 +320,8 @@ object FireFreezeFeature {
 
 	private fun drawCircleRing(
 		consumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		center: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		center: Vec3,
 		radius: Double,
 		red: Int,
 		green: Int,
@@ -340,16 +339,16 @@ object FireFreezeFeature {
 
 	private fun drawLineSegment(
 		consumer: VertexConsumer,
-		entry: net.minecraft.client.util.math.MatrixStack.Entry,
-		start: Vec3d,
-		end: Vec3d,
+		entry: com.mojang.blaze3d.vertex.PoseStack.Pose,
+		start: Vec3,
+		end: Vec3,
 		red: Int,
 		green: Int,
 		blue: Int,
 		lineWidth: Float,
 	) {
-		consumer.vertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat()).color(red, green, blue, 230).normal(entry, 0.0f, 1.0f, 0.0f).lineWidth(lineWidth)
-		consumer.vertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat()).color(red, green, blue, 230).normal(entry, 0.0f, 1.0f, 0.0f).lineWidth(lineWidth)
+		consumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat()).setColor(red, green, blue, 230).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(lineWidth)
+		consumer.addVertex(entry, end.x.toFloat(), end.y.toFloat(), end.z.toFloat()).setColor(red, green, blue, 230).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(lineWidth)
 	}
 
 	private fun refreezeColor(remainingMs: Long): Int {
@@ -366,7 +365,7 @@ object FireFreezeFeature {
 	}
 
 	private fun playAlertSound(config: BridgeConfig) {
-		MinecraftClient.getInstance().soundManager.play(
+		Minecraft.getInstance().soundManager.play(
 			SoundCatalog.masterSound(
 				config.fireFreezeRefreezeAlertSoundId,
 				config.fireFreezeRefreezeAlertSoundPitch.coerceIn(0.1f, 2.0f),
@@ -389,7 +388,7 @@ object FireFreezeFeature {
 		suppressedEffectAreas.clear()
 	}
 
-	private fun isInsideSuppressedEffectArea(pos: Vec3d, now: Long): Boolean {
+	private fun isInsideSuppressedEffectArea(pos: Vec3, now: Long): Boolean {
 		return fireFreezes.values.any { !it.hasFinished(now) && it.isInside(pos, extra = EFFECT_SUPPRESSION_EXTRA_RADIUS) } ||
 			suppressedEffectAreas.values.any { it.expiresAtMs > now && it.isInside(pos) }
 	}
@@ -406,12 +405,12 @@ object FireFreezeFeature {
 
 	private data class PositionKey(val x: Int, val y: Int, val z: Int) {
 		companion object {
-			fun of(pos: Vec3d): PositionKey = PositionKey((pos.x * 100.0).toInt(), (pos.y * 100.0).toInt(), (pos.z * 100.0).toInt())
+			fun of(pos: Vec3): PositionKey = PositionKey((pos.x * 100.0).toInt(), (pos.y * 100.0).toInt(), (pos.z * 100.0).toInt())
 		}
 	}
 
 	private data class FireFreezeArea(
-		val center: Vec3d,
+		val center: Vec3,
 		var lastPitch: Float,
 		var startAtMs: Long = System.currentTimeMillis(),
 		var freezeAtMs: Long = timeFromPitch(lastPitch),
@@ -427,7 +426,7 @@ object FireFreezeFeature {
 
 		fun hasFinished(now: Long): Boolean = frozen || now > freezeAtMs + 500L
 
-		fun isInside(pos: Vec3d, extra: Double = 0.5): Boolean {
+		fun isInside(pos: Vec3, extra: Double = 0.5): Boolean {
 			val dx = center.x - pos.x
 			val dz = center.z - pos.z
 			return ((dx * dx) + (dz * dz)) < ((RADIUS + extra) * (RADIUS + extra))
@@ -442,10 +441,10 @@ object FireFreezeFeature {
 	)
 
 	private data class SuppressedEffectArea(
-		val center: Vec3d,
+		val center: Vec3,
 		val expiresAtMs: Long,
 	) {
-		fun isInside(pos: Vec3d): Boolean {
+		fun isInside(pos: Vec3): Boolean {
 			val dx = center.x - pos.x
 			val dz = center.z - pos.z
 			return ((dx * dx) + (dz * dz)) < ((RADIUS + EFFECT_SUPPRESSION_EXTRA_RADIUS) * (RADIUS + EFFECT_SUPPRESSION_EXTRA_RADIUS))
@@ -502,11 +501,11 @@ object FireFreezeTimersHudElement : XclipsenHudElement(
 		return isEnabled(config) && (FireFreezeFeature.activeFreezeTimers().isNotEmpty() || FireFreezeFeature.activeMobTimers().isNotEmpty())
 	}
 
-	override fun defaultX(context: DrawContext): Float = 20f
+	override fun defaultX(context: GuiGraphicsExtractor): Float = 20f
 
-	override fun defaultY(context: DrawContext): Float = 112f
+	override fun defaultY(context: GuiGraphicsExtractor): Float = 112f
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: BridgeConfig()
 		val lines = if (example) {
 			listOf("Freeze 2.3s", "Mob 4.8s")
@@ -517,15 +516,15 @@ object FireFreezeTimersHudElement : XclipsenHudElement(
 			}
 		}
 		if (lines.isEmpty()) return 110f to 22f
-		val renderer = MinecraftClient.getInstance().textRenderer
-		val width = lines.maxOf { renderer.getWidth(it) }.coerceAtLeast(98) + 12
-		val height = 8 + (lines.size * (renderer.fontHeight + 2))
+		val renderer = Minecraft.getInstance().font
+		val width = lines.maxOf { renderer.width(it) }.coerceAtLeast(98) + 12
+		val height = 8 + (lines.size * (renderer.lineHeight + 2))
 		context.fill(0, 0, width, height, 0xB4121212.toInt())
 		context.fill(0, 0, width, 1, 0xFF00F5FF.toInt())
 		var y = 5
 		for (line in lines) {
-			context.drawTextWithShadow(renderer, line, 6, y, 0xFFE8FFFF.toInt())
-			y += renderer.fontHeight + 2
+			context.text(renderer, line, 6, y, 0xFFE8FFFF.toInt(), true)
+			y += renderer.lineHeight + 2
 		}
 		return width.toFloat() to height.toFloat()
 	}
@@ -539,20 +538,20 @@ object FireFreezeRefreezeAlertHudElement : XclipsenHudElement(
 
 	override fun shouldDraw(config: BridgeConfig): Boolean = isEnabled(config) && FireFreezeFeature.shouldDrawAlert(config)
 
-	override fun defaultX(context: DrawContext): Float = ((context.scaledWindowWidth - 170) / 2f).coerceAtLeast(4f)
+	override fun defaultX(context: GuiGraphicsExtractor): Float = ((context.guiWidth() - 170) / 2f).coerceAtLeast(4f)
 
-	override fun defaultY(context: DrawContext): Float = (context.scaledWindowHeight * 0.28f).coerceAtLeast(24f)
+	override fun defaultY(context: GuiGraphicsExtractor): Float = (context.guiHeight() * 0.28f).coerceAtLeast(24f)
 
-	override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-		val renderer = MinecraftClient.getInstance().textRenderer
+	override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+		val renderer = Minecraft.getInstance().font
 		val text = if (example) "Refreeze now!" else FireFreezeFeature.currentAlertText()
-		val width = (renderer.getWidth(text) + 18).coerceAtLeast(170)
-		val height = renderer.fontHeight + 12
+		val width = (renderer.width(text) + 18).coerceAtLeast(170)
+		val height = renderer.lineHeight + 12
 		context.fill(0, 0, width, height, 0xC0181818.toInt())
 		context.fill(0, 0, width, 1, 0xFFFF3030.toInt())
 		context.fill(0, height - 1, width, height, 0xFFFF3030.toInt())
 		context.fill(3, 3, width - 3, height - 3, 0x40FF3030)
-		context.drawCenteredTextWithShadow(renderer, text, width / 2, 6, 0xFFFFFFFF.toInt())
+		context.centeredText(renderer, text, width / 2, 6, 0xFFFFFFFF.toInt())
 		return width.toFloat() to height.toFloat()
 	}
 }

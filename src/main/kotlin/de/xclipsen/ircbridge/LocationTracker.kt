@@ -1,6 +1,6 @@
 package de.xclipsen.ircbridge
 
-import net.minecraft.client.MinecraftClient
+import net.minecraft.client.Minecraft
 
 /**
  * Tracks the player's current server-side area by reading the tab-list
@@ -54,16 +54,16 @@ object LocationTracker {
 	var isCritterSafariActive: Boolean = false
 		private set
 
-	// ── Tick ────────────────────────────────────────────────────────────
+	// ── SavedTick ────────────────────────────────────────────────────────────
 
 	private var tickCounter = 0
 	private const val CHECK_INTERVAL = 20   // re-read tab list once per second
 
-	fun onTick(client: MinecraftClient) {
+	fun onTick(client: Minecraft) {
 		if (++tickCounter < CHECK_INTERVAL) return
 		tickCounter = 0
 
-		if (client.world == null || client.player == null) {
+		if (client.level == null || client.player == null) {
 			currentArea = ""
 			scoreboardTitle = ""
 			isOnHypixel = false
@@ -84,11 +84,11 @@ object LocationTracker {
 	 * starts with "Area: " or "Dungeon: " and returns the area portion.
 	 * Returns null if no such entry is found (e.g. not on a SkyBlock server).
 	 */
-	private fun readAreaFromTabList(client: MinecraftClient): String? {
-		val playerList = client.player?.networkHandler?.playerList ?: return null
+	private fun readAreaFromTabList(client: Minecraft): String? {
+		val playerList = client.player?.connection?.listedOnlinePlayers ?: return null
 
 		for (entry in playerList) {
-			val display = entry.displayName?.string ?: continue
+			val display = entry.tabListDisplayName?.string ?: continue
 
 			for (prefix in AREA_PREFIXES) {
 				if (display.startsWith(prefix, ignoreCase = true)) {
@@ -99,20 +99,20 @@ object LocationTracker {
 		return null
 	}
 
-	private fun hasTabListEntry(client: MinecraftClient, text: String): Boolean {
-		return client.player?.networkHandler?.playerList?.any { entry ->
-			entry.displayName?.string?.contains(text, ignoreCase = true) == true
+	private fun hasTabListEntry(client: Minecraft, text: String): Boolean {
+		return client.player?.connection?.listedOnlinePlayers?.any { entry ->
+			entry.tabListDisplayName?.string?.contains(text, ignoreCase = true) == true
 		} == true
 	}
 
-	private fun readScoreboardTitle(client: MinecraftClient): String? {
-		val scoreboard = client.world?.scoreboard ?: return null
-		val objective = scoreboard.getObjectiveForSlot(net.minecraft.scoreboard.ScoreboardDisplaySlot.SIDEBAR) ?: return null
+	private fun readScoreboardTitle(client: Minecraft): String? {
+		val scoreboard = client.level?.scoreboard ?: return null
+		val objective = scoreboard.getDisplayObjective(net.minecraft.world.scores.DisplaySlot.SIDEBAR) ?: return null
 		return objective.displayName?.string?.trim()?.takeUnless { it.isEmpty() }
 	}
 
-	private fun isHypixelServer(client: MinecraftClient): Boolean {
-		val address = client.currentServerEntry?.address?.trim()?.lowercase() ?: return false
+	private fun isHypixelServer(client: Minecraft): Boolean {
+		val address = client.currentServer?.ip?.trim()?.lowercase() ?: return false
 		return address == "hypixel.net" || address.endsWith(".hypixel.net")
 	}
 

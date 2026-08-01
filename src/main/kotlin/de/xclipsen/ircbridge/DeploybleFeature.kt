@@ -2,14 +2,14 @@ package de.xclipsen.ircbridge
 
 import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.fabricmc.fabric.api.event.player.UseItemCallback
-import net.minecraft.client.MinecraftClient
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.entity.Entity
-import net.minecraft.entity.decoration.ArmorStandEntity
-import net.minecraft.entity.projectile.FireworkRocketEntity
-import net.minecraft.text.Text
-import net.minecraft.util.ActionResult
-import net.minecraft.util.Hand
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.decoration.ArmorStand
+import net.minecraft.world.entity.projectile.FireworkRocketEntity
+import net.minecraft.network.chat.Component
+import net.minecraft.world.InteractionResult
+import net.minecraft.world.InteractionHand
 import kotlin.math.max
 
 object DeploybleFeature {
@@ -70,23 +70,23 @@ object DeploybleFeature {
 
  fun init() {
   UseItemCallback.EVENT.register { player, world, hand ->
-   if (world.isClient && hand == Hand.MAIN_HAND) {
-    handleItemUse(player.mainHandStack.name.string)
+   if (world.isClientSide && hand == InteractionHand.MAIN_HAND) {
+    handleItemUse(player.mainHandItem.hoverName.string)
    }
-   ActionResult.PASS
+   InteractionResult.PASS
   }
 
   UseBlockCallback.EVENT.register { player, world, hand, _ ->
-   if (world.isClient && hand == Hand.MAIN_HAND) {
-    handleItemUse(player.mainHandStack.name.string)
+   if (world.isClientSide && hand == InteractionHand.MAIN_HAND) {
+    handleItemUse(player.mainHandItem.hoverName.string)
    }
-   ActionResult.PASS
+   InteractionResult.PASS
   }
  }
 
- fun onTick(client: MinecraftClient) {
+ fun onTick(client: Minecraft) {
   val config = XclipsenIrcBridgeClient.instance?.config()
-  if (config?.deploybleModuleEnabled != true || !LocationTracker.isOnHypixelSkyBlock || client.world == null || client.player == null) {
+   if (config?.deploybleModuleEnabled != true || !LocationTracker.isOnHypixelSkyBlock || client.level == null || client.player == null) {
    onWorldChange()
    return
   }
@@ -101,7 +101,7 @@ object DeploybleFeature {
   trackDeployablesStatus(client)
  }
 
- fun onIncomingMessage(message: Text?) {
+ fun onIncomingMessage(message: Component?) {
   if (XclipsenIrcBridgeClient.instance?.config()?.deploybleModuleEnabled != true || !LocationTracker.isOnHypixelSkyBlock) {
    return
   }
@@ -173,7 +173,7 @@ object DeploybleFeature {
   }
  }
 
- private fun handlePendingFlareCheck(client: MinecraftClient) {
+ private fun handlePendingFlareCheck(client: Minecraft) {
   val checkAt = pendingFlareCheckAt
   if (checkAt <= 0L || System.currentTimeMillis() < checkAt) {
    return
@@ -181,10 +181,10 @@ object DeploybleFeature {
 
   pendingFlareCheckAt = 0L
   val player = client.player ?: return
-  val world = client.world ?: return
-  val hasNearbyRocket = world.entities.asSequence()
+   val world = client.level ?: return
+   val hasNearbyRocket = world.entitiesForRendering().asSequence()
    .filterIsInstance<FireworkRocketEntity>()
-   .any { it.squaredDistanceTo(player) <= 100.0 }
+    .any { it.distanceToSqr(player) <= 100.0 }
 
   if (hasNearbyRocket) {
    flareData.remainingSeconds = 180
@@ -194,12 +194,12 @@ object DeploybleFeature {
   }
  }
 
- private fun trackDeployablesStatus(client: MinecraftClient) {
-  val world = client.world ?: return
+ private fun trackDeployablesStatus(client: Minecraft) {
+   val world = client.level ?: return
   val player = client.player ?: return
-  val armorStands = world.entities.asSequence()
-   .filterIsInstance<ArmorStandEntity>()
-   .filter { it.isAlive && !it.isRemoved }
+   val armorStands = world.entitiesForRendering().asSequence()
+   .filterIsInstance<ArmorStand>()
+    .filter { it.isAlive() && !it.isRemoved() }
    .toList()
 
   trackRecentlyPlacedEntityDeployables(armorStands, player)
@@ -210,7 +210,7 @@ object DeploybleFeature {
   trackFlareStatus()
  }
 
- private fun trackRecentlyPlacedEntityDeployables(armorStands: List<ArmorStandEntity>, player: Entity) {
+ private fun trackRecentlyPlacedEntityDeployables(armorStands: List<ArmorStand>, player: Entity) {
   val now = System.currentTimeMillis()
   val canTrackUmberella = now - lastUmberellaInteractAt <= INTERACTION_WINDOW_MS
   val canTrackLantern = now - lastDwarvenLanternInteractAt <= INTERACTION_WINDOW_MS
@@ -219,7 +219,7 @@ object DeploybleFeature {
   }
 
   armorStands.asSequence()
-   .filter { it.squaredDistanceTo(player) <= 25.0 }
+    .filter { it.distanceToSqr(player) <= 25.0 }
    .forEach { armorStand ->
     val name = armorStand.customName?.string?.trim().orEmpty()
     if (canTrackUmberella && (name == "Umberella 300s" || name == "Umberella 600s")) {
@@ -233,7 +233,7 @@ object DeploybleFeature {
    }
  }
 
- private fun trackTotemStatus(armorStands: List<ArmorStandEntity>, player: Entity) {
+ private fun trackTotemStatus(armorStands: List<ArmorStand>, player: Entity) {
   val playerName = player.name.string.takeIf { it.isNotBlank() } ?: return
   val ownerArmorStand = armorStands.firstOrNull { armorStand ->
    val name = armorStand.customName?.string ?: return@firstOrNull false
@@ -261,7 +261,7 @@ object DeploybleFeature {
   maybeAlert(DeployableType.TOTEM_OF_CORRUPTION.displayName, totemData)
  }
 
- private fun trackBlackHoleStatus(armorStands: List<ArmorStandEntity>, player: Entity) {
+ private fun trackBlackHoleStatus(armorStands: List<ArmorStand>, player: Entity) {
   val playerName = player.name.string.takeIf { it.isNotBlank() } ?: return
   val ownerArmorStand = armorStands.firstOrNull { armorStand ->
    val name = armorStand.customName?.string.orEmpty()
@@ -284,7 +284,7 @@ object DeploybleFeature {
   maybeAlert(DeployableType.BLACK_HOLE.displayName, blackHoleData)
  }
 
- private fun trackUmberellaStatus(armorStands: List<ArmorStandEntity>) {
+ private fun trackUmberellaStatus(armorStands: List<ArmorStand>) {
   val trackedId = umberellaData.id ?: return
   val name = armorStands.firstOrNull { it.id == trackedId && it.customName?.string?.startsWith("Umberella ") == true }
    ?.customName?.string
@@ -299,7 +299,7 @@ object DeploybleFeature {
   maybeAlert(DeployableType.UMBERELLA.displayName, umberellaData)
  }
 
- private fun trackDwarvenLanternStatus(armorStands: List<ArmorStandEntity>) {
+ private fun trackDwarvenLanternStatus(armorStands: List<ArmorStand>) {
   val trackedId = dwarvenLanternData.id ?: return
   val name = armorStands.firstOrNull { it.id == trackedId && isDwarvenLanternArmorStandName(it.customName?.string.orEmpty()) }
    ?.customName?.string
@@ -342,8 +342,8 @@ object DeploybleFeature {
   currentAlertText = "$itemDisplayName expires soon"
   alertVisibleUntil = now + 2800L
 
-  val client = MinecraftClient.getInstance()
-  client.player?.sendMessage(Text.literal("Your $itemDisplayName expires soon."), false)
+  val client = Minecraft.getInstance()
+   client.player?.sendSystemMessage(Component.literal("Your $itemDisplayName expires soon."))
   client.soundManager.play(SoundCatalog.masterSound(SoundCatalog.defaultSoundId, 1.0f, 1.0f))
  }
 
@@ -406,27 +406,27 @@ object DeploybleAlertHudElement : XclipsenHudElement(
 
  override fun shouldDraw(config: BridgeConfig): Boolean = DeploybleFeature.shouldDrawAlert(config)
 
- override fun defaultX(context: DrawContext): Float {
-  return ((context.scaledWindowWidth - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
+ override fun defaultX(context: GuiGraphicsExtractor): Float {
+   return ((context.guiWidth() - DEFAULT_WIDTH) / 2f).coerceAtLeast(4f)
  }
 
- override fun defaultY(context: DrawContext): Float {
-  return (context.scaledWindowHeight * 0.24f).coerceAtLeast(24f)
+ override fun defaultY(context: GuiGraphicsExtractor): Float {
+   return (context.guiHeight() * 0.24f).coerceAtLeast(24f)
  }
 
- override fun draw(context: DrawContext, example: Boolean): Pair<Float, Float> {
-  val client = MinecraftClient.getInstance()
-  val textRenderer = client.textRenderer
+ override fun draw(context: GuiGraphicsExtractor, example: Boolean): Tuple<Float, Float> {
+  val client = Minecraft.getInstance()
+   val textRenderer = client.font
   val text = if (example) DeploybleFeature.ALERT_TEXT else DeploybleFeature.currentAlertText()
-  val width = max(DEFAULT_WIDTH, textRenderer.getWidth(text) + PADDING_X * 2)
-  val height = PADDING_Y * 2 + textRenderer.fontHeight
+   val width = max(DEFAULT_WIDTH, textRenderer.width(text) + PADDING_X * 2)
+   val height = PADDING_Y * 2 + textRenderer.lineHeight
 
   context.fill(0, 0, width, height, BACKGROUND)
   context.fill(0, 0, width, 1, ACCENT)
   context.fill(0, height - 1, width, height, ACCENT)
   context.fill(0, 0, 1, height, ACCENT)
   context.fill(width - 1, 0, width, height, ACCENT)
-  context.drawCenteredTextWithShadow(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
+   context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
   return width.toFloat() to height.toFloat()
  }
 

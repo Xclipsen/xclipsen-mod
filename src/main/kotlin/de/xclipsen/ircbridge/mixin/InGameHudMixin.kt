@@ -1,24 +1,24 @@
 package de.xclipsen.ircbridge.mixin
 
 import de.xclipsen.ircbridge.CustomCrosshairFeature
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.hud.InGameHud
-import net.minecraft.client.render.RenderTickCounter
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.Gui
+import net.minecraft.client.DeltaTracker
 import org.spongepowered.asm.mixin.Mixin
 import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 
-@Mixin(InGameHud::class)
+@Mixin(Gui::class)
 abstract class InGameHudMixin {
 	@Inject(
-		method = ["renderCrosshair(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/client/render/RenderTickCounter;)V"],
+		method = ["extractCrosshair(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"],
 		at = [At("HEAD")],
 		cancellable = true,
 	)
 	private fun xclipsenCancelVanillaCrosshair(
-		context: DrawContext,
-		tickCounter: RenderTickCounter,
+		context: GuiGraphicsExtractor,
+		tickCounter: DeltaTracker,
 		ci: CallbackInfo,
 	) {
 		if (CustomCrosshairFeature.shouldOverrideVanilla()) {
