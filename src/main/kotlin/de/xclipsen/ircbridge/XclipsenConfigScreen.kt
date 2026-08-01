@@ -80,7 +80,7 @@ class XclipsenConfigScreen(
 		ConfigPanel("MODULES", listOf(ConfigSection.IRC_BRIDGE, ConfigSection.CHAT, ConfigSection.TIME_CHANGER, ConfigSection.AUCTION_HOUSE, ConfigSection.SLAYER)),
 		ConfigPanel("MISC", listOf(ConfigSection.CHIMERA_DROP, ConfigSection.DEPLOYBLE, ConfigSection.WORMHOLE_FINDER, ConfigSection.AUTO_SPRINT, ConfigSection.PEST_ESP, ConfigSection.CORPSE_ESP, ConfigSection.MOB_MODEL, ConfigSection.CROSSHAIR, ConfigSection.INVENTORY_PREVIEW, ConfigSection.SILENT_DISCONNECT, ConfigSection.PICKAXE_COOLDOWN, ConfigSection.FIRE_FREEZE, ConfigSection.MINESHAFT_AUTOWARP)),
 		ConfigPanel("DUNGEON", listOf(ConfigSection.M5, ConfigSection.DUNGEON_AUTOKICK, ConfigSection.AUTO_CROESUS, ConfigSection.EXPERIMENTS, ConfigSection.DOOR, ConfigSection.RED_VIGNETTE)),
-		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA)),
+		ConfigPanel("GALATEA", listOf(ConfigSection.HIDEONLEAF_HELPER, ConfigSection.PURPLE_TERRACOTTA, ConfigSection.FLOOR_DROP_ESP)),
 		ConfigPanel("SYSTEM", listOf(ConfigSection.SETUP, ConfigSection.STATUS)),
 	)
 
@@ -293,6 +293,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CHAT -> workingCopy.chatModuleEnabled = !workingCopy.chatModuleEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled = !workingCopy.hideonleafHelperEnabled
 			ConfigSection.PURPLE_TERRACOTTA -> workingCopy.purpleTerracottaHighlightModuleEnabled = !workingCopy.purpleTerracottaHighlightModuleEnabled
+			ConfigSection.FLOOR_DROP_ESP -> workingCopy.floorDropEspModuleEnabled = !workingCopy.floorDropEspModuleEnabled
 			ConfigSection.WORMHOLE_FINDER -> workingCopy.wormholeFinderModuleEnabled = !workingCopy.wormholeFinderModuleEnabled
 			ConfigSection.AUTO_SPRINT -> workingCopy.autoSprintModuleEnabled = !workingCopy.autoSprintModuleEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled = !workingCopy.timeChangerEnabled
@@ -414,6 +415,7 @@ class XclipsenConfigScreen(
 		candidate.timeChangerMode = workingCopy.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
 		candidate.auctionHouseModuleEnabled = workingCopy.auctionHouseModuleEnabled
 		candidate.auctionHouseAutoCopyUnderbidEnabled = workingCopy.auctionHouseAutoCopyUnderbidEnabled
+		candidate.highClassDiceTrackerEnabled = workingCopy.highClassDiceTrackerEnabled
 		candidate.slayerModuleEnabled = workingCopy.slayerModuleEnabled
 		candidate.slayerSpawnAnnouncerEnabled = workingCopy.slayerSpawnAnnouncerEnabled
 		candidate.slayerBlazePhaseDisplayEnabled = workingCopy.slayerBlazePhaseDisplayEnabled
@@ -422,6 +424,15 @@ class XclipsenConfigScreen(
 		candidate.slayerBlazeAutoDaggerDelayMaxTicks = workingCopy.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(2, 5)
 		candidate.slayerBlazeAutoDaggerResetAfterBossEnabled = workingCopy.slayerBlazeAutoDaggerResetAfterBossEnabled
 		candidate.slayerBlazeAutoDaggerDebugEnabled = workingCopy.slayerBlazeAutoDaggerDebugEnabled
+		candidate.slayerRngMeterDisplayEnabled = workingCopy.slayerRngMeterDisplayEnabled
+		candidate.slayerRngMeterOptimalRemovalEnabled = workingCopy.slayerRngMeterOptimalRemovalEnabled
+		candidate.slayerRngMeterCompactMode = workingCopy.slayerRngMeterCompactMode
+		candidate.slayerRngMeterUseMagicFind = workingCopy.slayerRngMeterUseMagicFind
+		candidate.slayerRngMeterMagicFind = workingCopy.slayerRngMeterMagicFind.coerceIn(0, 900)
+		candidate.slayerRngMeterActiveSlayer = workingCopy.slayerRngMeterActiveSlayer
+		candidate.slayerRngMeterState = workingCopy.slayerRngMeterState.mapValues { entry -> entry.value.copy() }.toMutableMap()
+		candidate.slayerRngMeterWikiCacheUpdatedAtMs = workingCopy.slayerRngMeterWikiCacheUpdatedAtMs
+		candidate.slayerRngMeterWikiCache = workingCopy.slayerRngMeterWikiCache.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		candidate.slayerSpawnAnnouncerText = slayerAnnouncerTextField.text.trim()
 		candidate.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(workingCopy.slayerSpawnAnnouncerSoundId)
 		candidate.slayerSpawnAnnouncerSoundVolume = workingCopy.slayerSpawnAnnouncerSoundVolume
@@ -453,6 +464,8 @@ class XclipsenConfigScreen(
 		candidate.partyFinderMemberCountEnabled = workingCopy.partyFinderMemberCountEnabled
 		candidate.partyFinderRightClickEnabled = workingCopy.partyFinderRightClickEnabled
 		candidate.pestEspModuleEnabled = workingCopy.pestEspModuleEnabled
+		candidate.floorDropEspModuleEnabled = workingCopy.floorDropEspModuleEnabled
+		candidate.floorDropEspTracerEnabled = workingCopy.floorDropEspTracerEnabled
 		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
 		candidate.corpseEspModuleEnabled = workingCopy.corpseEspModuleEnabled
 		candidate.corpseEspLapisEnabled = workingCopy.corpseEspLapisEnabled
@@ -794,6 +807,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CHAT -> workingCopy.chatModuleEnabled
 			ConfigSection.HIDEONLEAF_HELPER -> workingCopy.hideonleafHelperEnabled
 			ConfigSection.PURPLE_TERRACOTTA -> workingCopy.purpleTerracottaHighlightModuleEnabled
+			ConfigSection.FLOOR_DROP_ESP -> workingCopy.floorDropEspModuleEnabled
 			ConfigSection.WORMHOLE_FINDER -> workingCopy.wormholeFinderModuleEnabled
 			ConfigSection.AUTO_SPRINT -> workingCopy.autoSprintModuleEnabled
 			ConfigSection.TIME_CHANGER -> workingCopy.timeChangerEnabled
@@ -841,6 +855,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CHAT -> drawChatSettings(context, menu, mouseX, mouseY)
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, menu, mouseX, mouseY)
 			ConfigSection.PURPLE_TERRACOTTA -> drawPurpleTerracottaSettings(context, menu, mouseX, mouseY)
+			ConfigSection.FLOOR_DROP_ESP -> drawFloorDropEspSettings(context, menu, mouseX, mouseY)
 			ConfigSection.WORMHOLE_FINDER -> drawWormholeFinderSettings(context, menu, mouseX, mouseY)
 			ConfigSection.AUTO_SPRINT -> drawAutoSprintSettings(context, menu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, menu, mouseX, mouseY)
@@ -874,6 +889,11 @@ class XclipsenConfigScreen(
 
 	private fun drawSetupSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawInfoSetting(context, settingRowBounds(menu, 0, TEXT_INPUT_SETTING_HEIGHT), "Mod API", BridgeConfigManager.MOD_BACKEND_BASE_URL, mouseX, mouseY)
+	}
+
+	private fun drawFloorDropEspSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawToggleSetting(context, floorDropEspTracerBounds(menu), "Tracer to nearest", workingCopy.floorDropEspTracerEnabled, mouseX, mouseY)
+		drawInfoSetting(context, floorDropEspDetectionBounds(menu), "Detection", "3 grouped string displays", mouseX, mouseY)
 	}
 
 	private fun drawIrcBridgeSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -972,6 +992,7 @@ class XclipsenConfigScreen(
 
 	private fun drawAuctionHouseSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawToggleSetting(context, auctionHouseAutoCopyBounds(menu), "Auto Copy Underbid", workingCopy.auctionHouseAutoCopyUnderbidEnabled, mouseX, mouseY)
+		drawToggleSetting(context, highClassDiceTrackerBounds(menu), "High Class Dice Sell Tracker", workingCopy.highClassDiceTrackerEnabled, mouseX, mouseY)
 	}
 
 	private fun drawSlayerSettings(context: DrawContext, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -986,8 +1007,13 @@ class XclipsenConfigScreen(
 		}
 
 		drawDisclosureSetting(context, slayerMiscHeaderBounds(menu), "Misc", slayerMiscExpanded, mouseX, mouseY)
-		if (slayerMiscExpanded) {
-			drawToggleSetting(context, slayerSpawnAnnouncerBounds(menu), "Spawn Announcer", workingCopy.slayerSpawnAnnouncerEnabled, mouseX, mouseY)
+			if (slayerMiscExpanded) {
+				drawToggleSetting(context, slayerRngMeterDisplayBounds(menu), "RNG Meter Display", workingCopy.slayerRngMeterDisplayEnabled, mouseX, mouseY)
+				drawToggleSetting(context, slayerRngMeterOptimalRemovalBounds(menu), "Optimal Removal Hint", workingCopy.slayerRngMeterOptimalRemovalEnabled, mouseX, mouseY)
+				drawToggleSetting(context, slayerRngMeterCompactModeBounds(menu), "Compact Mode", workingCopy.slayerRngMeterCompactMode, mouseX, mouseY)
+				drawToggleSetting(context, slayerRngMeterUseMagicFindBounds(menu), "Use Magic Find", workingCopy.slayerRngMeterUseMagicFind, mouseX, mouseY)
+				drawOptionSetting(context, slayerRngMeterMagicFindBounds(menu), "Magic Find", workingCopy.slayerRngMeterMagicFind.coerceIn(0, 900).toString(), mouseX, mouseY)
+				drawToggleSetting(context, slayerSpawnAnnouncerBounds(menu), "Spawn Announcer", workingCopy.slayerSpawnAnnouncerEnabled, mouseX, mouseY)
 			drawTextInputSetting(context, slayerAnnouncerTextBounds(menu), "Announcer Text", slayerAnnouncerTextField, mouseX, mouseY)
 			drawSoundSetting(context, slayerAnnouncerSoundBounds(menu), "Announcer Sound", workingCopy.slayerSpawnAnnouncerSoundId, mouseX, mouseY)
 			if (soundDropdownOpen) {
@@ -1647,6 +1673,7 @@ class XclipsenConfigScreen(
 			ConfigSection.CHAT -> CHAT_POPUP_HEIGHT
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
 			ConfigSection.PURPLE_TERRACOTTA -> PURPLE_TERRACOTTA_POPUP_HEIGHT
+			ConfigSection.FLOOR_DROP_ESP -> 120
 			ConfigSection.AUTO_SPRINT -> 160
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
 			ConfigSection.AUCTION_HOUSE -> AUCTION_HOUSE_POPUP_HEIGHT
@@ -1901,6 +1928,12 @@ class XclipsenConfigScreen(
 			return true
 		}
 
+		if (section == ConfigSection.AUCTION_HOUSE && highClassDiceTrackerBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.highClassDiceTrackerEnabled = !workingCopy.highClassDiceTrackerEnabled
+			return true
+		}
+
 
 		if (section == ConfigSection.SLAYER) {
 			if (slayerBlazeHeaderBounds(menu).contains(mouseX, mouseY)) {
@@ -1954,6 +1987,37 @@ class XclipsenConfigScreen(
 					soundDropdownOpen = false
 				}
 				layoutWidgets()
+				return true
+			}
+
+			if (slayerMiscExpanded && slayerRngMeterDisplayBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerRngMeterDisplayEnabled = !workingCopy.slayerRngMeterDisplayEnabled
+				return true
+			}
+
+			if (slayerMiscExpanded && slayerRngMeterOptimalRemovalBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerRngMeterOptimalRemovalEnabled = !workingCopy.slayerRngMeterOptimalRemovalEnabled
+				return true
+			}
+
+			if (slayerMiscExpanded && slayerRngMeterCompactModeBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerRngMeterCompactMode = !workingCopy.slayerRngMeterCompactMode
+				return true
+			}
+
+			if (slayerMiscExpanded && slayerRngMeterUseMagicFindBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerRngMeterUseMagicFind = !workingCopy.slayerRngMeterUseMagicFind
+				return true
+			}
+
+			if (slayerMiscExpanded && slayerRngMeterMagicFindBounds(menu).contains(mouseX, mouseY)) {
+				readWorkingCopyFromFields(updateStatus = false)
+				workingCopy.slayerRngMeterMagicFind =
+					if (workingCopy.slayerRngMeterMagicFind >= 900) 0 else ((workingCopy.slayerRngMeterMagicFind + 25) / 25) * 25
 				return true
 			}
 
@@ -2035,6 +2099,12 @@ class XclipsenConfigScreen(
 				updateColorFromPicker(mouseX, mouseY, target)
 				return true
 			}
+		}
+
+		if (section == ConfigSection.FLOOR_DROP_ESP && floorDropEspTracerBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.floorDropEspTracerEnabled = !workingCopy.floorDropEspTracerEnabled
+			return true
 		}
 
 		if (section == ConfigSection.CORPSE_ESP) {
@@ -2845,6 +2915,15 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, top, menu.right - 10, top + SETTING_HEIGHT)
 	}
 
+	private fun floorDropEspTracerBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
+	private fun floorDropEspDetectionBounds(menu: Bounds): Bounds {
+		val top = floorDropEspTracerBounds(menu).bottom + SETTING_GAP
+		return Bounds(menu.left + 10, top, menu.right - 10, top + TEXT_INPUT_SETTING_HEIGHT)
+	}
+
 	private fun pestEspTracerBounds(menu: Bounds): Bounds {
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
@@ -3376,6 +3455,10 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
 
+	private fun highClassDiceTrackerBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(auctionHouseAutoCopyBounds(menu), SETTING_HEIGHT)
+	}
+
 	private fun slayerRowAfter(previous: Bounds, rowHeight: Int): Bounds {
 		val top = previous.bottom + SETTING_GAP
 		return Bounds(previous.left, top, previous.right, top + rowHeight)
@@ -3414,8 +3497,28 @@ class XclipsenConfigScreen(
 		return slayerRowAfter(previous, SETTING_HEIGHT)
 	}
 
-	private fun slayerSpawnAnnouncerBounds(menu: Bounds): Bounds {
+	private fun slayerRngMeterDisplayBounds(menu: Bounds): Bounds {
 		return slayerRowAfter(slayerMiscHeaderBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun slayerRngMeterOptimalRemovalBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerRngMeterDisplayBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun slayerRngMeterCompactModeBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerRngMeterOptimalRemovalBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun slayerRngMeterUseMagicFindBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerRngMeterCompactModeBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun slayerRngMeterMagicFindBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerRngMeterUseMagicFindBounds(menu), SETTING_HEIGHT)
+	}
+
+	private fun slayerSpawnAnnouncerBounds(menu: Bounds): Bounds {
+		return slayerRowAfter(slayerRngMeterMagicFindBounds(menu), SETTING_HEIGHT)
 	}
 
 	private fun slayerAnnouncerTextBounds(menu: Bounds): Bounds {
@@ -3602,10 +3705,11 @@ class XclipsenConfigScreen(
 		CHAT("Chat", "Client-side chat cleanup and message hiders.", toggleable = true),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", toggleable = true),
 		PURPLE_TERRACOTTA("Purple Terracotta", "Highlights purple terracotta blocks through walls.", toggleable = true),
+		FLOOR_DROP_ESP("Floor Drop ESP", "Highlights Galatea floor drops made from three grouped string displays.", toggleable = true),
 		WORMHOLE_FINDER("Wormhole Finder", "Shows a water-surface ring and tracer for the active wormhole.", toggleable = true),
 		AUTO_SPRINT("Auto Sprint", "Automatically starts sprinting while moving forward.", toggleable = true),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", toggleable = true),
-		AUCTION_HOUSE("Auction House", "Copies LBIN minus 1 for Create BIN Auction.", toggleable = true),
+		AUCTION_HOUSE("Auction House", "Copies BIN underbids and tracks High Class Dice LBIN sell signals.", toggleable = true),
 		SLAYER("Slayer", "Slayer helpers including Blaze boss phase displays and Autopet spawn announcements.", toggleable = true),
 		PEST_ESP("Pest ESP", "Highlights named Garden pests through walls.", toggleable = true),
 		CORPSE_ESP("Corpse ESP", "Highlights Glacite Mineshaft corpses by armor-stand helmet ID.", toggleable = true),
@@ -3687,7 +3791,7 @@ class XclipsenConfigScreen(
 		private const val HIDEONLEAF_POPUP_HEIGHT = 500
 		private const val PURPLE_TERRACOTTA_POPUP_HEIGHT = 230
 		private const val TIME_CHANGER_POPUP_HEIGHT = 100
-		private const val AUCTION_HOUSE_POPUP_HEIGHT = 100
+		private const val AUCTION_HOUSE_POPUP_HEIGHT = 150
 		private const val PEST_ESP_POPUP_HEIGHT = 230
 		private const val CORPSE_ESP_POPUP_HEIGHT = 410
 		private const val MOB_MODEL_POPUP_HEIGHT = 325

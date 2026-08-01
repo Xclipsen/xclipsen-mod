@@ -257,7 +257,7 @@ object PartyFinderFeature {
 			else -> null
 		}
 		return Text.literal(buildString {
-			append(" §8(§6${formatFixed(stats.catacombsLevel, 0)}§8)")
+			append(" §8(§6${formatLevel(stats.catacombsLevel)}§8)")
 			append(" §8[§3${formatShort(stats.secrets)} §7| §b${formatFixed(stats.averageSecrets, 1)}§8]")
 			if (pb == null) append(" §8[§cNO PB§8]") else append(" §8[§a$pb§8]")
 		})
@@ -329,6 +329,8 @@ object PartyFinderFeature {
 
 	private fun formatFixed(value: Double, decimals: Int): String = "%.${decimals}f".format(Locale.US, value)
 
+	private fun formatLevel(value: Double): String = kotlin.math.floor(value.coerceAtLeast(0.0)).toInt().toString()
+
 	private fun formatTime(ms: Long): String {
 		val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
 		return "${totalSeconds / 60}:${(totalSeconds % 60).toString().padStart(2, '0')}"
@@ -355,7 +357,7 @@ object PartyFinderFeature {
 	private val PARTY_SLOT_RANGE = 0..45
 	private val TYPE_REGEX = "^Dungeon: (Master Mode )?(The Catacombs)$".toRegex()
 	private val FLOOR_REGEX = "^Floor: Floor ([IV]+)$".toRegex()
-	private val USER_ROLE_REGEX = "^ (\\w{1,16}): (Healer|Tank|Mage|Berserk|Archer) \\((\\d+)\\)$".toRegex()
+	private val USER_ROLE_REGEX = "^ (\\w{1,16}): (Healer|Tank|Mage|Berserk|Archer) \\((\\d+)\\)(?: .*)?$".toRegex()
 	private val LOW_CATA_REGEX = "^Requires Catacombs Level \\d+!$".toRegex()
 	private val LOW_ROLE_REGEX = "^Requires a Class at Level \\d+!$".toRegex()
 	private val CANNOT_JOIN_REGEX = "^Complete previous floor first!$".toRegex()

@@ -223,6 +223,52 @@ class ClientBackendBridgeService(
 		}
 	}
 
+	fun fetchHighClassDiceTracker(): BackendHighClassDiceTrackerResponse? {
+		if (activeModBackendBaseUrl(config).isBlank()) return null
+
+		return try {
+			val request = modBackendRequestBuilder(modBackendUrl("/api/skyblock/auction-trackers/highclass")).GET().build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			lastHttpStatus = response.statusCode()
+			if (response.statusCode() !in 200..299) {
+				logger.debug("High Class Dice tracker fetch returned HTTP {}", response.statusCode())
+				null
+			} else {
+				GSON.fromJson(response.body(), BackendHighClassDiceTrackerResponse::class.java)
+			}
+		} catch (exception: IOException) {
+			logger.debug("High Class Dice tracker fetch failed: {}", exception.message)
+			null
+		} catch (exception: RuntimeException) {
+			logger.debug("High Class Dice tracker response could not be parsed", exception)
+			null
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
+	fun fetchSlayerRngMeterDrops(): BackendSlayerRngMeterResponse? {
+		if (activeModBackendBaseUrl(config).isBlank()) return null
+
+		return try {
+			val request = modBackendRequestBuilder(modBackendUrl("/api/skyblock/slayer-rng-meter")).GET().build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			if (response.statusCode() != 200) {
+				logger.debug("Slayer RNG meter fetch returned HTTP {}", response.statusCode())
+				null
+			} else {
+				GSON.fromJson(response.body(), BackendSlayerRngMeterResponse::class.java)
+			}
+		} catch (exception: IOException) {
+			logger.debug("Slayer RNG meter fetch failed: {}", exception.message)
+			null
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
 	fun fetchDungeonStats(playerName: String): BackendDungeonStatsResponse? {
 		if (activeModBackendBaseUrl(config).isBlank()) {
 			return null

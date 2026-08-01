@@ -35,7 +35,11 @@ object LocationTracker {
 
 	/** True while the player is anywhere on Galatea Island. */
 	val isOnGalatea: Boolean
-		get() = isOnHypixelSkyBlock && currentArea.contains("galatea", ignoreCase = true)
+		get() = isOnHypixelSkyBlock && normalizedGalateaArea(currentArea) != null
+
+	/** True while the tab list reports the Safari area. */
+	val isInSafariArea: Boolean
+		get() = isOnHypixelSkyBlock && currentArea.equals("Safari", ignoreCase = true)
 
 	/** True while the player is on The End island or one of its sub-areas. */
 	val isOnEndIsland: Boolean
@@ -44,6 +48,11 @@ object LocationTracker {
 	/** True while the player is on The Garden or one of its plots. */
 	val isOnGarden: Boolean
 		get() = isOnHypixelSkyBlock && normalizedGardenArea(currentArea) != null
+
+	/** True while the Critter Safari event is listed in the Hypixel tab list. */
+	@Volatile
+	var isCritterSafariActive: Boolean = false
+		private set
 
 	// ── Tick ────────────────────────────────────────────────────────────
 
@@ -58,12 +67,14 @@ object LocationTracker {
 			currentArea = ""
 			scoreboardTitle = ""
 			isOnHypixel = false
+			isCritterSafariActive = false
 			return
 		}
 
 		isOnHypixel = isHypixelServer(client)
 		scoreboardTitle = readScoreboardTitle(client) ?: ""
 		currentArea = readAreaFromTabList(client) ?: ""
+		isCritterSafariActive = hasTabListEntry(client, "Critter Safari")
 	}
 
 	// ── Tab-list reader ─────────────────────────────────────────────────
@@ -88,6 +99,12 @@ object LocationTracker {
 		return null
 	}
 
+	private fun hasTabListEntry(client: MinecraftClient, text: String): Boolean {
+		return client.player?.networkHandler?.playerList?.any { entry ->
+			entry.displayName?.string?.contains(text, ignoreCase = true) == true
+		} == true
+	}
+
 	private fun readScoreboardTitle(client: MinecraftClient): String? {
 		val scoreboard = client.world?.scoreboard ?: return null
 		val objective = scoreboard.getObjectiveForSlot(net.minecraft.scoreboard.ScoreboardDisplaySlot.SIDEBAR) ?: return null
@@ -106,6 +123,11 @@ object LocationTracker {
 		}
 	}
 
+	private fun normalizedGalateaArea(raw: String): String? {
+		val normalized = raw.trim().lowercase()
+		return GALATEA_AREAS.firstOrNull { area -> normalized == area || normalized.contains(area) }
+	}
+
 	private fun normalizedGardenArea(raw: String): String? {
 		val normalized = raw.trim().lowercase()
 		if (normalized.isBlank()) {
@@ -118,6 +140,12 @@ object LocationTracker {
 	}
 
 	private val AREA_PREFIXES = listOf("Area: ", "Dungeon: ")
+	private val GALATEA_AREAS = setOf(
+		"galatea",
+		"torrhus canyon",
+		"critter safari entrance",
+		"safari",
+	)
 	private val END_ISLAND_AREAS = setOf(
 		"the end",
 		"dragon's nest",

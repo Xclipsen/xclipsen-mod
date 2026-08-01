@@ -75,6 +75,8 @@ class BridgeConfig {
 	@JvmField var shardTrackerEnabled: Boolean = true
 	@JvmField var purpleTerracottaHighlightModuleEnabled: Boolean = false
 	@JvmField var purpleTerracottaHighlightColorHex: String = "#B06CFF"
+	@JvmField var floorDropEspModuleEnabled: Boolean = true
+	@JvmField var floorDropEspTracerEnabled: Boolean = true
 	@JvmField var wormholeFinderModuleEnabled: Boolean = false
 	@JvmField var wormholeDepartureAlertEnabled: Boolean = true
 	@JvmField var wormholeDepartureAlertSoundId: String = "minecraft:entity.enderman.teleport"
@@ -86,6 +88,7 @@ class BridgeConfig {
 	@JvmField var timeChangerMode: Int = 0
 	@JvmField var auctionHouseModuleEnabled: Boolean = false
 	@JvmField var auctionHouseAutoCopyUnderbidEnabled: Boolean = true
+	@JvmField var highClassDiceTrackerEnabled: Boolean = false
 	@JvmField var autoCroesusModuleEnabled: Boolean = false
 	@JvmField var experimentationTableModuleEnabled: Boolean = false
 	@JvmField var autoExperimentsClickDelayMs: Int = 200
@@ -183,6 +186,15 @@ class BridgeConfig {
 	@JvmField var slayerBlazeAutoDaggerDelayMaxTicks: Int = 2
 	@JvmField var slayerBlazeAutoDaggerResetAfterBossEnabled: Boolean = false
 	@JvmField var slayerBlazeAutoDaggerDebugEnabled: Boolean = false
+	@JvmField var slayerRngMeterDisplayEnabled: Boolean = true
+	@JvmField var slayerRngMeterOptimalRemovalEnabled: Boolean = true
+	@JvmField var slayerRngMeterCompactMode: Boolean = false
+	@JvmField var slayerRngMeterUseMagicFind: Boolean = false
+	@JvmField var slayerRngMeterMagicFind: Int = 0
+	@JvmField var slayerRngMeterActiveSlayer: String = ""
+	@JvmField var slayerRngMeterState: MutableMap<String, SlayerRngMeterState> = mutableMapOf()
+	@JvmField var slayerRngMeterWikiCacheUpdatedAtMs: Long = 0L
+	@JvmField var slayerRngMeterWikiCache: MutableMap<String, SlayerRngMeterDropCache> = mutableMapOf()
 	@JvmField var slayerSpawnAnnouncerText: String = SlayerFeature.DEFAULT_ANNOUNCER_TEXT
 	@JvmField var slayerSpawnAnnouncerSoundId: String = SoundCatalog.defaultSoundId
 	@JvmField var slayerSpawnAnnouncerSoundVolume: Float = 1.0f
@@ -221,6 +233,8 @@ class BridgeConfig {
 		it.shardTrackerEnabled = shardTrackerEnabled
 		it.purpleTerracottaHighlightModuleEnabled = purpleTerracottaHighlightModuleEnabled
 		it.purpleTerracottaHighlightColorHex = purpleTerracottaHighlightColorHex
+		it.floorDropEspModuleEnabled = floorDropEspModuleEnabled
+		it.floorDropEspTracerEnabled = floorDropEspTracerEnabled
 		it.wormholeFinderModuleEnabled = wormholeFinderModuleEnabled
 		it.wormholeDepartureAlertEnabled = wormholeDepartureAlertEnabled
 		it.wormholeDepartureAlertSoundId = wormholeDepartureAlertSoundId
@@ -232,6 +246,7 @@ class BridgeConfig {
 		it.timeChangerMode = timeChangerMode
 		it.auctionHouseModuleEnabled = auctionHouseModuleEnabled
 		it.auctionHouseAutoCopyUnderbidEnabled = auctionHouseAutoCopyUnderbidEnabled
+		it.highClassDiceTrackerEnabled = highClassDiceTrackerEnabled
 		it.autoCroesusModuleEnabled = autoCroesusModuleEnabled
 		it.experimentationTableModuleEnabled = experimentationTableModuleEnabled
 		it.autoExperimentsClickDelayMs = autoExperimentsClickDelayMs
@@ -329,11 +344,54 @@ class BridgeConfig {
 		it.slayerBlazeAutoDaggerDelayMaxTicks = slayerBlazeAutoDaggerDelayMaxTicks
 		it.slayerBlazeAutoDaggerResetAfterBossEnabled = slayerBlazeAutoDaggerResetAfterBossEnabled
 		it.slayerBlazeAutoDaggerDebugEnabled = slayerBlazeAutoDaggerDebugEnabled
+		it.slayerRngMeterDisplayEnabled = slayerRngMeterDisplayEnabled
+		it.slayerRngMeterOptimalRemovalEnabled = slayerRngMeterOptimalRemovalEnabled
+		it.slayerRngMeterCompactMode = slayerRngMeterCompactMode
+		it.slayerRngMeterUseMagicFind = slayerRngMeterUseMagicFind
+		it.slayerRngMeterMagicFind = slayerRngMeterMagicFind
+		it.slayerRngMeterActiveSlayer = slayerRngMeterActiveSlayer
+		it.slayerRngMeterState = slayerRngMeterState.mapValues { entry -> entry.value.copy() }.toMutableMap()
+		it.slayerRngMeterWikiCacheUpdatedAtMs = slayerRngMeterWikiCacheUpdatedAtMs
+		it.slayerRngMeterWikiCache = slayerRngMeterWikiCache.mapValues { entry -> entry.value.copy() }.toMutableMap()
 		it.slayerSpawnAnnouncerText = slayerSpawnAnnouncerText
 		it.slayerSpawnAnnouncerSoundId = slayerSpawnAnnouncerSoundId
 		it.slayerSpawnAnnouncerSoundVolume = slayerSpawnAnnouncerSoundVolume
 		it.slayerSpawnAnnouncerSoundPitch = slayerSpawnAnnouncerSoundPitch
 		it.hudElements = hudElements.mapValues { entry -> entry.value.copy() }.toMutableMap()
+	}
+}
+
+class SlayerRngMeterState() {
+	@JvmField var currentMeter: Long = -1L
+	@JvmField var gainPerBoss: Long = -1L
+	@JvmField var goalNeeded: Long = -1L
+	@JvmField var itemGoal: String = "?"
+	@JvmField var lastSelectedItemGoal: String = ""
+	@JvmField var oddsPercent: Double = -1.0
+	@JvmField var lastSelectedOddsPercent: Double = -1.0
+
+	fun copy(): SlayerRngMeterState = SlayerRngMeterState().also {
+		it.currentMeter = currentMeter
+		it.gainPerBoss = gainPerBoss
+		it.goalNeeded = goalNeeded
+		it.itemGoal = itemGoal
+		it.lastSelectedItemGoal = lastSelectedItemGoal
+		it.oddsPercent = oddsPercent
+		it.lastSelectedOddsPercent = lastSelectedOddsPercent
+	}
+}
+
+class SlayerRngMeterDropCache() {
+	@JvmField var slayer: String = ""
+	@JvmField var item: String = ""
+	@JvmField var oddsPercent: Double = -1.0
+	@JvmField var goalNeeded: Long = -1L
+
+	fun copy(): SlayerRngMeterDropCache = SlayerRngMeterDropCache().also {
+		it.slayer = slayer
+		it.item = item
+		it.oddsPercent = oddsPercent
+		it.goalNeeded = goalNeeded
 	}
 }
 
@@ -400,6 +458,37 @@ class ItemPrice {
 	@JvmField var sellPrice: Double = 0.0
 	/** Unix-ms timestamp when the Bot last fetched this from Hypixel. */
 	@JvmField var lastUpdated: Long = 0L
+}
+
+class BackendHighClassDiceTrackerResponse {
+	@JvmField var ok: Boolean = false
+	@JvmField var itemId: String = ""
+	@JvmField var displayName: String = ""
+	@JvmField var currentLbin: Long = 0L
+	@JvmField var median7d: Long = 0L
+	@JvmField var percentAboveMedian: Double = 0.0
+	@JvmField var goodToSell: Boolean = false
+	@JvmField var thresholdPercentAboveMedian: Double = 15.0
+	@JvmField var historyWindowMs: Long = 604800000L
+	@JvmField var sampleCount: Int = 0
+	@JvmField var lastUpdated: Long = 0L
+	@JvmField var source: String = ""
+	@JvmField var error: String = ""
+}
+
+class BackendSlayerRngMeterResponse {
+	@JvmField var ok: Boolean = false
+	@JvmField var source: String = ""
+	@JvmField var updatedAt: Long = 0L
+	@JvmField var code: String = ""
+	@JvmField var drops: MutableList<BackendSlayerRngMeterDrop> = mutableListOf()
+}
+
+class BackendSlayerRngMeterDrop {
+	@JvmField var slayer: String = ""
+	@JvmField var item: String = ""
+	@JvmField var oddsPercent: Double = -1.0
+	@JvmField var goalNeeded: Long = -1L
 }
 
 class BackendDungeonStatsResponse {

@@ -92,6 +92,7 @@ class BridgeConfigManager(
 		value.timeChangerMode = value.timeChangerMode.coerceIn(0, ClientTimeChanger.modeCount - 1)
 		value.autoExperimentsClickDelayMs = value.autoExperimentsClickDelayMs.coerceIn(50, 5_000)
 		value.autoExperimentsDelayVarietyMs = value.autoExperimentsDelayVarietyMs.coerceIn(0, 5_000)
+		value.highClassDiceTrackerEnabled = normalizedBoolean(value.highClassDiceTrackerEnabled)
 		value.autoExperimentsSerumCount = value.autoExperimentsSerumCount.coerceIn(0, 3)
 		value.dungeonDoorMode = value.dungeonDoorMode.coerceIn(0, MortDoorBarrierFeature.modeCount - 1)
 		value.pestEspColorHex = normalizedHexColor(value.pestEspColorHex, "#7CFF6B")
@@ -126,6 +127,23 @@ class BridgeConfigManager(
 		value.slayerBlazeAutoDaggerDelayMaxTicks = value.slayerBlazeAutoDaggerDelayMaxTicks.coerceIn(2, 5)
 		value.slayerBlazeAutoDaggerResetAfterBossEnabled = normalizedBoolean(value.slayerBlazeAutoDaggerResetAfterBossEnabled)
 		value.slayerBlazeAutoDaggerDebugEnabled = normalizedBoolean(value.slayerBlazeAutoDaggerDebugEnabled)
+		value.slayerRngMeterDisplayEnabled = normalizedBoolean(value.slayerRngMeterDisplayEnabled)
+		value.slayerRngMeterOptimalRemovalEnabled = normalizedBoolean(value.slayerRngMeterOptimalRemovalEnabled)
+		value.slayerRngMeterCompactMode = normalizedBoolean(value.slayerRngMeterCompactMode)
+		value.slayerRngMeterUseMagicFind = normalizedBoolean(value.slayerRngMeterUseMagicFind)
+		value.slayerRngMeterMagicFind = value.slayerRngMeterMagicFind.coerceIn(0, 900)
+		value.slayerRngMeterActiveSlayer = normalizedShortKey(value.slayerRngMeterActiveSlayer)
+		value.slayerRngMeterState = (value.slayerRngMeterState ?: mutableMapOf())
+			.mapKeys { entry -> normalizedShortKey(entry.key) }
+			.filterKeys { it.isNotBlank() }
+			.mapValues { entry -> normalizeSlayerRngMeterState(entry.value) }
+			.toMutableMap()
+		value.slayerRngMeterWikiCacheUpdatedAtMs = value.slayerRngMeterWikiCacheUpdatedAtMs.coerceAtLeast(0L)
+		value.slayerRngMeterWikiCache = (value.slayerRngMeterWikiCache ?: mutableMapOf())
+			.mapKeys { entry -> normalizedShortKey(entry.key) }
+			.filterKeys { it.isNotBlank() }
+			.mapValues { entry -> normalizeSlayerRngMeterDropCache(entry.value) }
+			.toMutableMap()
 		value.slayerSpawnAnnouncerText = normalizedTemplate(value.slayerSpawnAnnouncerText, SlayerFeature.DEFAULT_ANNOUNCER_TEXT)
 		value.slayerSpawnAnnouncerSoundId = SoundCatalog.normalizeSoundId(value.slayerSpawnAnnouncerSoundId)
 		value.slayerSpawnAnnouncerSoundVolume = value.slayerSpawnAnnouncerSoundVolume.coerceIn(0.0f, 2.0f)
@@ -147,6 +165,36 @@ class BridgeConfigManager(
 		}
 
 		return if (candidate.length > 256) candidate.substring(0, 256) else candidate
+	}
+
+	private fun normalizedShortKey(value: String?): String {
+		val candidate = safeString(value, "")
+			.replace('\r', ' ')
+			.replace('\n', ' ')
+			.replace(Regex("\\s+"), " ")
+			.trim()
+		return if (candidate.length > 96) candidate.substring(0, 96) else candidate
+	}
+
+	private fun normalizeSlayerRngMeterState(value: SlayerRngMeterState?): SlayerRngMeterState {
+		val state = value ?: SlayerRngMeterState()
+		state.currentMeter = state.currentMeter.coerceAtLeast(-1L)
+		state.gainPerBoss = state.gainPerBoss.coerceAtLeast(-1L)
+		state.goalNeeded = state.goalNeeded.coerceAtLeast(-1L)
+		state.itemGoal = normalizedShortKey(state.itemGoal)
+		state.lastSelectedItemGoal = normalizedShortKey(state.lastSelectedItemGoal)
+		state.oddsPercent = state.oddsPercent.takeIf { it.isFinite() }?.coerceIn(-1.0, 100.0) ?: -1.0
+		state.lastSelectedOddsPercent = state.lastSelectedOddsPercent.takeIf { it.isFinite() }?.coerceIn(-1.0, 100.0) ?: -1.0
+		return state
+	}
+
+	private fun normalizeSlayerRngMeterDropCache(value: SlayerRngMeterDropCache?): SlayerRngMeterDropCache {
+		val cache = value ?: SlayerRngMeterDropCache()
+		cache.slayer = normalizedShortKey(cache.slayer)
+		cache.item = normalizedShortKey(cache.item)
+		cache.oddsPercent = cache.oddsPercent.takeIf { it.isFinite() }?.coerceIn(-1.0, 100.0) ?: -1.0
+		cache.goalNeeded = cache.goalNeeded.coerceAtLeast(-1L)
+		return cache
 	}
 
 	private fun normalizeServerBaseUrl(value: String?, fallback: String): String {

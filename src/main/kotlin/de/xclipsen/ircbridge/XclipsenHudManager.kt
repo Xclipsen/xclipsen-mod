@@ -17,6 +17,7 @@ object XclipsenHudManager {
 		FireFreezeRefreezeAlertHudElement,
 		DeploybleAlertHudElement,
 		SlayerSpawnAnnouncerHudElement,
+		SlayerRngMeterHudElement,
 		WormholeDepartureAlertHudElement,
 		PickaxeAbilityCooldownHudElement,
 		PickaxeAbilityReadyAlertHudElement,

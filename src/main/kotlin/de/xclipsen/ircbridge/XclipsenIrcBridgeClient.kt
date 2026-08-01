@@ -55,6 +55,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		minigameController.initialize()
 		HideonleafShardTracker.init()
 		applyBackendBridgeConfig()
+		HighClassDiceTrackerFeature.init()
 		ModUpdateChecker.onStartup()
 		MobModelFeature.onStartup()
 		AutoCroesus.initialize()
@@ -66,6 +67,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 
 		ClientLifecycleEvents.CLIENT_STOPPING.register {
 			HideonleafShardTracker.shutdown()
+			HighClassDiceTrackerFeature.shutdown()
 			MortDoorBarrierFeature.onWorldChange()
 			backendBridge.stop()
 			minigameController.shutdown()
@@ -116,6 +118,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> ShulkerTracerRenderer.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> MortDoorBarrierFeature.onRender(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PurpleTerracottaHighlightFeature.render(context) }
+		WorldRenderEvents.AFTER_ENTITIES.register { context -> FloorDropEspFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> WormholeFinderFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> PestEspFeature.render(context) }
 		WorldRenderEvents.AFTER_ENTITIES.register { context -> CorpseEspFeature.render(context) }
@@ -217,11 +220,23 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 							),
 					)
 					.then(
+						ClientCommandManager.literal("tracker")
+							.then(
+								ClientCommandManager.literal("highclass")
+									.executes(::toggleHighClassDiceTracker)
+									.then(ClientCommandManager.literal("on").executes { setHighClassDiceTracker(it, true) })
+									.then(ClientCommandManager.literal("off").executes { setHighClassDiceTracker(it, false) })
+									.then(ClientCommandManager.literal("status").executes(::showHighClassDiceTrackerStatus))
+									.then(ClientCommandManager.literal("check").executes(::showHighClassDiceTrackerStatus)),
+							),
+					)
+					.then(
 						ClientCommandManager.literal("dev")
 							.executes(::toggleDevMode)
 							.then(ClientCommandManager.literal("on").executes { setDevMode(it, true) })
 							.then(ClientCommandManager.literal("off").executes { setDevMode(it, false) })
 							.then(ClientCommandManager.literal("status").executes(::showDevModeStatus))
+							.then(ClientCommandManager.literal("entities").executes(::logNearbyEntities))
 							.then(ClientCommandManager.literal("chim").executes(::runDevTest))
 							.then(ClientCommandManager.literal("test").executes(::runDevTest)),
 					)
@@ -289,6 +304,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		minigameController.onConfigChanged()
 		ModUpdateChecker.onConfigChanged()
 		MobModelFeature.onConfigChanged()
+		HighClassDiceTrackerFeature.onConfigChanged()
 	}
 
 	@Throws(IOException::class)
@@ -318,6 +334,33 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		return 1
 	}
 
+	private fun toggleHighClassDiceTracker(context: CommandContext<FabricClientCommandSource>): Int =
+		setHighClassDiceTracker(context, !config.highClassDiceTrackerEnabled)
+
+	private fun setHighClassDiceTracker(context: CommandContext<FabricClientCommandSource>, enabled: Boolean): Int {
+		val previous = config.highClassDiceTrackerEnabled
+		config.highClassDiceTrackerEnabled = enabled
+
+		return try {
+			configManager.save(config)
+			HighClassDiceTrackerFeature.onConfigChanged()
+			context.source.sendFeedback(Text.literal("High Class Dice tracker ${if (enabled) "enabled" else "disabled"}."))
+			1
+		} catch (_: IOException) {
+			config.highClassDiceTrackerEnabled = previous
+			context.source.sendError(Text.literal("Failed to save High Class Dice tracker setting."))
+			0
+		}
+	}
+
+	private fun showHighClassDiceTrackerStatus(context: CommandContext<FabricClientCommandSource>): Int {
+		context.source.sendFeedback(Text.literal("Fetching High Class Dice tracker status..."))
+		HighClassDiceTrackerFeature.requestStatus { message ->
+			context.source.sendFeedback(message)
+		}
+		return 1
+	}
+
 	private fun runDevTest(context: CommandContext<FabricClientCommandSource>): Int {
 		return if (ChimeraBookDropEffectsFeature.runTest()) {
 			context.source.sendFeedback(Text.literal("Triggered Chimera book drop effect test."))
@@ -326,6 +369,21 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			context.source.sendError(Text.literal("Chimera book drop effects module is disabled."))
 			0
 		}
+	}
+
+	private fun logNearbyEntities(context: CommandContext<FabricClientCommandSource>): Int {
+		val result = EntityDiagnostics.logNearby(MinecraftClient.getInstance())
+		if (result == null) {
+			context.source.sendError(Text.literal("Entity scan requires an active world."))
+			return 0
+		}
+
+		context.source.sendFeedback(
+			Text.literal(
+				"Logged ${result.entityCount} nearby entities, including ${result.itemDisplayCount} item displays, to latest.log.",
+			),
+		)
+		return 1
 	}
 
 	private fun toggleDevMode(context: CommandContext<FabricClientCommandSource>): Int =
@@ -341,6 +399,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 			if (previous != enabled) {
 				minigameController.onConfigChanged()
 				MobModelFeature.onConfigChanged()
+				HighClassDiceTrackerFeature.onConfigChanged()
 			}
 			showDevModeStatus(context)
 		} catch (_: IOException) {
@@ -367,6 +426,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		AutoSprintFeature.onTick(client)
 		M5Feature.onTick(client)
 		PickaxeAbilityCooldownFeature.onTick(client)
+		SlayerFeature.onTick(client)
 		BlazeSlayerFeature.onTick(client)
 		FireFreezeFeature.onTick(client)
 		MineshaftAutoWarpFeature.onTick(client)
@@ -426,6 +486,7 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 	private fun reloadConfig(context: CommandContext<FabricClientCommandSource>): Int {
 		config = configManager.load()
 		applyBackendBridgeConfig()
+		HighClassDiceTrackerFeature.onConfigChanged()
 		context.source.sendFeedback(Text.literal("IRC bridge config reloaded: ${configManager.path()}"))
 		return 1
 	}

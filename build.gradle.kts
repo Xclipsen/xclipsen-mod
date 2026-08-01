@@ -82,8 +82,9 @@ val prismTargetDirs: List<String> = listOf(
 	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 skyhanni + sbo/minecraft/mods",
 	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 Polar/minecraft/mods",
 	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 skyhanni + sbo/minecraft/mods",
-	"/home/la/.local/share/PrismLauncher/instances/1.21.11 testing 1/minecraft/mods",
-	"/home/la/.local/share/PrismLauncher/instances/1.21.11 testing 2/minecraft/mods"
+	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 testing 1/minecraft/mods",
+	// "/home/la/.local/share/PrismLauncher/instances/1.21.11 testing 2/minecraft/mods"
+	"/home/la/.local/share/PrismLauncher/instances/1.21.11 Dungeons für clippy/minecraft/mods",
 )
 
 fun Project.findRemappedModJar(): File {

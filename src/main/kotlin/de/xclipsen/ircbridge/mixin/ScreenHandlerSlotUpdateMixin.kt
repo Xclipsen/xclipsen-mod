@@ -1,6 +1,7 @@
 package de.xclipsen.ircbridge.mixin
 
 import de.xclipsen.ircbridge.ExperimentationTableFeature
+import de.xclipsen.ircbridge.SlayerFeature
 import net.minecraft.item.ItemStack
 import net.minecraft.screen.ScreenHandler
 import org.spongepowered.asm.mixin.Mixin
@@ -14,10 +15,12 @@ abstract class ScreenHandlerSlotUpdateMixin {
 	private fun xclipsenOnSetStackInSlot(slot: Int, revision: Int, stack: ItemStack, ci: CallbackInfo) {
 		ExperimentationTableFeature.onSlotStackChanged(this as ScreenHandler, slot, stack)
 		ExperimentationTableFeature.onSlotUpdate(this as ScreenHandler)
+		SlayerFeature.onSlotUpdate(this as ScreenHandler)
 	}
 
 	@Inject(method = ["updateSlotStacks"], at = [At("RETURN")])
 	private fun xclipsenOnUpdateSlotStacks(revision: Int, stacks: List<ItemStack>, cursorStack: ItemStack, ci: CallbackInfo) {
 		ExperimentationTableFeature.onSlotUpdate(this as ScreenHandler)
+		SlayerFeature.onSlotUpdate(this as ScreenHandler)
 	}
 }
