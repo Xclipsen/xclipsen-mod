@@ -2,7 +2,7 @@
 
 Fabric-Clientmod fuer Minecraft `26.1.2`.
 
-Aktuelle Version: `1.0.0`
+Aktuelle Version: `1.0.1`
 
 ## Kurzuebersicht
 
@@ -12,6 +12,7 @@ Aktuelle Version: `1.0.0`
 - `Hypixel Co-op Relay`: Hypixel-Co-op-Chat automatisch ins Backend weiterleiten, wenn die Bridge aktiv und der Account gelinkt ist.
 - `Image Preview`: Discord-/Chat-Bildlinks als Hover-Preview im Chat anzeigen, inklusive Shift-Grossansicht.
 - `Hideonleaf Helper`: Shulker Glow, Projektil-Glow, Tracer-Linie, Lost-Fight-Alert und konfigurierbarer Alert-Sound.
+- `Safari ESP`: Separate Floor-Drop-, Duplico- und Hideyho-Module mit gemeinsamem Box-/Tracer- oder X-Ray-Glow-Modus.
 - `Shard Tracker`: Hideonleaf-Shards und Drops tracken, Session/Total-HUD anzeigen, Profit pro Stunde berechnen und Bazaar-Preise vom Backend aktualisieren.
 - `HUD Editor`: HUD-Elemente verschieben, skalieren und zuruecksetzen ueber `/xclipsen hud` oder `/irc hud`.
 - `Time Changer`: clientseitige Zeit-Presets wie Day, Noon, Sunset, Night, Midnight, Sunrise und Real Time.

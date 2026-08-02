@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.1
+
+- Added independently toggleable Duplico and Hideyho ESP modules restricted to the Safari area.
+- Added a shared player-scoped Safari ESP mode for either X-ray glow or box-and-tracer rendering.
+- Added a dedicated Safari ClickGUI section containing Floor Drop ESP, Duplico ESP, and Hideyho ESP.
+- Added developer diagnostics for live Duplico and Hideyho detection.
+
 ## v1.0.0
 
 - Ported the client target from Minecraft `1.21.11` to `26.1.2` with Java 25 and unobfuscated Mojang names.

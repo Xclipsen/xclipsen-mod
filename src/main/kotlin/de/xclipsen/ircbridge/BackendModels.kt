@@ -92,6 +92,9 @@ class BridgeConfig {
 	@JvmField var purpleTerracottaHighlightColorHex: String = "#B06CFF"
 	@JvmField var floorDropEspModuleEnabled: Boolean = true
 	@JvmField var floorDropEspTracerEnabled: Boolean = true
+	@JvmField var duplicoEspModuleEnabled: Boolean = false
+	@JvmField var hideyhoEspModuleEnabled: Boolean = false
+	@JvmField var safariEspMode: Int = SafariEspMode.BOX_TRACER
 	@JvmField var wormholeFinderModuleEnabled: Boolean = false
 	@JvmField var wormholeDepartureAlertEnabled: Boolean = true
 	@JvmField var wormholeDepartureAlertSoundId: String = "minecraft:entity.enderman.teleport"
@@ -245,6 +248,9 @@ class BridgeConfig {
 		it.purpleTerracottaHighlightColorHex = purpleTerracottaHighlightColorHex
 		it.floorDropEspModuleEnabled = floorDropEspModuleEnabled
 		it.floorDropEspTracerEnabled = floorDropEspTracerEnabled
+		it.duplicoEspModuleEnabled = duplicoEspModuleEnabled
+		it.hideyhoEspModuleEnabled = hideyhoEspModuleEnabled
+		it.safariEspMode = safariEspMode
 		it.wormholeFinderModuleEnabled = wormholeFinderModuleEnabled
 		it.wormholeDepartureAlertEnabled = wormholeDepartureAlertEnabled
 		it.wormholeDepartureAlertSoundId = wormholeDepartureAlertSoundId

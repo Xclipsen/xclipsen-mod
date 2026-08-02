@@ -115,6 +115,22 @@ Status markers: `[ ]` pending, `[-]` in progress, `[x]` completed, `[!]` blocked
 - [x] Integrate the player-scoped MISC toggle, searchable ClickGUI descriptor, reset lifecycle, and developer status command.
 - [x] Validate with `./gradlew jar`; target prediction, cooldown gating, block classification, and rendering remain manual in-game checks.
 
+## Duplico ESP Integration
+
+- [x] Detect Duplico display stacks exclusively in the Safari area without sending packets.
+- [x] Render an X-ray box and tracer until the display disappears or transforms.
+- [x] Integrate the player-scoped GALATEA module toggle and `/xclipsen dev duplico status` diagnostic.
+- [x] Validate with `./gradlew jar`; live entity naming, transformation removal, island gating, and rendering remain manual in-game checks.
+
+## Hideyho And Safari ESP Modes
+
+- [x] Detect Hideyho remote-player entities through their own or nearby armor-stand names exclusively in Safari.
+- [x] Keep independent Duplico and Hideyho module toggles with one player-scoped global `Box + Tracer` or `Glow` mode.
+- [x] Reuse one shared Safari box/tracer renderer and the existing entity-glow mixin without sending packets.
+- [x] Integrate the GALATEA ClickGUI settings and `/xclipsen dev hideyho status` diagnostic.
+- [x] Validate with `./gradlew jar` and deploy automatically to `26.1.2 Normal für clippy`; live naming, both modes, and both independent toggles remain manual checks.
+- [x] Place Floor Drop ESP, Duplico ESP, and Hideyho ESP together in a dedicated SAFARI ClickGUI category.
+
 ## Validation Log
 
 - 2026-08-01: `./gradlew jar` passed with JDK 25 after implementing shared/player config persistence, flat-config backup migration, profile-change reload/reset handling, and UUID-scoped Hideonleaf tracker files.
@@ -141,3 +157,6 @@ Status markers: `[ ]` pending, `[-]` in progress, `[x]` completed, `[!]` blocked
 - 2026-08-02: The existing Pickaxe Cooldown HUD now shows a shadowed `Predicted: <count>` line for Pickobulus when its helper option is enabled, using the same surface-block prediction set. `./gradlew jar` passed; live count updates and HUD sizing remain manual checks.
 - 2026-08-02: Configurable alert sounds now use an unattenuated relative `MASTER` sound instead of a linearly attenuated sound positioned at world origin. `./gradlew jar` passed with Temurin JDK 25, and the JAR was atomically installed and checksum-verified in both Clippy instances; Pickaxe Ready playback and shared sound previews remain manual in-game checks.
 - 2026-08-02: Release `v1.0.0` metadata was synchronized across Gradle, README, and changelog. `./gradlew jar` passed with Temurin JDK 25; `xclipsen-mod-1.0.0.jar` passed ZIP validation and embeds mod version `1.0.0` for Minecraft `26.1.2`. Manual in-game checks listed above remain outstanding.
+- 2026-08-02: `./gradlew jar` passed with Temurin JDK 25 after adding the player-scoped Duplico ESP for Safari. Live diagnostics then identified the disguised mob as an item display stacked with an interaction entity and silverfish rather than a block display; detection now supports that exact stack plus named displays and uses the interaction hitbox for lime X-ray boxes and tracers. It sends no packets and exposes `/xclipsen dev duplico status`; transformation cleanup, Safari gating, and rendering remain manual checks.
+- 2026-08-02: `./gradlew jar` passed with Temurin JDK 25 after adding the independently toggleable Hideyho ESP and a player-scoped global Safari ESP mode shared with Duplico. Hideyho matches remote players by their own or nearby armor-stand name, both features support either the shared box/tracer renderer or the existing through-wall glow pipeline, and neither sends packets. The JAR was automatically deployed to `26.1.2 Normal für clippy`; live detection, independent toggles, and both render modes remain manual checks.
+- 2026-08-02: Prepared release `v1.0.1` with a dedicated SAFARI ClickGUI category containing Floor Drop ESP, Duplico ESP, and Hideyho ESP. `./gradlew jar` passed with Temurin JDK 25, and `xclipsen-mod-1.0.1.jar` was automatically deployed to `26.1.2 Normal für clippy`; GitHub publication is tracked by the active release task.

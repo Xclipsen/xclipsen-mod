@@ -115,6 +115,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> MortDoorBarrierFeature.onRender(context) }
 		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> PurpleTerracottaHighlightFeature.render(context) }
 		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> FloorDropEspFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> DuplicoEspFeature.render(context) }
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> HideyhoEspFeature.render(context) }
 		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> WormholeFinderFeature.render(context) }
 		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> PestEspFeature.render(context) }
 		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register { context -> CorpseEspFeature.render(context) }
@@ -254,6 +256,8 @@ class XclipsenIrcBridgeClient : ClientModInitializer {
 							.then(devStatusCommand("firefreeze", FireFreezeFeature::statusLine))
 							.then(devStatusCommand("corpse", CorpseEspFeature::statusLine))
 							.then(devStatusCommand("floordrop", FloorDropEspFeature::statusLine))
+							.then(devStatusCommand("duplico", DuplicoEspFeature::statusLine))
+							.then(devStatusCommand("hideyho", HideyhoEspFeature::statusLine))
 							.then(devStatusCommand("pestesp", PestEspFeature::statusLine))
 							.then(devStatusCommand("experimentation", ExperimentationTableFeature::statusLine))
 							.then(devStatusCommand("itemupdatefix", ItemUpdateFixFeature::statusLine)),

@@ -500,6 +500,9 @@ class XclipsenConfigScreen(
 		candidate.pestEspModuleEnabled = workingCopy.pestEspModuleEnabled
 		candidate.floorDropEspModuleEnabled = workingCopy.floorDropEspModuleEnabled
 		candidate.floorDropEspTracerEnabled = workingCopy.floorDropEspTracerEnabled
+		candidate.duplicoEspModuleEnabled = workingCopy.duplicoEspModuleEnabled
+		candidate.hideyhoEspModuleEnabled = workingCopy.hideyhoEspModuleEnabled
+		candidate.safariEspMode = SafariEspMode.normalize(workingCopy.safariEspMode)
 		candidate.pestEspTracerEnabled = workingCopy.pestEspTracerEnabled
 		candidate.corpseEspModuleEnabled = workingCopy.corpseEspModuleEnabled
 		candidate.corpseEspLapisEnabled = workingCopy.corpseEspLapisEnabled
@@ -842,6 +845,7 @@ class XclipsenConfigScreen(
 			ConfigSection.HIDEONLEAF_HELPER -> drawHideonleafHelperSettings(context, contentMenu, mouseX, mouseY)
 			ConfigSection.PURPLE_TERRACOTTA -> drawPurpleTerracottaSettings(context, contentMenu, mouseX, mouseY)
 			ConfigSection.FLOOR_DROP_ESP -> drawFloorDropEspSettings(context, contentMenu, mouseX, mouseY)
+			ConfigSection.DUPLICO_ESP, ConfigSection.HIDEYHO_ESP -> drawSafariEspSettings(context, contentMenu, mouseX, mouseY)
 			ConfigSection.WORMHOLE_FINDER -> drawWormholeFinderSettings(context, contentMenu, mouseX, mouseY)
 			ConfigSection.AUTO_SPRINT -> drawAutoSprintSettings(context, contentMenu, mouseX, mouseY)
 			ConfigSection.TIME_CHANGER -> drawTimeChangerSettings(context, contentMenu, mouseX, mouseY)
@@ -963,6 +967,10 @@ class XclipsenConfigScreen(
 
 	private fun drawTimeChangerSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
 		drawOptionSetting(context, timeChangerModeBounds(menu), "Time", ClientTimeChanger.displayName(workingCopy.timeChangerMode), mouseX, mouseY)
+	}
+
+	private fun drawSafariEspSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
+		drawOptionSetting(context, safariEspModeBounds(menu), "Global ESP Mode", SafariEspMode.displayName(workingCopy.safariEspMode), mouseX, mouseY)
 	}
 
 	private fun drawAuctionHouseSettings(context: GuiGraphics, menu: Bounds, mouseX: Int, mouseY: Int) {
@@ -1632,6 +1640,7 @@ class XclipsenConfigScreen(
 			ConfigSection.HIDEONLEAF_HELPER -> HIDEONLEAF_POPUP_HEIGHT
 			ConfigSection.PURPLE_TERRACOTTA -> PURPLE_TERRACOTTA_POPUP_HEIGHT
 			ConfigSection.FLOOR_DROP_ESP -> 120
+			ConfigSection.DUPLICO_ESP, ConfigSection.HIDEYHO_ESP -> 120
 			ConfigSection.WORMHOLE_FINDER -> if (soundDropdownOpen) WORMHOLE_POPUP_WITH_DROPDOWN_HEIGHT else WORMHOLE_POPUP_HEIGHT
 			ConfigSection.AUTO_SPRINT -> 160
 			ConfigSection.TIME_CHANGER -> TIME_CHANGER_POPUP_HEIGHT
@@ -1747,8 +1756,12 @@ class XclipsenConfigScreen(
 			return true
 		}
 		return when {
-			row == timeChangerModeBounds(menu) -> {
+			openedSection == ConfigSection.TIME_CHANGER && row == timeChangerModeBounds(menu) -> {
 				workingCopy.timeChangerMode = (workingCopy.timeChangerMode + direction + ClientTimeChanger.modeCount) % ClientTimeChanger.modeCount
+				true
+			}
+			openedSection in SAFARI_ESP_SECTIONS && row == safariEspModeBounds(menu) -> {
+				workingCopy.safariEspMode = (workingCopy.safariEspMode + direction + SafariEspMode.modeCount) % SafariEspMode.modeCount
 				true
 			}
 			openedSection == ConfigSection.DOOR && row == settingRowBounds(menu, 2, SETTING_HEIGHT) -> {
@@ -2048,6 +2061,12 @@ class XclipsenConfigScreen(
 		if (section == ConfigSection.TIME_CHANGER && timeChangerModeBounds(menu).contains(mouseX, mouseY)) {
 			readWorkingCopyFromFields(updateStatus = false)
 			workingCopy.timeChangerMode = (workingCopy.timeChangerMode + 1) % ClientTimeChanger.modeCount
+			return true
+		}
+
+		if (section in SAFARI_ESP_SECTIONS && safariEspModeBounds(menu).contains(mouseX, mouseY)) {
+			readWorkingCopyFromFields(updateStatus = false)
+			workingCopy.safariEspMode = (workingCopy.safariEspMode + 1) % SafariEspMode.modeCount
 			return true
 		}
 
@@ -3516,6 +3535,10 @@ class XclipsenConfigScreen(
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
 
+	private fun safariEspModeBounds(menu: Bounds): Bounds {
+		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
+	}
+
 	private fun auctionHouseAutoCopyBounds(menu: Bounds): Bounds {
 		return Bounds(menu.left + 10, menu.top + 40, menu.right - 10, menu.top + 40 + SETTING_HEIGHT)
 	}
@@ -3739,7 +3762,7 @@ class XclipsenConfigScreen(
 		SLAYER_ANNOUNCER_PITCH,
 	}
 
-	private enum class ConfigCategory { MODULES, MISC, DUNGEON, GALATEA, SYSTEM }
+	private enum class ConfigCategory { MODULES, MISC, DUNGEON, GALATEA, SAFARI, SYSTEM }
 
 	private enum class ConfigSection(
 		val label: String,
@@ -3754,7 +3777,9 @@ class XclipsenConfigScreen(
 		CHAT("Chat", "Client-side chat cleanup and message hiders.", ConfigCategory.MODULES, enabledGetter = { it.chatModuleEnabled }, enabledSetter = { c, v -> c.chatModuleEnabled = v }),
 		HIDEONLEAF_HELPER("Hideonleaf Helper", "Shulker glow and Hideonleaf fight alerts.", ConfigCategory.GALATEA, enabledGetter = { it.hideonleafHelperEnabled }, enabledSetter = { c, v -> c.hideonleafHelperEnabled = v }),
 		PURPLE_TERRACOTTA("Purple Terracotta", "Highlights purple terracotta blocks through walls.", ConfigCategory.GALATEA, enabledGetter = { it.purpleTerracottaHighlightModuleEnabled }, enabledSetter = { c, v -> c.purpleTerracottaHighlightModuleEnabled = v }),
-		FLOOR_DROP_ESP("Floor Drop ESP", "Highlights Galatea floor drops made from three grouped string displays.", ConfigCategory.GALATEA, enabledGetter = { it.floorDropEspModuleEnabled }, enabledSetter = { c, v -> c.floorDropEspModuleEnabled = v }),
+		FLOOR_DROP_ESP("Floor Drop ESP", "Highlights Safari floor drops made from three grouped string displays.", ConfigCategory.SAFARI, enabledGetter = { it.floorDropEspModuleEnabled }, enabledSetter = { c, v -> c.floorDropEspModuleEnabled = v }),
+		DUPLICO_ESP("Duplico ESP", "Highlights disguised Duplicos in Safari using the global Safari ESP mode.", ConfigCategory.SAFARI, enabledGetter = { it.duplicoEspModuleEnabled }, enabledSetter = { c, v -> c.duplicoEspModuleEnabled = v }),
+		HIDEYHO_ESP("Hideyho ESP", "Highlights named Hideyho player entities in Safari using the global Safari ESP mode.", ConfigCategory.SAFARI, enabledGetter = { it.hideyhoEspModuleEnabled }, enabledSetter = { c, v -> c.hideyhoEspModuleEnabled = v }),
 		WORMHOLE_FINDER("Wormhole Finder", "Shows a water-surface ring and tracer for the active wormhole.", ConfigCategory.MISC, enabledGetter = { it.wormholeFinderModuleEnabled }, enabledSetter = { c, v -> c.wormholeFinderModuleEnabled = v }),
 		AUTO_SPRINT("Auto Sprint", "Automatically starts sprinting while moving forward.", ConfigCategory.MISC, enabledGetter = { it.autoSprintModuleEnabled }, enabledSetter = { c, v -> c.autoSprintModuleEnabled = v }),
 		TIME_CHANGER("Time Changer", "Client-side world time presets.", ConfigCategory.MODULES, enabledGetter = { it.timeChangerEnabled }, enabledSetter = { c, v -> c.timeChangerEnabled = v }),
@@ -3812,6 +3837,7 @@ class XclipsenConfigScreen(
 	}
 
 	companion object {
+		private val SAFARI_ESP_SECTIONS = setOf(ConfigSection.DUPLICO_ESP, ConfigSection.HIDEYHO_ESP)
 		private const val ACCENT = XclipsenUiTokens.ACCENT
 		private const val ACCENT_TRANS = XclipsenUiTokens.ACCENT_TRANSLUCENT
 		private const val PANEL_HEADER = XclipsenUiTokens.SURFACE_PANEL_HEADER

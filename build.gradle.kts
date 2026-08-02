@@ -72,7 +72,7 @@ java {
 
 val prismTargetDirs: List<String> = listOf(
 	// """C:\Users\leon.arning\AppData\Roaming\PrismLauncher\instances\26.1.2""",
-	"/home/la/.local/share/PrismLauncher/instances/26.1.2 Dungeons für clippy/minecraft/mods",
+	"/home/la/.local/share/PrismLauncher/instances/26.1.2 Normal für clippy/minecraft/mods",
 )
 
 fun Project.findRemappedModJar(): File {
