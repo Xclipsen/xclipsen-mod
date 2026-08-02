@@ -1,6 +1,6 @@
 package de.xclipsen.ircbridge
 
-import com.autocroesus.util.ColorUtil
+import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
@@ -28,6 +28,12 @@ object PartyFinderFeature {
 	private var inPartyFinder = false
 	private var inCatacombsGate = false
 	private var currentRole: String? = null
+	private var activeContainerId = -1
+	private var activeRevision = -1
+
+	fun statusLine(): String =
+		"enabled=${isEnabled()}, screen=$inPartyFinder, catacombsGate=$inCatacombsGate, role=${currentRole ?: "unknown"}, " +
+			"parties=${parties.size}, cachedPlayers=${statsCache.size}, pending=${pendingStats.size}"
 
 	fun onTick(client: Minecraft) {
 		val screen = client.screen as? AbstractContainerScreen<*> ?: return
@@ -49,23 +55,31 @@ object PartyFinderFeature {
 		pendingStats.clear()
 	}
 
+	fun shutdown() {
+		onDisconnect()
+		executor.shutdownNow()
+	}
+
 	fun onServerContainerOpen(syncId: Int, title: Component) {
 		val titleString = title.string
 		inPartyFinder = titleString == "Party Finder"
 		inCatacombsGate = titleString == "Catacombs Gate"
+		activeContainerId = if (inPartyFinder || inCatacombsGate) syncId else -1
+		activeRevision = -1
 		if (!inPartyFinder) {
 			parties = emptyMap()
 		}
 	}
 
 	fun onServerContainerClose(syncId: Int) {
-		reset()
+		if (syncId == activeContainerId) reset()
 	}
 
 	fun onServerContainerContent(syncId: Int, revision: Int, stacks: List<ItemStack>) {
-		if (!isEnabled()) {
+		if (!isEnabled() || syncId != activeContainerId || revision < activeRevision) {
 			return
 		}
+		activeRevision = revision
 		if (inCatacombsGate) {
 			parseCurrentRole(stacks.getOrNull(45))
 			inCatacombsGate = false
@@ -78,9 +92,10 @@ object PartyFinderFeature {
 	}
 
 	fun onServerContainerSlot(syncId: Int, revision: Int, slot: Int, stack: ItemStack) {
-		if (!isEnabled()) {
+		if (!isEnabled() || syncId != activeContainerId || revision < activeRevision) {
 			return
 		}
+		activeRevision = revision
 		if (inCatacombsGate && slot == 45) {
 			parseCurrentRole(stack)
 			inCatacombsGate = false
@@ -127,7 +142,7 @@ object PartyFinderFeature {
 			return false
 		}
 
-		val leader = LEADER_NAME_PATTERN.matchEntire(ColorUtil.stripColors(slot.item.hoverName.string))?.groupValues?.getOrNull(1) ?: return false
+		val leader = LEADER_NAME_PATTERN.matchEntire(ChatFormatting.stripFormatting(slot.item.hoverName.string).orEmpty())?.groupValues?.getOrNull(1) ?: return false
 		val client = Minecraft.getInstance()
 		client.keyboardHandler.setClipboard(leader)
 		client.player?.sendSystemMessage(Component.literal("§bCopied leader name §a$leader"))
@@ -228,6 +243,7 @@ object PartyFinderFeature {
 	}
 
 	private fun requestMissingStats(names: List<String>) {
+		val generation = ClientSessionLifecycle.snapshot()
 		val missing = names
 			.map { it.lowercase(Locale.ROOT) }
 			.filter { it.isNotBlank() && !statsCache.containsKey(it) && pendingStats.add(it) }
@@ -236,7 +252,7 @@ object PartyFinderFeature {
 
 		executor.execute {
 			val response = XclipsenIrcBridgeClient.instance?.backendBridge()?.fetchDungeonStats(missing)
-			if (response?.ok == true) {
+			if (ClientSessionLifecycle.isCurrent(generation) && response?.ok == true) {
 				response.players.forEach { (name, stats) ->
 					statsCache[name.lowercase(Locale.ROOT)] = stats
 					if (stats.username.isNotBlank()) {
@@ -244,7 +260,9 @@ object PartyFinderFeature {
 					}
 				}
 			}
-			pendingStats.removeAll(missing.toSet())
+			if (ClientSessionLifecycle.isCurrent(generation)) {
+				pendingStats.removeAll(missing.toSet())
+			}
 		}
 	}
 
@@ -283,7 +301,7 @@ object PartyFinderFeature {
 	}
 
 	private fun loreLines(stack: ItemStack): List<String> {
-		return stack.get(DataComponents.LORE)?.lines()?.map { ColorUtil.stripColors(it.string) } ?: emptyList()
+		return stack.get(DataComponents.LORE)?.lines()?.map { ChatFormatting.stripFormatting(it.string).orEmpty() } ?: emptyList()
 	}
 
 	private fun isPartyFinderScreen(screen: AbstractContainerScreen<*>): Boolean = screen.title.string == "Party Finder"
@@ -305,6 +323,9 @@ object PartyFinderFeature {
 		parties = emptyMap()
 		inPartyFinder = false
 		inCatacombsGate = false
+		currentRole = null
+		activeContainerId = -1
+		activeRevision = -1
 	}
 
 	private fun parseRoman(value: String): Int {

@@ -1,6 +1,5 @@
 package de.xclipsen.ircbridge
 
-import com.autocroesus.util.ColorUtil
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.HoverEvent
@@ -10,13 +9,14 @@ import net.minecraft.ChatFormatting
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentHashMap
 
 object DungeonAutoKickFeature {
 	private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
 		Thread(runnable, "xclipsen-dungeon-autokick").apply { isDaemon = true }
 	}
-	private val kickedCache = mutableSetOf<String>()
-	private val pendingLookups = mutableSetOf<String>()
+	private val kickedCache = ConcurrentHashMap.newKeySet<String>()
+	private val pendingLookups = ConcurrentHashMap.newKeySet<String>()
 	private var lastCommandSentAt = 0L
 	private var lastStatus = "Idle"
 
@@ -43,7 +43,14 @@ object DungeonAutoKickFeature {
 
 	fun onDisconnect() {
 		pendingLookups.clear()
+		kickedCache.clear()
+		lastCommandSentAt = 0L
 		lastStatus = "Disconnected"
+	}
+
+	fun shutdown() {
+		onDisconnect()
+		executor.shutdownNow()
 	}
 
 	fun clearKickCache() {
@@ -54,15 +61,17 @@ object DungeonAutoKickFeature {
 	fun showCataStats(playerName: String) {
 		val safePlayerName = cleanPlayerName(playerName)
 		if (!USERNAME_PATTERN.matches(safePlayerName)) {
-			sendClientMessage("Usage: /cata <player>", ChatFormatting.RED)
+			sendClientMessage("Usage: /xclipsen cata <player>", ChatFormatting.RED)
 			return
 		}
 
+		val generation = ClientSessionLifecycle.snapshot()
 		executor.execute {
 			val client = Minecraft.getInstance()
 			try {
 				val response = XclipsenIrcBridgeClient.instance?.backendBridge()?.fetchDungeonStats(safePlayerName)
 				client.execute {
+					if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 					if (response == null) {
 						sendClientMessage("Cata: backend unreachable for $safePlayerName.", ChatFormatting.RED)
 						return@execute
@@ -75,6 +84,7 @@ object DungeonAutoKickFeature {
 				}
 			} catch (exception: Exception) {
 				client.execute {
+					if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 					sendClientMessage("Cata: failed to check $safePlayerName: ${exception.message ?: exception::class.java.simpleName}", ChatFormatting.RED)
 				}
 			}
@@ -90,6 +100,7 @@ object DungeonAutoKickFeature {
 	}
 
 	private fun onPartyFinderJoin(playerName: String, config: BridgeConfig) {
+		val generation = ClientSessionLifecycle.snapshot()
 		val key = playerName.lowercase(Locale.ROOT)
 		if (!pendingLookups.add(key)) {
 			return
@@ -101,6 +112,7 @@ object DungeonAutoKickFeature {
 				val client = Minecraft.getInstance()
 				if (config.dungeonAutoKickAutoKickEnabled && config.dungeonAutoKickCacheEnabled && kickedCache.contains(key)) {
 					client.execute {
+						if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 						sendCommand(client, "party kick $playerName", forceDelay = true)
 						sendClientMessage("Kicked $playerName because they are in the AutoKick cache.", ChatFormatting.YELLOW)
 					}
@@ -109,6 +121,7 @@ object DungeonAutoKickFeature {
 
 				val response = XclipsenIrcBridgeClient.instance?.backendBridge()?.fetchDungeonStats(playerName)
 				client.execute {
+					if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 					if (response == null) {
 						lastStatus = "Backend unreachable for $playerName"
 						sendClientMessage("Dungeon AutoKick: backend unreachable for $playerName.", ChatFormatting.RED)
@@ -140,6 +153,7 @@ object DungeonAutoKickFeature {
 						executor.execute {
 							Thread.sleep(COMMAND_GAP_MS + 250L)
 							client.execute {
+								if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 								sendCommand(client, "party kick $playerName", forceDelay = true)
 							}
 						}
@@ -154,10 +168,11 @@ object DungeonAutoKickFeature {
 			} catch (exception: Exception) {
 				lastStatus = "Stats check failed for $playerName"
 				Minecraft.getInstance().execute {
+					if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 					sendClientMessage("Dungeon AutoKick: failed to check $playerName: ${exception.message ?: exception::class.java.simpleName}", ChatFormatting.RED)
 				}
 			} finally {
-				pendingLookups.remove(key)
+				if (ClientSessionLifecycle.isCurrent(generation)) pendingLookups.remove(key)
 			}
 		}
 	}
@@ -358,7 +373,7 @@ object DungeonAutoKickFeature {
 	}
 
 	private fun normalize(raw: String): String {
-		return ColorUtil.stripColors(raw)
+		return ChatFormatting.stripFormatting(raw).orEmpty()
 			.replace('\r', ' ')
 			.replace('\n', ' ')
 			.replace(WHITESPACE_PATTERN, " ")

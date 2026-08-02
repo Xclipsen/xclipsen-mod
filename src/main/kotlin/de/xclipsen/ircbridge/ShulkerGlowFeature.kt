@@ -23,11 +23,6 @@ object ShulkerGlowFeature {
 		} else {
 			config.shulkerGlowColorHex
 		}
-		return hex.trim()
-			.removePrefix("#")
-			.takeIf { HEX_COLOR_PATTERN.matches(it) }
-			?.toInt(16)
+		return ClientColor.parseRgb(hex)
 	}
-
-	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 }

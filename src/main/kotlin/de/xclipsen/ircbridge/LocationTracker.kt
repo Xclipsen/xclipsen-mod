@@ -1,6 +1,9 @@
 package de.xclipsen.ircbridge
 
 import net.minecraft.client.Minecraft
+import net.hypixel.modapi.HypixelModAPI
+import net.hypixel.modapi.packet.impl.clientbound.event.ClientboundLocationPacket
+import java.util.Locale
 
 /**
  * Tracks the player's current server-side area by reading the tab-list
@@ -13,6 +16,17 @@ import net.minecraft.client.Minecraft
  * [onTick] must be called every client tick (END_CLIENT_TICK).
  */
 object LocationTracker {
+	private var initialized = false
+	private var modApiLocationReceived = false
+	private var modApiSkyBlock = false
+
+	@Volatile
+	var currentIsland: IslandType = IslandType.NONE
+		private set
+
+	@Volatile
+	var currentModeIdentifier: String = ""
+		private set
 
 	/** Raw area string as shown in the tab list, e.g. "Galatea Island". Empty when unknown. */
 	@Volatile
@@ -31,23 +45,30 @@ object LocationTracker {
 
 	/** True while the client appears to be on Hypixel SkyBlock. */
 	val isOnHypixelSkyBlock: Boolean
-		get() = isOnHypixel && scoreboardTitle.contains("skyblock", ignoreCase = true)
+		get() = isOnHypixel && if (modApiLocationReceived) modApiSkyBlock else scoreboardTitle.contains("skyblock", ignoreCase = true)
 
 	/** True while the player is anywhere on Galatea Island. */
 	val isOnGalatea: Boolean
-		get() = isOnHypixelSkyBlock && normalizedGalateaArea(currentArea) != null
+		get() = isOnHypixelSkyBlock && if (modApiLocationReceived) {
+			currentIsland in GALATEA_ISLANDS
+		} else {
+			normalizedGalateaArea(currentArea) != null
+		}
 
 	/** True while the tab list reports the Safari area. */
 	val isInSafariArea: Boolean
-		get() = isOnHypixelSkyBlock && currentArea.equals("Safari", ignoreCase = true)
+		get() = isOnHypixelSkyBlock && if (modApiLocationReceived) currentIsland == IslandType.SAFARI else currentArea.equals("Safari", ignoreCase = true)
 
 	/** True while the player is on The End island or one of its sub-areas. */
 	val isOnEndIsland: Boolean
-		get() = isOnHypixelSkyBlock && normalizedEndArea(currentArea) != null
+		get() = isOnHypixelSkyBlock && if (modApiLocationReceived) currentIsland == IslandType.THE_END else normalizedEndArea(currentArea) != null
 
 	/** True while the player is on The Garden or one of its plots. */
 	val isOnGarden: Boolean
-		get() = isOnHypixelSkyBlock && normalizedGardenArea(currentArea) != null
+		get() = isOnHypixelSkyBlock && if (modApiLocationReceived) currentIsland in GARDEN_ISLANDS else normalizedGardenArea(currentArea) != null
+
+	val isInMineshaft: Boolean
+		get() = isOnHypixelSkyBlock && if (modApiLocationReceived) currentIsland == IslandType.MINESHAFT else currentArea.contains("mineshaft", ignoreCase = true)
 
 	/** True while the Critter Safari event is listed in the Hypixel tab list. */
 	@Volatile
@@ -58,6 +79,38 @@ object LocationTracker {
 
 	private var tickCounter = 0
 	private const val CHECK_INTERVAL = 20   // re-read tab list once per second
+
+	fun init() {
+		if (initialized) return
+		initialized = true
+		val api = HypixelModAPI.getInstance()
+		api.createHandler(ClientboundLocationPacket::class.java) { packet ->
+			Minecraft.getInstance().execute { updateFromModApi(packet) }
+		}
+		api.subscribeToEventPacket(ClientboundLocationPacket::class.java)
+	}
+
+	fun reset() {
+		tickCounter = 0
+		currentArea = ""
+		scoreboardTitle = ""
+		isOnHypixel = false
+		isCritterSafariActive = false
+		modApiLocationReceived = false
+		modApiSkyBlock = false
+		currentIsland = IslandType.NONE
+		currentModeIdentifier = ""
+	}
+
+	private fun updateFromModApi(packet: ClientboundLocationPacket) {
+		if (!isHypixelServer(Minecraft.getInstance())) return
+		modApiLocationReceived = true
+		isOnHypixel = true
+		modApiSkyBlock = packet.serverType.map { it.name.equals("SKYBLOCK", ignoreCase = true) }.orElse(false)
+		val mode = packet.mode.orElse("").trim().lowercase(Locale.ROOT)
+		currentModeIdentifier = mode.filterNot(Char::isISOControl).take(64)
+		currentIsland = if (modApiSkyBlock) IslandType.fromMode(mode) else IslandType.NONE
+	}
 
 	fun onTick(client: Minecraft) {
 		if (++tickCounter < CHECK_INTERVAL) return
@@ -146,6 +199,8 @@ object LocationTracker {
 		"critter safari entrance",
 		"safari",
 	)
+	private val GALATEA_ISLANDS = setOf(IslandType.GALATEA, IslandType.TORRHUS_CANYON, IslandType.SAFARI)
+	private val GARDEN_ISLANDS = setOf(IslandType.GARDEN, IslandType.GARDEN_GUEST)
 	private val END_ISLAND_AREAS = setOf(
 		"the end",
 		"dragon's nest",

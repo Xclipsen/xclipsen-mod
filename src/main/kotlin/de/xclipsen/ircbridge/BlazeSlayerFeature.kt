@@ -30,6 +30,12 @@ object BlazeSlayerFeature {
 	private var ownBlazeBossLastPosition: Vec3? = null
 	private var ownBlazeBossLastSeenTick = 0
 
+	fun statusLine(): String {
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: return "Unavailable"
+		return "enabled=${config.slayerModuleEnabled && (config.slayerBlazePhaseDisplayEnabled || config.slayerBlazeColoredMobsEnabled)}, " +
+			"skyblock=${LocationTracker.isOnHypixelSkyBlock}, bosses=${trackedBosses.size}, shields=${trackedShields.size}, ownBoss=${ownBlazeBossUuid != null}"
+	}
+
 	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config()
 		val world = client.level
@@ -678,6 +684,8 @@ object BlazeSlayerFeature {
 		}
 		return builder.toString()
 	}
+
+	fun onWorldChange() = clear()
 
 	private fun clear() {
 		featureTickCounter = 0

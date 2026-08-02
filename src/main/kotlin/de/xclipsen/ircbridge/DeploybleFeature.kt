@@ -421,19 +421,12 @@ object DeploybleAlertHudElement : XclipsenHudElement(
    val width = max(DEFAULT_WIDTH, textRenderer.width(text) + PADDING_X * 2)
    val height = PADDING_Y * 2 + textRenderer.lineHeight
 
-  context.fill(0, 0, width, height, BACKGROUND)
-  context.fill(0, 0, width, 1, ACCENT)
-  context.fill(0, height - 1, width, height, ACCENT)
-  context.fill(0, 0, 1, height, ACCENT)
-  context.fill(width - 1, 0, width, height, ACCENT)
-   context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
+	   context.text(textRenderer, text, (width - textRenderer.width(text)) / 2, PADDING_Y, TEXT_COLOR, true)
   return width.toFloat() to height.toFloat()
  }
 
  private const val DEFAULT_WIDTH = 180
  private const val PADDING_X = 8
  private const val PADDING_Y = 6
- private const val BACKGROUND = 0xC0181818.toInt()
- private const val ACCENT = 0xFFE85D75.toInt()
- private const val TEXT_COLOR = 0xFFFFFFFF.toInt()
+	 private const val TEXT_COLOR = 0xFFFFFFFF.toInt()
 }

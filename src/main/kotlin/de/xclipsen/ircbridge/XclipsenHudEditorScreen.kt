@@ -17,7 +17,12 @@ class XclipsenHudEditorScreen(
 			Button.builder(Component.literal("Reset HUD")) {
 				val context = MinecraftDrawContextHolder.current ?: return@builder
 				XclipsenHudManager.elements.forEach { element -> element.reset(context) }
-			}.bounds(width / 2 - 50, height - 56, 100, 20).build(),
+			}.bounds(
+				width / 2 - XclipsenUiTokens.BUTTON_WIDTH / 2,
+				height - 56,
+				XclipsenUiTokens.BUTTON_WIDTH,
+				XclipsenUiTokens.CONTROL_HEIGHT,
+			).build(),
 		)
 	}
 
@@ -25,20 +30,26 @@ class XclipsenHudEditorScreen(
 
 	override fun extractRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
 		MinecraftDrawContextHolder.current = context
-		context.fill(0, 0, width, height, 0x96000000.toInt())
+		context.fill(0, 0, width, height, XclipsenUiTokens.SURFACE_EDITOR_OVERLAY)
 
 		XclipsenHudManager.elements.forEach { element ->
 			element.drawEditor(context, mouseX, mouseY)
 		}
 
 		val dragged = XclipsenHudManager.elements.firstOrNull { it.isDragging }
-		context.centeredText(font, dragged?.displayName ?: "HUD Editor", width / 2, 10, TEXT_WHITE)
+		context.centeredText(
+			font,
+			dragged?.displayName ?: "HUD Editor",
+			width / 2,
+			XclipsenUiTokens.SCREEN_MARGIN,
+			XclipsenUiTokens.TEXT_WHITE,
+		)
 		context.centeredText(
 			font,
 			"Drag elements | Scroll while dragging to scale | ESC saves",
 			width / 2,
 			height - 26,
-			TEXT_MUTED,
+			XclipsenUiTokens.TEXT_MUTED,
 		)
 
 		super.extractRenderState(context, mouseX, mouseY, delta)
@@ -98,7 +109,5 @@ class XclipsenHudEditorScreen(
 
 	companion object {
 		private const val LEFT_MOUSE_BUTTON = 0
-		private const val TEXT_WHITE = 0xFFFFFFFF.toInt()
-		private const val TEXT_MUTED = 0xFFA0A0A0.toInt()
 	}
 }

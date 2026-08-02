@@ -1,6 +1,7 @@
 package de.xclipsen.ircbridge
 
 import net.minecraft.client.resources.sounds.SimpleSoundInstance
+import net.minecraft.client.resources.sounds.SoundInstance
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.sounds.SoundSource
 import net.minecraft.sounds.SoundEvent
@@ -32,14 +33,18 @@ object SoundCatalog {
 
 	fun masterSound(value: String?, pitch: Float, volume: Float): SimpleSoundInstance {
 		return SimpleSoundInstance(
-			soundEvent(value),
+			soundEvent(value).location(),
 			SoundSource.MASTER,
 			volume,
 			pitch,
 			RandomSource.create(),
+			false,
+			0,
+			SoundInstance.Attenuation.NONE,
 			0.0,
 			0.0,
 			0.0,
+			true,
 		)
 	}
 

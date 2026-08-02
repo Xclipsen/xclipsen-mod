@@ -9,6 +9,7 @@ import net.minecraft.network.chat.Component
 import net.minecraft.ChatFormatting
 import org.slf4j.Logger
 import java.io.IOException
+import java.io.InputStream
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -22,6 +23,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 import kotlin.math.min
 
@@ -34,7 +36,10 @@ class ClientBackendBridgeService(
 	}
 
 	private var scheduler: ScheduledExecutorService? = null
+	private val serviceGeneration = AtomicLong()
 	private var config = BridgeConfig()
+	@Volatile
+	private var modCredential: String? = null
 	private var lastSeenMessageId = 0L
 	private var incomingMessagesEnabled = true
 	private var previewHoverPaused = false
@@ -71,13 +76,18 @@ class ClientBackendBridgeService(
 
 	@Synchronized
 	fun configure(config: BridgeConfig) {
-		this.config = config
+		this.config = config.copy()
+	}
+
+	@Synchronized
+	fun configureModCredential(credential: String?) {
+		modCredential = credential
 	}
 
 	@Synchronized
 	fun start(config: BridgeConfig) {
 		stop()
-		this.config = config
+		this.config = config.copy()
 		lastSeenMessageId = 0L
 		lastHttpStatus = -1
 		lastSuccessAt = 0L
@@ -88,10 +98,10 @@ class ClientBackendBridgeService(
 		announcedConnected = false
 		backlogInitialized = false
 
-		if (config.ircServerBaseUrl.isBlank() || config.backendAuthToken.isBlank()) {
+		if (normalizeIrcServerBaseUrl(config.ircServerBaseUrl) == null || !isValidIrcAuthToken(config.backendAuthToken)) {
 			state = "disabled"
-			lastError = "IRC server URL or auth token missing."
-			logger.warn("Client backend bridge disabled because IRC server URL or auth token is missing.")
+			lastError = "IRC server URL must use HTTPS, except for loopback development, and the auth token must be valid."
+			logger.warn("Client backend bridge disabled because its endpoint or auth token is invalid.")
 			return
 		}
 
@@ -100,17 +110,27 @@ class ClientBackendBridgeService(
 		}
 
 		val interval = max(500L, config.backendPollIntervalMs)
+		val generation = serviceGeneration.incrementAndGet()
+		val configSnapshot = this.config.copy()
 		state = "starting"
-		scheduler?.execute(::bootstrapLastSeenMessageId)
-		scheduler?.scheduleAtFixedRate(::pollMessages, interval, interval, TimeUnit.MILLISECONDS)
+		scheduler?.execute { bootstrapLastSeenMessageId(generation) }
+		scheduler?.scheduleAtFixedRate({ pollMessages(generation, configSnapshot) }, interval, interval, TimeUnit.MILLISECONDS)
 		logger.info("Client backend bridge started with IRC endpoint {}", config.ircServerBaseUrl)
 	}
 
 	@Synchronized
 	fun stop() {
+		serviceGeneration.incrementAndGet()
 		scheduler?.shutdownNow()
 		scheduler = null
+		synchronized(pendingLocalEchoes) { pendingLocalEchoes.clear() }
+		synchronized(pausedIncomingMessages) { pausedIncomingMessages.clear() }
 		state = "stopped"
+	}
+
+	fun shutdown() {
+		stop()
+		outboundExecutor.shutdownNow()
 	}
 
 	fun sendIrcMessage(playerName: String, message: String) {
@@ -127,7 +147,9 @@ class ClientBackendBridgeService(
 			this.playerName = safePlayerName
 			this.message = safeMessage
 		}
-		outboundExecutor.execute { postOutgoing(outgoing) }
+		val generation = serviceGeneration.get()
+		val configSnapshot = config.copy()
+		outboundExecutor.execute { postOutgoing(outgoing, generation, configSnapshot) }
 	}
 
 	fun relayCoopChat(localPlayerName: String, coopPlayerName: String, message: String) {
@@ -144,7 +166,9 @@ class ClientBackendBridgeService(
 			this.forwardedPlayerName = safeAuthor
 			this.message = safeMessage
 		}
-		outboundExecutor.execute { postOutgoing(outgoing) }
+		val generation = serviceGeneration.get()
+		val configSnapshot = config.copy()
+		outboundExecutor.execute { postOutgoing(outgoing, generation, configSnapshot) }
 	}
 
 	fun setIncomingMessagesEnabled(enabled: Boolean) {
@@ -163,18 +187,16 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	fun getLinkStatus(playerName: String): BackendLinkStatusResponse {
-		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
-		if (safePlayerName.isBlank()) {
+	fun getLinkStatus(): BackendLinkStatusResponse {
+		val requestBuilder = authenticatedModBackendRequestBuilder(modBackendUrl("/api/auth/link-status"))
+		if (requestBuilder == null) {
 			return BackendLinkStatusResponse().apply {
-				error = "Minecraft username missing."
+				error = "Not linked. Verify your account with /link on Discord, then use /xclipsen link <code>."
 			}
 		}
 
 		return try {
-			val request = modBackendRequestBuilder(
-				modBackendUrl("/api/link/status?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
-			).GET().build()
+			val request = requestBuilder.GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
 
@@ -194,6 +216,8 @@ class ClientBackendBridgeService(
 			BackendLinkStatusResponse().apply {
 				error = "${exception::class.java.simpleName}: ${safe(exception.message)}"
 			}
+		} catch (_: RuntimeException) {
+			BackendLinkStatusResponse().apply { error = "Link status response was invalid." }
 		}
 	}
 
@@ -355,29 +379,27 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	fun uploadMobModelState(playerName: String, snapshot: BackendMobModelState): Boolean {
+	fun uploadMobModelState(snapshot: BackendMobModelState, sessionGeneration: Long = ClientSessionLifecycle.snapshot()): Boolean {
 		if (activeModBackendBaseUrl(config).isBlank()) {
 			return false
 		}
 
-		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
-		if (safePlayerName.isBlank()) {
-			return false
-		}
-
 		val outgoing = BackendMobModelState().apply {
-			minecraftUsername = safePlayerName
 			enabled = snapshot.enabled
 			entityType = sanitizeInline(snapshot.entityType, 64).lowercase()
 			variant = sanitizeInline(snapshot.variant, 96).lowercase()
 			baby = snapshot.baby
+			showArmor = snapshot.showArmor
+			showHeldItems = snapshot.showHeldItems
 			scale = snapshot.scale.coerceIn(0.25f, 4.0f)
 			updatedAt = snapshot.updatedAt.coerceAtLeast(0L)
 		}
 
 		return try {
-			val request = modBackendRequestBuilder(modBackendUrl("/api/mob-model"))
-				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
+			val requestBuilder = authenticatedModBackendRequestBuilder(modBackendUrl("/api/mob-model"), sessionGeneration) ?: return false
+			val body = GSON.toJsonTree(outgoing).asJsonObject.apply { remove("minecraftUsername") }
+			val request = requestBuilder
+				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(body)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
@@ -391,20 +413,13 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	fun fetchMobModelStates(playerName: String): BackendMobModelStatesResponse? {
+	fun fetchMobModelStates(): BackendMobModelStatesResponse? {
 		if (activeModBackendBaseUrl(config).isBlank()) {
 			return null
 		}
 
-		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
-		if (safePlayerName.isBlank()) {
-			return null
-		}
-
 		return try {
-			val request = modBackendRequestBuilder(
-				modBackendUrl("/api/mob-models?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
-			).GET().build()
+			val request = (authenticatedModBackendRequestBuilder(modBackendUrl("/api/mob-models")) ?: return null).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
 			if (response.statusCode() != 200) {
@@ -421,72 +436,58 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	fun uploadHideonleafStats(playerName: String, snapshot: BackendHideonleafStatsUpload): Boolean {
+	fun mutateHideonleaf(
+		mutationRequest: BackendHideonleafMutationRequest,
+		sessionGeneration: Long = ClientSessionLifecycle.snapshot(),
+	): BackendHideonleafMutationResult? {
 		if (activeModBackendBaseUrl(config).isBlank()) {
-			return false
-		}
-
-		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
-		if (safePlayerName.isBlank()) {
-			return false
-		}
-
-		val outgoing = BackendHideonleafStatsUpload().apply {
-			this.playerName = safePlayerName
-			kills = snapshot.kills.coerceAtLeast(0L)
-			totalShards = snapshot.totalShards.coerceAtLeast(0L)
-			totalProfit = snapshot.totalProfit.coerceAtLeast(0.0)
-			profitPerHour = snapshot.profitPerHour.coerceAtLeast(0.0)
-			totalDurationMs = snapshot.totalDurationMs.coerceAtLeast(0L)
-			updatedAt = snapshot.updatedAt.coerceAtLeast(0L)
-			items = snapshot.items.mapValues { (_, item) ->
-				BackendHideonleafTrackedItem().also { mapped ->
-					mapped.amount = item.amount.coerceAtLeast(0L)
-					mapped.timesDropped = item.timesDropped.coerceAtLeast(0L)
-					mapped.pricePerUnit = item.pricePerUnit.coerceAtLeast(0.0)
-				}
-			}.toMutableMap()
+			return null
 		}
 
 		return try {
-			val request = modBackendRequestBuilder(modBackendUrl("/api/hideonleaf"))
-				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
+			val requestBuilder = authenticatedModBackendRequestBuilder(modBackendUrl("/api/hideonleaf"), sessionGeneration) ?: return null
+			val request = requestBuilder
+				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(mutationRequest)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
-			response.statusCode() in 200..299
+			val payload = if (response.statusCode() == 200 || response.statusCode() == 409) {
+				GSON.fromJson(response.body(), BackendHideonleafMutationResponse::class.java)
+			} else {
+				null
+			}
+			BackendHideonleafMutationResult(response.statusCode(), payload)
 		} catch (exception: IOException) {
-			logger.debug("Hideonleaf stats upload failed", exception)
-			false
+			logger.debug("Hideonleaf mutation failed", exception)
+			null
+		} catch (exception: RuntimeException) {
+			logger.warn("Hideonleaf mutation response could not be parsed", exception)
+			null
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
-			false
+			null
 		}
 	}
 
-	fun fetchHideonleafStats(playerName: String): BackendHideonleafStatsUpload? {
+	fun fetchHideonleafStats(sessionGeneration: Long = ClientSessionLifecycle.snapshot()): BackendHideonleafState? {
 		if (activeModBackendBaseUrl(config).isBlank()) {
 			return null
 		}
 
-		val safePlayerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
-		if (safePlayerName.isBlank()) {
-			return null
-		}
-
 		return try {
-			val request = modBackendRequestBuilder(
-				modBackendUrl("/api/hideonleaf/status?playerName=" + URLEncoder.encode(safePlayerName, StandardCharsets.UTF_8)),
-			).GET().build()
+			val request = (authenticatedModBackendRequestBuilder(modBackendUrl("/api/hideonleaf/status"), sessionGeneration) ?: return null).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
 			if (response.statusCode() != 200) {
 				null
 			} else {
-				GSON.fromJson(response.body(), BackendHideonleafStatsUpload::class.java)
+				GSON.fromJson(response.body(), BackendHideonleafState::class.java)
 			}
 		} catch (exception: IOException) {
 			logger.debug("Hideonleaf stats fetch failed", exception)
+			null
+		} catch (exception: RuntimeException) {
+			logger.warn("Hideonleaf stats response could not be parsed", exception)
 			null
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
@@ -494,33 +495,74 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	fun completeLink(playerName: String, code: String): BackendLinkStatusResponse {
+	fun fetchAuctionHousePrices(itemIds: List<String>): BackendAuctionHousePriceResponse? {
+		val requested = itemIds.distinct()
+		if (requested.isEmpty() || requested.size > MAX_AUCTION_PRICE_ITEMS || requested.any { !AUCTION_ITEM_ID_PATTERN.matches(it) }) {
+			return null
+		}
+		val query = requested.joinToString("&") { "itemId=${URLEncoder.encode(it, StandardCharsets.UTF_8)}" }
+		return try {
+			val request = modBackendRequestBuilder(modBackendUrl("/api/skyblock/auction-house/prices?$query"))
+				.header("Accept", "application/json")
+				.GET()
+				.build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
+			lastHttpStatus = response.statusCode()
+			if (response.statusCode() != 200) {
+				response.body().close()
+				return null
+			}
+			val declaredSize = response.headers().firstValueAsLong("Content-Length").orElse(-1L)
+			if (declaredSize > MAX_AUCTION_PRICE_RESPONSE_BYTES) {
+				response.body().close()
+				return null
+			}
+			val body = response.body().use { readBounded(it, MAX_AUCTION_PRICE_RESPONSE_BYTES) }
+			val payload = GSON.fromJson(body.toString(Charsets.UTF_8), BackendAuctionHousePriceResponse::class.java) ?: return null
+			payload.takeIf { isValidAuctionPriceResponse(it, requested) }
+		} catch (exception: IOException) {
+			logger.debug("Auction House price fetch failed", exception)
+			null
+		} catch (exception: RuntimeException) {
+			logger.warn("Auction House price response could not be parsed")
+			null
+		} catch (exception: InterruptedException) {
+			Thread.currentThread().interrupt()
+			null
+		}
+	}
+
+	fun completeLink(code: String): BackendLinkCompleteResponse {
 		val outgoing = BackendLinkCompleteRequest().apply {
-			this.playerName = sanitizeInline(playerName, MAX_NAME_LENGTH)
-			this.code = sanitizeInline(code, 32).uppercase()
+			this.code = sanitizeInline(code, 32)
+		}
+		if (!MOD_LINK_CODE_PATTERN.matches(outgoing.code)) {
+			return BackendLinkCompleteResponse().apply { error = "Link code format is invalid." }
 		}
 
 		return try {
-			val request = modBackendRequestBuilder(modBackendUrl("/api/link/complete"))
+			val request = modBackendRequestBuilder(modBackendUrl("/api/auth/complete"))
 				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = response.statusCode()
 
-			val payload = GSON.fromJson(response.body(), BackendLinkStatusResponse::class.java) ?: BackendLinkStatusResponse()
+			val payload = GSON.fromJson(response.body(), BackendLinkCompleteResponse::class.java) ?: BackendLinkCompleteResponse()
 			if (response.statusCode() >= 300 && payload.error.isBlank()) {
 				payload.error = "Link returned HTTP ${response.statusCode()}"
 			}
 			payload
 		} catch (exception: IOException) {
-			BackendLinkStatusResponse().apply {
+			BackendLinkCompleteResponse().apply {
 				error = "${exception::class.java.simpleName}: ${safe(exception.message)}"
 			}
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
-			BackendLinkStatusResponse().apply {
+			BackendLinkCompleteResponse().apply {
 				error = "${exception::class.java.simpleName}: ${safe(exception.message)}"
 			}
+		} catch (_: RuntimeException) {
+			BackendLinkCompleteResponse().apply { error = "Link response was invalid." }
 		}
 	}
 
@@ -530,7 +572,8 @@ class ClientBackendBridgeService(
 		backlogInitialized = false
 	}
 
-	private fun pollMessages() {
+	private fun pollMessages(generation: Long, configSnapshot: BridgeConfig) {
+		if (serviceGeneration.get() != generation) return
 		val client = Minecraft.getInstance()
 		val playerName = currentPlayerName(client)
 		if (client == null || client.player == null || client.gui == null || playerName.isBlank()) {
@@ -543,9 +586,11 @@ class ClientBackendBridgeService(
 				"/api/messages?after=" +
 					URLEncoder.encode(lastSeenMessageId.toString(), StandardCharsets.UTF_8) +
 					"&playerName=" + URLEncoder.encode(playerName, StandardCharsets.UTF_8),
+				configOverride = configSnapshot,
 			)
-			val request = ircRequestBuilder(query).GET().build()
+			val request = ircRequestBuilder(query, configSnapshot).GET().build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			if (serviceGeneration.get() != generation) return
 			lastHttpStatus = response.statusCode()
 
 			if (response.statusCode() != 200) {
@@ -562,7 +607,7 @@ class ClientBackendBridgeService(
 			state = "connected"
 			lastSuccessAt = System.currentTimeMillis()
 			lastError = ""
-			announceConnected(client)
+			announceConnected(client, generation)
 
 			val payload = GSON.fromJson(response.body(), BackendMessagesResponse::class.java)
 			if (payload?.messages == null) {
@@ -596,12 +641,12 @@ class ClientBackendBridgeService(
 				val formatted = when (message.source) {
 					"status" -> safeContent
 					"event" -> TextFormatter.apply(
-						config.ircCommandFormat,
+						configSnapshot.ircCommandFormat,
 						"%player%", safeTitle.ifBlank { safeUser },
 						"%message%", safeContent,
 					)
 					else -> TextFormatter.apply(
-						config.ircCommandFormat,
+						configSnapshot.ircCommandFormat,
 						"%player%", safeUser,
 						"%message%", safeContent,
 					)
@@ -618,33 +663,39 @@ class ClientBackendBridgeService(
 							}
 						}
 					} else {
-						if (isIrcMessage) {
-							IrcChatTabManager.addIrcMessage(styledMessage)
-						}
-						showClientMessage(client, styledMessage)
+						showBridgeMessage(client, styledMessage, isIrcMessage, generation)
 					}
 				}
 			}
 		} catch (exception: IOException) {
+			if (serviceGeneration.get() != generation) return
 			state = "error"
 			lastError = "${exception::class.java.simpleName}: ${safe(exception.message)}"
 			logger.debug("Backend poll failed", exception)
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
+		} catch (exception: RuntimeException) {
+			if (serviceGeneration.get() != generation) return
+			state = "error"
+			lastError = "IRC backend response or endpoint was invalid."
+			logger.warn("Backend polling failed validation", exception)
 		}
 	}
 
-	private fun bootstrapLastSeenMessageId() {
+	private fun bootstrapLastSeenMessageId(generation: Long) {
+		if (serviceGeneration.get() != generation) return
 		lastSeenMessageId = 0L
 		backlogInitialized = false
 	}
 
-	private fun postOutgoing(outgoing: BackendOutgoingMessage) {
+	private fun postOutgoing(outgoing: BackendOutgoingMessage, generation: Long, configSnapshot: BridgeConfig) {
+		if (serviceGeneration.get() != generation) return
 		try {
-			val request = ircRequestBuilder(ircServerUrl("/api/messages"))
+			val request = ircRequestBuilder(ircServerUrl("/api/messages", configSnapshot), configSnapshot)
 				.POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(outgoing)))
 				.build()
 			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+			if (serviceGeneration.get() != generation) return
 			lastHttpStatus = response.statusCode()
 
 			if (response.statusCode() >= 300) {
@@ -658,11 +709,17 @@ class ClientBackendBridgeService(
 			lastSuccessAt = System.currentTimeMillis()
 			lastError = ""
 		} catch (exception: IOException) {
+			if (serviceGeneration.get() != generation) return
 			state = "error"
 			lastError = "${exception::class.java.simpleName}: ${safe(exception.message)}"
 			logger.warn("Failed to send IRC message to backend", exception)
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
+		} catch (exception: RuntimeException) {
+			if (serviceGeneration.get() != generation) return
+			state = "error"
+			lastError = "IRC backend endpoint or request was invalid."
+			logger.warn("Failed to validate IRC backend request", exception)
 		}
 	}
 
@@ -674,15 +731,15 @@ class ClientBackendBridgeService(
 	}
 
 	fun testConnection(configOverride: BridgeConfig): BackendStatusSnapshot {
-		if (configOverride.ircServerBaseUrl.isBlank() || configOverride.backendAuthToken.isBlank()) {
+		if (normalizeIrcServerBaseUrl(configOverride.ircServerBaseUrl) == null || !isValidIrcAuthToken(configOverride.backendAuthToken)) {
 			state = "disabled"
-			lastError = "IRC server URL or auth token missing."
+			lastError = "IRC server URL must use HTTPS, except for loopback development, and the auth token must be valid."
 			return status()
 		}
 
 		return try {
 			lastPollAt = System.currentTimeMillis()
-			val healthRequest = ircRequestBuilder(ircServerUrl("/health", configOverride), configOverride).GET().build()
+			val healthRequest = modBackendRequestBuilder(ircServerUrl("/health", configOverride)).GET().build()
 			val healthResponse = httpClient.send(healthRequest, HttpResponse.BodyHandlers.ofString())
 			lastHttpStatus = healthResponse.statusCode()
 
@@ -724,6 +781,10 @@ class ClientBackendBridgeService(
 			state = "error"
 			lastError = "${exception::class.java.simpleName}: ${safe(exception.message)}"
 			status()
+		} catch (exception: RuntimeException) {
+			state = "error"
+			lastError = "IRC backend endpoint or response was invalid."
+			status()
 		}
 	}
 
@@ -732,21 +793,63 @@ class ClientBackendBridgeService(
 			.timeout(Duration.ofSeconds(10))
 			.header("Content-Type", "application/json")
 
-	private fun ircRequestBuilder(url: String, configOverride: BridgeConfig = config): HttpRequest.Builder =
-		modBackendRequestBuilder(url)
+	private fun authenticatedModBackendRequestBuilder(url: String, sessionGeneration: Long? = null): HttpRequest.Builder? = synchronized(this) {
+		if (sessionGeneration != null && !ClientSessionLifecycle.isCurrent(sessionGeneration)) return@synchronized null
+		modCredential?.takeIf { it.isNotBlank() }?.let { credential ->
+			modBackendRequestBuilder(url).header("Authorization", "Bearer $credential")
+		}
+	}
+
+	private fun ircRequestBuilder(url: String, configOverride: BridgeConfig = config): HttpRequest.Builder {
+		require(normalizeIrcServerBaseUrl(configOverride.ircServerBaseUrl) != null) { "Unsafe IRC backend endpoint" }
+		require(isValidIrcAuthToken(configOverride.backendAuthToken)) { "Invalid IRC backend token" }
+		return modBackendRequestBuilder(url)
 			.header("Authorization", "Bearer ${configOverride.backendAuthToken}")
+	}
 
 	private fun modBackendUrl(path: String, configOverride: BridgeConfig = config): String = activeModBackendBaseUrl(configOverride) + path
 
 	private fun ircServerUrl(path: String, configOverride: BridgeConfig = config): String = configOverride.ircServerBaseUrl + path
 
-	private fun announceConnected(client: Minecraft?) {
+	private fun readBounded(input: InputStream, maximumBytes: Int): ByteArray {
+		val bytes = input.readNBytes(maximumBytes + 1)
+		if (bytes.size > maximumBytes) throw IOException("Response exceeds size limit")
+		return bytes
+	}
+
+	private fun isValidAuctionPriceResponse(payload: BackendAuctionHousePriceResponse, requested: List<String>): Boolean {
+		if (payload.items.size != requested.size || payload.items.map { it.itemId } != requested) return false
+		if (!isValidAuctionSource(payload.sources.lowestBin) || !isValidAuctionSource(payload.sources.bazaar)) return false
+		val lowestAvailable = payload.sources.lowestBin.available
+		val bazaarAvailable = payload.sources.bazaar.available
+		if (!lowestAvailable && !bazaarAvailable || payload.partial != !(lowestAvailable && bazaarAvailable)) return false
+		return payload.items.all { item ->
+			AUCTION_ITEM_ID_PATTERN.matches(item.itemId) &&
+				isValidAuctionPrice(item.lowestBin) && isValidAuctionPrice(item.bazaarSellReference) &&
+				(item.lowestBin == null || lowestAvailable) && (item.bazaarSellReference == null || bazaarAvailable)
+		}
+	}
+
+	private fun isValidAuctionSource(source: BackendAuctionHouseSourceStatus): Boolean {
+		val fetchedAt = source.fetchedAt
+		if (source.stale && !source.available) return false
+		return if (source.available) {
+			fetchedAt != null && fetchedAt > 0L && fetchedAt <= System.currentTimeMillis() + MAX_CLOCK_SKEW_MS
+		} else {
+			fetchedAt == null
+		}
+	}
+
+	private fun isValidAuctionPrice(price: Double?): Boolean =
+		price == null || (price.isFinite() && price > 0.0 && price <= MAX_AUCTION_UNIT_PRICE)
+
+	private fun announceConnected(client: Minecraft?, generation: Long) {
 		if (announcedConnected || client?.player == null || client.gui == null) {
 			return
 		}
 
 		announcedConnected = true
-		showClientMessage(client, Component.literal("[IRC] Connected to backend.").withStyle(ChatFormatting.GREEN))
+		showClientMessage(client, Component.literal("[IRC] Connected to backend.").withStyle(ChatFormatting.GREEN), generation)
 	}
 
 	private fun echoLocally(message: String) {
@@ -801,8 +904,20 @@ class ClientBackendBridgeService(
 		}
 	}
 
-	private fun showClientMessage(client: Minecraft?, message: Component) {
+	private fun showClientMessage(client: Minecraft?, message: Component, generation: Long? = null) {
 		client?.execute {
+			if (generation != null && serviceGeneration.get() != generation) return@execute
+			when {
+				client.player != null -> client.player?.sendSystemMessage(message)
+				client.gui != null -> client.gui.chat.addClientSystemMessage(message)
+			}
+		}
+	}
+
+	private fun showBridgeMessage(client: Minecraft, message: Component, isIrcMessage: Boolean, generation: Long) {
+		client.execute {
+			if (serviceGeneration.get() != generation) return@execute
+			if (isIrcMessage) IrcChatTabManager.addIrcMessage(message)
 			when {
 				client.player != null -> client.player?.sendSystemMessage(message)
 				client.gui != null -> client.gui.chat.addClientSystemMessage(message)
@@ -909,11 +1024,17 @@ class ClientBackendBridgeService(
 	companion object {
 		private val GSON = Gson()
 		private val URL_PATTERN = Regex("""https?://\S+""")
+		private val MOD_LINK_CODE_PATTERN = Regex("[A-Za-z0-9_-]{22}")
 		private const val TRAILING_URL_PUNCTUATION = ".,!?;:)]}"
 		private const val MAX_OUTGOING_MESSAGE_LENGTH = 280
 		private const val MAX_INCOMING_MESSAGE_LENGTH = 2048
 		private const val MAX_NAME_LENGTH = 32
 		private const val MAX_BATCH_DUNGEON_PLAYERS = 45
+		private const val MAX_AUCTION_PRICE_ITEMS = 32
+		private const val MAX_AUCTION_PRICE_RESPONSE_BYTES = 256 * 1024
+		private const val MAX_AUCTION_UNIT_PRICE = 1_000_000_000_000_000.0
+		private const val MAX_CLOCK_SKEW_MS = 5 * 60 * 1000L
+		private val AUCTION_ITEM_ID_PATTERN = Regex("^[A-Z0-9_:-]+(?:;[0-9]{1,2})?(?:\\+[A-Z0-9_:-]+)?$")
 		private const val LOCAL_ECHO_TTL_MS = 10_000L
 		private const val MAX_LOCAL_ECHOES = 32
 		private const val MAX_PAUSED_INCOMING_MESSAGES = 100

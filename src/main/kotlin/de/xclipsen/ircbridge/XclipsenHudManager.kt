@@ -82,7 +82,7 @@ private object HideonleafLostFightHudElement : XclipsenHudElement(
 		val width = textWidth.coerceAtLeast(DEFAULT_WIDTH)
 		val height = client.font.lineHeight
 
-		context.centeredText(client.font, text, width / 2, 0, 0xFFFFFFFF.toInt())
+		context.text(client.font, text, (width - textWidth) / 2, 0, 0xFFFFFFFF.toInt(), true)
 
 		if (example) {
 			context.text(client.font, "Alert", 5, height + 4, 0xFFA0A0A0.toInt(), true)

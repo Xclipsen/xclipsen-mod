@@ -2,6 +2,7 @@ package de.xclipsen.ircbridge
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -10,12 +11,14 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.StandardCopyOption
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import kotlin.math.roundToLong
 
 /**
  * Hideonleaf Shards Profit Tracker — inspired by SkyHanni profit trackers.
@@ -92,7 +95,12 @@ object HideonleafShardTracker {
 
 	private var totalData: TrackerData = TrackerData()
 	private var sessionData: TrackerData = TrackerData()
-	private var activePlayerName: String = ""
+	private var canonicalData: TrackerData = TrackerData()
+	private var canonicalRevision: Long = 0L
+	private var canonicalUpdatedAt: Long = 0L
+	private var pendingMutations: MutableList<PendingMutation> = mutableListOf()
+	private var legacyAggregate: TrackerData? = null
+	private var activeProfileId: UUID? = null
 	private var activeDataPath: Path? = null
 
 	@Volatile
@@ -114,21 +122,12 @@ object HideonleafShardTracker {
 
 	private var sessionStartedAt: Long = 0L
 	@Volatile
-	private var shareDirty: Boolean = true
-	@Volatile
-	private var lastShareUploadAt: Long = 0L
-	@Volatile
 	private var legacyTotalDurationUnknown: Boolean = false
 	@Volatile
 	private var hideonleafSyncInFlight: Boolean = false
 	@Volatile
-	private var lastRemoteSyncAt: Long = 0L
-	@Volatile
-	private var lastAppliedRemoteUpdatedAt: Long = 0L
-	@Volatile
-	private var lastLocalMutationAt: Long = 0L
-	@Volatile
-	private var initialRemoteSyncCompleted: Boolean = false
+	private var canonicalFetched: Boolean = false
+	private var nextSyncAttemptAt: Long = 0L
 
 	// ── Data classes ─────────────────────────────────────────────────────
 
@@ -142,6 +141,24 @@ object HideonleafShardTracker {
 		@JvmField var amount: Long = 0,
 		@JvmField var timesDropped: Long = 0,
 		@JvmField var pricePerUnit: Double = 0.0,
+	)
+
+	data class PendingMutation(
+		@JvmField var requestId: String = "",
+		@JvmField var expectedRevision: Long = -1L,
+		@JvmField var type: String = "increment",
+		@JvmField var kills: Long = 0L,
+		@JvmField var totalDurationMs: Long = 0L,
+		@JvmField var items: MutableMap<String, TrackedItem> = mutableMapOf(),
+	)
+
+	data class PersistedTrackerState(
+		@JvmField var version: Int = TRACKER_FILE_VERSION,
+		@JvmField var canonical: TrackerData = TrackerData(),
+		@JvmField var revision: Long = 0L,
+		@JvmField var updatedAt: Long = 0L,
+		@JvmField var pendingMutations: MutableList<PendingMutation> = mutableListOf(),
+		@JvmField var legacyAggregate: TrackerData? = null,
 	)
 
 	// ── Initialisation ───────────────────────────────────────────────────
@@ -178,22 +195,13 @@ object HideonleafShardTracker {
 			if (value > 0) fresh[displayName] = value
 		}
 
-		livePrices = fresh
-		pricesLastRefreshedAt = System.currentTimeMillis()
-		LOGGER.info("Shard tracker: prices refreshed — {}", fresh)
-
-		// Retroactively apply live prices to all already-tracked items
-		applyLivePricesToData(totalData, fresh)
-		applyLivePricesToData(sessionData, fresh)
-		markShareDirty(forceUpload = false)
-	}
-
-	private fun applyLivePricesToData(data: TrackerData, prices: Map<String, Double>) {
-		for ((name, item) in data.items) {
-			val livePrice = prices[name]
-			if (livePrice != null && livePrice > 0) {
-				item.pricePerUnit = livePrice
-			}
+		val generation = ClientSessionLifecycle.snapshot()
+		Minecraft.getInstance().execute {
+			if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
+			livePrices = fresh
+			pricesLastRefreshedAt = System.currentTimeMillis()
+			applyPriceChanges(fresh)
+			LOGGER.debug("Shard tracker prices refreshed: {}", fresh)
 		}
 	}
 
@@ -238,11 +246,9 @@ object HideonleafShardTracker {
 
 		ensureSessionActive()
 		lastActivityAt = System.currentTimeMillis()
-		totalData.kills++
+		val elapsed = checkpointTimer()
 		sessionData.kills++
-		saveData()
-		recordLocalMutation()
-		markShareDirty(forceUpload = true)
+		enqueueIncrement(kills = 1L, totalDurationMs = elapsed)
 	}
 
 	// ── Manual item add (for testing / commands) ─────────────────────────
@@ -251,14 +257,12 @@ object HideonleafShardTracker {
 		if (!ensureActivePlayerLoaded()) return
 		ensureSessionActive()
 		lastActivityAt = System.currentTimeMillis()
+		val elapsed = checkpointTimer()
 
 		val canonicalName = canonicalize(name)
-		addToData(totalData, canonicalName, amount)
 		addToData(sessionData, canonicalName, amount)
-
-		saveData()
-		recordLocalMutation()
-		markShareDirty(forceUpload = true)
+		val price = sessionData.items[canonicalName]?.pricePerUnit ?: 0.0
+		enqueueIncrement(totalDurationMs = elapsed, items = mutableMapOf(canonicalName to TrackedItem(amount, 1L, price)))
 
 		val client = Minecraft.getInstance()
 		client.execute {
@@ -279,16 +283,23 @@ object HideonleafShardTracker {
 	}
 
 	fun resetTotal() {
-		totalData = TrackerData()
 		legacyTotalDurationUnknown = false
 		resetSession()
-		saveData()
-		recordLocalMutation()
-		markShareDirty(forceUpload = true)
+		enqueueReset()
 	}
 
 	fun shutdown() {
 		flushCurrentPlayerState()
+		priceScheduler?.shutdownNow()
+		priceScheduler = null
+		syncExecutor.shutdownNow()
+	}
+
+	fun onWorldChange() {
+		if (timerRunning) pauseTimer()
+		hideonleafSyncInFlight = false
+		canonicalFetched = false
+		nextSyncAttemptAt = 0L
 	}
 
 	fun toggleView() {
@@ -307,7 +318,6 @@ object HideonleafShardTracker {
 		refreshLegacyDurationReliability()
 		if (!sessionActive) {
 			maybeSyncRemoteStats()
-			maybeUploadSharedStats()
 			return
 		}
 
@@ -315,6 +325,11 @@ object HideonleafShardTracker {
 		val now = System.currentTimeMillis()
 		val isAfk = lastActivityAt > 0L && (now - lastActivityAt) > AFK_THRESHOLD_MS
 		val shouldRun = onGalatea && !isAfk
+		if (shouldRun && timerRunning && now - sessionStartedAt >= DURATION_CHECKPOINT_INTERVAL_MS) {
+			val checkpointEnd = maxOf(sessionStartedAt, minOf(now, lastActivityAt.takeIf { it > 0L } ?: now))
+			val elapsed = checkpointTimer(checkpointEnd)
+			if (elapsed > 0L) enqueueIncrement(totalDurationMs = elapsed)
+		}
 
 		if (shouldRun && !timerRunning) resumeTimer()
 		else if (!shouldRun && timerRunning) {
@@ -325,7 +340,6 @@ object HideonleafShardTracker {
 		}
 
 		maybeSyncRemoteStats()
-		maybeUploadSharedStats()
 	}
 
 	/**
@@ -338,22 +352,27 @@ object HideonleafShardTracker {
 	private fun pauseTimer(effectiveEndMs: Long = System.currentTimeMillis()) {
 		if (!timerRunning) return
 		val elapsed = (effectiveEndMs - sessionStartedAt).coerceAtLeast(0L)
-		sessionData.totalDurationMs += elapsed
-		totalData.totalDurationMs += elapsed
-		if (totalData.totalDurationMs > 0L) {
+		sessionData.totalDurationMs = safeAdd(sessionData.totalDurationMs, elapsed)
+		if (elapsed > 0L) {
 			legacyTotalDurationUnknown = false
+			enqueueIncrement(totalDurationMs = elapsed)
 		}
 		sessionStartedAt = 0L
 		timerRunning = false
-		saveData()
-		recordLocalMutation()
-		markShareDirty(forceUpload = false)
 	}
 
 	private fun resumeTimer() {
 		if (!sessionActive || timerRunning) return
 		sessionStartedAt = System.currentTimeMillis()
 		timerRunning = true
+	}
+
+	private fun checkpointTimer(effectiveEndMs: Long = System.currentTimeMillis()): Long {
+		if (!timerRunning) return 0L
+		val elapsed = (effectiveEndMs - sessionStartedAt).coerceAtLeast(0L)
+		sessionData.totalDurationMs = safeAdd(sessionData.totalDurationMs, elapsed)
+		sessionStartedAt = effectiveEndMs
+		return elapsed
 	}
 
 	// ── Display data ─────────────────────────────────────────────────────
@@ -420,41 +439,44 @@ object HideonleafShardTracker {
 	// ── Persistence ──────────────────────────────────────────────────────
 
 	private fun ensureActivePlayerLoaded(): Boolean {
-		val playerName = Minecraft.getInstance().user.name.trim()
-		if (playerName.isBlank()) {
-			return activePlayerName.isNotBlank()
-		}
+		val user = Minecraft.getInstance().user
+		val profileId = user.profileId
 
-		if (activePlayerName.equals(playerName, ignoreCase = true)) {
+		if (activeProfileId == profileId) {
 			return true
 		}
 
-		switchActivePlayer(playerName)
+		switchActivePlayer(profileId)
 		return true
 	}
 
-	private fun switchActivePlayer(playerName: String) {
+	private fun switchActivePlayer(profileId: UUID) {
 		flushCurrentPlayerState()
-		activePlayerName = playerName
-		activeDataPath = playerDataPath(playerName)
-		totalData = loadData(activeDataPath!!, playerName)
-		applyLivePricesToData(totalData, livePrices)
+		activeProfileId = profileId
+		activeDataPath = playerDataPath(profileId)
+		canonicalData = TrackerData()
+		canonicalRevision = 0L
+		canonicalUpdatedAt = 0L
+		pendingMutations = mutableListOf()
+		legacyAggregate = null
+		loadData(activeDataPath!!)
+		rebuildProjectedTotal()
 		resetSession()
 		resetSyncStateForLoadedData()
-		LOGGER.info("Shard tracker: switched active tracker storage to {} ({})", playerName, activeDataPath)
+		LOGGER.info("Shard tracker: switched active tracker storage to profile {} ({})", profileId, activeDataPath)
 	}
 
 	private fun flushCurrentPlayerState() {
-		if (activePlayerName.isBlank() || activeDataPath == null) {
+		if (activeProfileId == null || activeDataPath == null) {
 			return
 		}
 
 		if (timerRunning) {
 			val elapsed = (System.currentTimeMillis() - sessionStartedAt).coerceAtLeast(0L)
 			sessionData.totalDurationMs += elapsed
-			totalData.totalDurationMs += elapsed
-			if (totalData.totalDurationMs > 0L) {
+			if (elapsed > 0L) {
 				legacyTotalDurationUnknown = false
+				enqueueIncrement(totalDurationMs = elapsed)
 			}
 			sessionStartedAt = 0L
 			timerRunning = false
@@ -466,57 +488,66 @@ object HideonleafShardTracker {
 	private fun resetActiveTrackerState() {
 		totalData = TrackerData()
 		sessionData = TrackerData()
-		activePlayerName = ""
+		canonicalData = TrackerData()
+		canonicalRevision = 0L
+		canonicalUpdatedAt = 0L
+		pendingMutations = mutableListOf()
+		legacyAggregate = null
+		activeProfileId = null
 		activeDataPath = null
 		resetSyncStateForLoadedData()
 	}
 
 	private fun resetSyncStateForLoadedData() {
 		legacyTotalDurationUnknown = totalData.totalDurationMs <= 0L && hasMeaningfulTrackerData(totalData)
-		shareDirty = hasMeaningfulTrackerData(totalData)
-		lastShareUploadAt = 0L
 		hideonleafSyncInFlight = false
-		lastRemoteSyncAt = 0L
-		lastAppliedRemoteUpdatedAt = 0L
-		lastLocalMutationAt = 0L
-		initialRemoteSyncCompleted = false
+		canonicalFetched = false
+		nextSyncAttemptAt = 0L
 	}
 
-	private fun loadData(path: Path, playerName: String): TrackerData {
-		return try {
+	private fun loadData(path: Path) {
+		try {
 			Files.createDirectories(DATA_DIR)
-			migrateLegacyDataIfNeeded(path, playerName)
+			migrateLegacyDataIfNeeded(path, Minecraft.getInstance().user.name)
 			if (Files.notExists(path)) {
-				TrackerData()
+				return
 			} else {
+				var migratedLegacy = false
 				Files.newBufferedReader(path).use { reader ->
-					GSON.fromJson(reader, TrackerData::class.java) ?: TrackerData()
+					val root = JsonParser.parseReader(reader).asJsonObject
+					if (root.has("canonical") || root.has("pendingMutations") || root.has("version")) {
+						val persisted = GSON.fromJson(root, PersistedTrackerState::class.java) ?: PersistedTrackerState()
+						canonicalData = sanitizeData(persisted.canonical)
+						canonicalRevision = persisted.revision.coerceAtLeast(0L)
+						canonicalUpdatedAt = persisted.updatedAt.coerceAtLeast(0L)
+						pendingMutations = persisted.pendingMutations.mapNotNull(::sanitizePendingMutation).toMutableList()
+						legacyAggregate = persisted.legacyAggregate?.let(::sanitizeData)
+					} else {
+						legacyAggregate = sanitizeData(GSON.fromJson(root, TrackerData::class.java) ?: TrackerData())
+						migratedLegacy = true
+					}
 				}
+				if (migratedLegacy) saveData()
 			}
 		} catch (exception: Exception) {
 			LOGGER.warn("Failed to load shard tracker data from {}", path, exception)
-			TrackerData()
 		}
 	}
 
 	private fun migrateLegacyDataIfNeeded(path: Path, playerName: String) {
-		if (Files.exists(path)) {
-			return
+		if (Files.exists(path)) return
+		val legacyFileName = "${sanitizePlayerNameForFilename(playerName)}.json"
+		val source = listOf(DATA_DIR.resolve(legacyFileName), LEGACY_DATA_DIR.resolve(legacyFileName), LEGACY_DATA_PATH)
+			.firstOrNull(Files::isRegularFile) ?: return
+		Files.createDirectories(path.parent)
+		val backup = source.resolveSibling("${source.fileName}.migrated.bak")
+		if (Files.notExists(backup)) Files.copy(source, backup)
+		try {
+			Files.move(source, path, StandardCopyOption.ATOMIC_MOVE)
+		} catch (_: AtomicMoveNotSupportedException) {
+			Files.move(source, path)
 		}
-
-		val legacyPlayerPath = LEGACY_DATA_DIR.resolve(path.fileName.toString())
-		when {
-			Files.exists(legacyPlayerPath) -> {
-				Files.createDirectories(path.parent)
-				Files.move(legacyPlayerPath, path)
-				LOGGER.info("Migrated legacy player tracker data {} to {}", legacyPlayerPath, path)
-			}
-			Files.exists(LEGACY_DATA_PATH) -> {
-				Files.createDirectories(path.parent)
-				Files.move(LEGACY_DATA_PATH, path)
-				LOGGER.info("Migrated legacy shard tracker data to player-scoped file {} for {}", path, playerName)
-			}
-		}
+		LOGGER.info("Migrated legacy shard tracker data to UUID-scoped storage {}", path)
 	}
 
 	private fun saveData() {
@@ -524,44 +555,46 @@ object HideonleafShardTracker {
 		try {
 			refreshLegacyDurationReliability()
 			Files.createDirectories(path.parent)
-			Files.newBufferedWriter(path).use { writer ->
-				GSON.toJson(buildPersistedTotalData(), writer)
+			val temporaryPath = path.resolveSibling("${path.fileName}.tmp")
+			Files.newBufferedWriter(temporaryPath).use { writer ->
+				GSON.toJson(
+					PersistedTrackerState(
+						canonical = copyData(canonicalData),
+						revision = canonicalRevision,
+						updatedAt = canonicalUpdatedAt,
+						pendingMutations = pendingMutations.map(::copyMutation).toMutableList(),
+						legacyAggregate = legacyAggregate?.let(::copyData),
+					),
+					writer,
+				)
+			}
+			try {
+				Files.move(temporaryPath, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+			} catch (_: AtomicMoveNotSupportedException) {
+				Files.move(temporaryPath, path, StandardCopyOption.REPLACE_EXISTING)
 			}
 		} catch (exception: IOException) {
 			LOGGER.warn("Failed to save shard tracker data to {}", path, exception)
 		}
 	}
 
-	private fun buildPersistedTotalData(): TrackerData =
-		TrackerData(
-			items = totalData.items.mapValues { (_, item) ->
-				TrackedItem(
-					amount = item.amount,
-					timesDropped = item.timesDropped,
-					pricePerUnit = item.pricePerUnit,
-				)
-			}.toMutableMap(),
-			kills = totalData.kills,
-			totalDurationMs = rawTotalDurationMs().coerceAtLeast(0L),
-		)
-
 	private fun rawTotalDurationMs(): Long {
 		if (!sessionActive) return totalData.totalDurationMs
 		if (!timerRunning) return totalData.totalDurationMs
-		return totalData.totalDurationMs + (System.currentTimeMillis() - sessionStartedAt)
+		return safeAdd(totalData.totalDurationMs, (System.currentTimeMillis() - sessionStartedAt).coerceAtLeast(0L))
 	}
 
-	private fun playerDataPath(playerName: String): Path {
-		return DATA_DIR.resolve("${sanitizePlayerNameForFilename(playerName)}.json")
+	private fun playerDataPath(profileId: UUID): Path {
+		return DATA_DIR.resolve("${profileId.toString().lowercase(Locale.ROOT)}.json")
 	}
 
 	private fun sanitizePlayerNameForFilename(playerName: String): String {
-		val sanitized = playerName.trim()
-			.lowercase(Locale.ROOT)
+		val sanitized = playerName.trim().lowercase(Locale.ROOT)
 			.replace("[^a-z0-9._-]".toRegex(), "_")
 			.trim('_')
 		return if (sanitized.isBlank()) "unknown" else sanitized
 	}
+
 
 	private fun refreshLegacyDurationReliability() {
 		if (legacyTotalDurationUnknown && hasMeaningfulTrackerData(totalData) && rawTotalDurationMs() > 0L) {
@@ -576,8 +609,6 @@ object HideonleafShardTracker {
 			sessionActive = true
 			sessionStartedAt = System.currentTimeMillis()
 			timerRunning = true
-			recordLocalMutation()
-			markShareDirty(forceUpload = false)
 		}
 	}
 
@@ -595,8 +626,122 @@ object HideonleafShardTracker {
 		return data.kills > 0 || data.items.values.any { it.amount > 0 }
 	}
 
-	private fun recordLocalMutation() {
-		lastLocalMutationAt = System.currentTimeMillis()
+	private fun enqueueIncrement(
+		kills: Long = 0L,
+		totalDurationMs: Long = 0L,
+		items: MutableMap<String, TrackedItem> = mutableMapOf(),
+	) {
+		val mutation = PendingMutation(
+			requestId = UUID.randomUUID().toString(),
+			kills = kills.coerceIn(0L, MAX_SAFE_INTEGER),
+			totalDurationMs = totalDurationMs.coerceIn(0L, MAX_SAFE_INTEGER),
+			items = items.mapNotNull { (name, item) ->
+				val safeName = sanitizeItemName(name)
+				if (safeName.isBlank()) null else safeName to TrackedItem(
+					item.amount.coerceIn(0L, MAX_SAFE_INTEGER),
+					item.timesDropped.coerceIn(0L, MAX_SAFE_INTEGER),
+					item.pricePerUnit.takeIf { it.isFinite() }?.coerceIn(0.0, MAX_PRICE_PER_UNIT) ?: 0.0,
+				)
+			}.take(MAX_TRACKED_ITEMS).toMap().toMutableMap(),
+		)
+		if (mutation.kills == 0L && mutation.totalDurationMs == 0L && mutation.items.isEmpty()) return
+		pendingMutations.add(mutation)
+		rebuildProjectedTotal()
+		saveData()
+		nextSyncAttemptAt = 0L
+	}
+
+	private fun enqueueReset() {
+		pendingMutations.clear()
+		pendingMutations.add(PendingMutation(requestId = UUID.randomUUID().toString(), type = "reset"))
+		rebuildProjectedTotal()
+		saveData()
+		nextSyncAttemptAt = 0L
+	}
+
+	private fun applyPriceChanges(prices: Map<String, Double>) {
+		if (activeProfileId == null) return
+		val changed = mutableMapOf<String, TrackedItem>()
+		for ((name, item) in totalData.items) {
+			val price = prices[name] ?: continue
+			if (price > 0.0 && price.isFinite() && price != item.pricePerUnit) {
+				changed[name] = TrackedItem(pricePerUnit = price)
+			}
+		}
+		for ((name, item) in sessionData.items) {
+			prices[name]?.takeIf { it > 0.0 && it.isFinite() }?.let { item.pricePerUnit = it }
+		}
+		enqueueIncrement(items = changed)
+	}
+
+	private fun rebuildProjectedTotal() {
+		val projected = copyData(canonicalData)
+		legacyAggregate?.let { mergeLegacyProjection(projected, it) }
+		for (mutation in pendingMutations) applyMutation(projected, mutation)
+		totalData = projected
+	}
+
+	private fun applyMutation(data: TrackerData, mutation: PendingMutation) {
+		if (mutation.type == "reset") {
+			data.items.clear()
+			data.kills = 0L
+			data.totalDurationMs = 0L
+			return
+		}
+		data.kills = safeAdd(data.kills, mutation.kills)
+		data.totalDurationMs = safeAdd(data.totalDurationMs, mutation.totalDurationMs)
+		for ((name, increment) in mutation.items) {
+			val item = data.items.getOrPut(name) { TrackedItem() }
+			item.amount = safeAdd(item.amount, increment.amount)
+			item.timesDropped = safeAdd(item.timesDropped, increment.timesDropped)
+			item.pricePerUnit = increment.pricePerUnit
+		}
+	}
+
+	private fun migrateLegacyAggregate() {
+		val legacy = legacyAggregate
+		if (legacy == null) {
+			rebuildProjectedTotal()
+			return
+		}
+		val items = mutableMapOf<String, TrackedItem>()
+		for ((name, legacyItem) in legacy.items) {
+			val canonicalItem = canonicalData.items[name]
+			val amount = (legacyItem.amount - (canonicalItem?.amount ?: 0L)).coerceAtLeast(0L)
+			val timesDropped = (legacyItem.timesDropped - (canonicalItem?.timesDropped ?: 0L)).coerceAtLeast(0L)
+			if (amount > 0L || timesDropped > 0L ||
+				(legacyItem.pricePerUnit > 0.0 && legacyItem.pricePerUnit != canonicalItem?.pricePerUnit)
+			) {
+				items[name] = TrackedItem(amount, timesDropped, legacyItem.pricePerUnit)
+			}
+		}
+		val initial = PendingMutation(
+			requestId = UUID.randomUUID().toString(),
+			kills = (legacy.kills - canonicalData.kills).coerceAtLeast(0L),
+			totalDurationMs = (legacy.totalDurationMs - canonicalData.totalDurationMs).coerceAtLeast(0L),
+			items = items,
+		)
+		if (initial.kills > 0L || initial.totalDurationMs > 0L || initial.items.isNotEmpty()) {
+			pendingMutations.add(0, initial)
+		}
+		legacyAggregate = null
+		rebuildProjectedTotal()
+		LOGGER.info("Shard tracker: converted legacy aggregate to a revisioned initial increment")
+	}
+
+	private fun mergeLegacyProjection(target: TrackerData, legacy: TrackerData) {
+		target.kills = maxOf(target.kills, legacy.kills)
+		target.totalDurationMs = maxOf(target.totalDurationMs, legacy.totalDurationMs)
+		for ((name, legacyItem) in legacy.items) {
+			val current = target.items[name]
+			if (current == null) {
+				target.items[name] = legacyItem.copy()
+			} else {
+				current.amount = maxOf(current.amount, legacyItem.amount)
+				current.timesDropped = maxOf(current.timesDropped, legacyItem.timesDropped)
+				if (legacyItem.pricePerUnit > 0.0) current.pricePerUnit = legacyItem.pricePerUnit
+			}
+		}
 	}
 
 	private fun isTrackedItem(name: String): Boolean {
@@ -645,52 +790,6 @@ object HideonleafShardTracker {
 
 	private val AMPERSAND_PATTERN = Regex("(?i)&[0-9A-FK-OR]")
 
-	private fun markShareDirty(forceUpload: Boolean) {
-		shareDirty = true
-		if (forceUpload) {
-			maybeUploadSharedStats(force = true)
-		}
-	}
-
-	private fun maybeUploadSharedStats(force: Boolean = false) {
-		val mod = XclipsenIrcBridgeClient.instance ?: return
-		val config = mod.config()
-		if (!config.hideonleafHelperEnabled || !config.shardTrackerEnabled || !config.hideonleafShareDataEnabled) {
-			return
-		}
-		if (!initialRemoteSyncCompleted && !force) {
-			return
-		}
-
-		val playerName = Minecraft.getInstance().user.name
-		if (playerName.isBlank()) {
-			return
-		}
-
-		val now = System.currentTimeMillis()
-		val periodicRefreshDue = sessionActive && (now - lastShareUploadAt) >= SHARE_UPLOAD_INTERVAL_MS
-		if (!force && !shareDirty && !periodicRefreshDue) {
-			return
-		}
-
-		if (!force && lastShareUploadAt > 0L && (now - lastShareUploadAt) < SHARE_UPLOAD_MIN_INTERVAL_MS) {
-			return
-		}
-
-		val snapshot = buildUploadSnapshot()
-		hideonleafSyncInFlight = true
-		syncExecutor.execute {
-			try {
-				if (mod.backendBridge().uploadHideonleafStats(playerName, snapshot)) {
-					shareDirty = false
-					lastShareUploadAt = now
-				}
-			} finally {
-				hideonleafSyncInFlight = false
-			}
-		}
-	}
-
 	private fun maybeSyncRemoteStats() {
 		val mod = XclipsenIrcBridgeClient.instance ?: return
 		val config = mod.config()
@@ -698,156 +797,184 @@ object HideonleafShardTracker {
 			return
 		}
 
-		val playerName = Minecraft.getInstance().user.name
-		if (playerName.isBlank()) {
-			return
-		}
-
 		val now = System.currentTimeMillis()
-		if (hideonleafSyncInFlight || (now - lastRemoteSyncAt) < REMOTE_SYNC_INTERVAL_MS) {
+		if (hideonleafSyncInFlight || now < nextSyncAttemptAt) {
 			return
 		}
 
+		val profileId = activeProfileId ?: return
 		hideonleafSyncInFlight = true
-		lastRemoteSyncAt = now
-		syncExecutor.execute {
-			try {
-				val remote = mod.backendBridge().fetchHideonleafStats(playerName)
+		val generation = ClientSessionLifecycle.snapshot()
+		if (!canonicalFetched) {
+			syncExecutor.execute {
+				val remote = mod.backendBridge().fetchHideonleafStats(generation)
 				Minecraft.getInstance().execute {
-					initialRemoteSyncCompleted = true
-					if (remote == null) {
+					if (!isCurrentSync(generation, profileId)) return@execute
+					hideonleafSyncInFlight = false
+					if (remote == null || !isValidCanonicalState(remote)) {
+						nextSyncAttemptAt = System.currentTimeMillis() + REMOTE_RETRY_INTERVAL_MS
 						return@execute
 					}
-					applyRemoteSnapshot(remote)
-					if (!hasMeaningfulTrackerData(remote.toTrackerData()) && hasMeaningfulTrackerData(totalData)) {
-						shareDirty = true
-					}
+					adoptCanonical(remote)
+					canonicalFetched = true
+					migrateLegacyAggregate()
+					saveData()
+					nextSyncAttemptAt = 0L
 				}
-			} finally {
-				hideonleafSyncInFlight = false
 			}
-		}
-	}
-
-	private fun buildUploadSnapshot(): BackendHideonleafStatsUpload {
-		val durationMs = rawTotalDurationMs().coerceAtLeast(0L)
-		return BackendHideonleafStatsUpload().apply {
-			kills = totalData.kills
-			totalShards = totalShardCount(totalData)
-			totalProfit = totalProfit(totalData)
-			totalDurationMs = durationMs
-			profitPerHour = if (durationMs > 0L && isTotalDurationReliable()) profitPerHour(totalData, durationMs) else 0.0
-			updatedAt = lastLocalMutationAt
-			items = totalData.items.mapValues { (_, item) ->
-				BackendHideonleafTrackedItem().also { mapped ->
-					mapped.amount = item.amount
-					mapped.timesDropped = item.timesDropped
-					mapped.pricePerUnit = item.pricePerUnit
-				}
-			}.toMutableMap()
-		}
-	}
-
-	private fun applyRemoteSnapshot(remote: BackendHideonleafStatsUpload) {
-		if (remote.updatedAt <= 0L || remote.updatedAt <= lastAppliedRemoteUpdatedAt || remote.updatedAt <= lastLocalMutationAt) {
 			return
 		}
 
-		val remoteData = remote.toTrackerData()
-
-		if (!hasMeaningfulTrackerData(remoteData)) {
+		val pending = pendingMutations.firstOrNull()
+		if (pending == null) {
+			nextSyncAttemptAt = now + REMOTE_SYNC_INTERVAL_MS
+			hideonleafSyncInFlight = false
 			return
 		}
-
-		if (tryMigrateLegacyDuration(remoteData)) {
-			lastAppliedRemoteUpdatedAt = remote.updatedAt
+		if (pending.expectedRevision < 0L) {
+			pending.expectedRevision = canonicalRevision
 			saveData()
-			markShareDirty(forceUpload = false)
-			return
 		}
-
-		if (hasMeaningfulTrackerData(totalData) && !isRemoteSupersetOfLocal(remoteData, totalData)) {
-			return
+		val request = pending.toBackendRequest()
+		syncExecutor.execute {
+			val result = mod.backendBridge().mutateHideonleaf(request, generation)
+			Minecraft.getInstance().execute {
+				if (!isCurrentSync(generation, profileId)) return@execute
+				hideonleafSyncInFlight = false
+				val head = pendingMutations.firstOrNull()
+				if (head?.requestId != pending.requestId || result == null) {
+					nextSyncAttemptAt = System.currentTimeMillis() + REMOTE_RETRY_INTERVAL_MS
+					return@execute
+				}
+				if (result.httpStatus == 400 || (result.httpStatus == 409 && result.response?.error != "revision mismatch")) {
+					LOGGER.warn("Dropping terminal Hideonleaf mutation {} after HTTP {}", pending.requestId, result.httpStatus)
+					pendingMutations.removeAt(0)
+					rebuildProjectedTotal()
+					saveData()
+					nextSyncAttemptAt = 0L
+					return@execute
+				}
+				val responseState = result.response?.state
+				if ((result.httpStatus != 200 && result.httpStatus != 409) || responseState == null || !isValidCanonicalState(responseState)) {
+					nextSyncAttemptAt = System.currentTimeMillis() + REMOTE_RETRY_INTERVAL_MS
+					return@execute
+				}
+				adoptCanonical(responseState)
+				if (result.httpStatus == 200) {
+					pendingMutations.removeAt(0)
+				} else {
+					head.expectedRevision = canonicalRevision
+				}
+				rebuildProjectedTotal()
+				saveData()
+				nextSyncAttemptAt = if (result.httpStatus == 409) {
+					System.currentTimeMillis() + CONFLICT_RETRY_INTERVAL_MS
+				} else {
+					0L
+				}
+			}
 		}
-
-		if (hasMeaningfulTrackerData(sessionData) && !isRemoteSupersetOfLocal(remoteData, sessionData)) {
-			return
-		}
-
-		totalData = remoteData
-		legacyTotalDurationUnknown = remoteData.totalDurationMs <= 0L
-		lastAppliedRemoteUpdatedAt = remote.updatedAt
-		applyLivePricesToData(totalData, livePrices)
-		saveData()
 	}
 
-	private fun tryMigrateLegacyDuration(remoteData: TrackerData): Boolean {
-		if (!legacyTotalDurationUnknown || totalData.totalDurationMs > 0L || !hasMeaningfulTrackerData(totalData)) {
-			return false
+	private fun isCurrentSync(generation: Long, profileId: UUID): Boolean =
+		ClientSessionLifecycle.isCurrent(generation) && activeProfileId == profileId
+
+	private fun isValidCanonicalState(state: BackendHideonleafState): Boolean {
+		val profileId = activeProfileId ?: return false
+		if (normalizeUuid(state.minecraftUuid) != normalizeUuid(profileId.toString()) || state.revision !in 0L..MAX_SAFE_INTEGER ||
+			state.updatedAt < 0L || state.kills !in 0L..MAX_SAFE_INTEGER || state.totalDurationMs !in 0L..MAX_SAFE_INTEGER ||
+			state.items.size > MAX_CANONICAL_ITEMS
+		) return false
+		return state.items.all { (name, item) ->
+			name == sanitizeItemName(name) && name.isNotBlank() && item.amount in 0L..MAX_SAFE_INTEGER &&
+				item.timesDropped in 0L..MAX_SAFE_INTEGER &&
+				item.pricePerUnit.isFinite() && item.pricePerUnit in 0.0..MAX_PRICE_PER_UNIT
+		}
+	}
+
+	private fun adoptCanonical(state: BackendHideonleafState) {
+		canonicalData = state.toTrackerData()
+		canonicalRevision = state.revision
+		canonicalUpdatedAt = state.updatedAt
+		rebuildProjectedTotal()
+	}
+
+	private fun PendingMutation.toBackendRequest(): BackendHideonleafMutationRequest =
+		BackendHideonleafMutationRequest().also { request ->
+			request.requestId = requestId
+			request.expectedRevision = expectedRevision.coerceAtLeast(0L)
+			request.mutation = if (type == "reset") {
+				BackendHideonleafResetMutation()
+			} else {
+				BackendHideonleafIncrementMutation().also { increment ->
+					increment.kills = kills
+					increment.totalDurationMs = totalDurationMs
+					increment.items = items.mapValues { (_, item) ->
+						BackendHideonleafTrackedItem().also { mapped ->
+							mapped.amount = item.amount
+							mapped.timesDropped = item.timesDropped
+							mapped.pricePerUnit = item.pricePerUnit
+						}
+					}.toMutableMap()
+				}
+			}
 		}
 
-		val estimatedDurationMs = estimateLegacyDurationFromRemote(totalData, remoteData)
-		if (estimatedDurationMs <= 0L) {
-			return false
-		}
+	private fun sanitizeData(data: TrackerData): TrackerData = TrackerData(
+		items = data.items.mapNotNull { (name, item) ->
+			val safeName = sanitizeItemName(name)
+			if (safeName.isBlank()) null else safeName to TrackedItem(
+				item.amount.coerceIn(0L, MAX_SAFE_INTEGER),
+				item.timesDropped.coerceIn(0L, MAX_SAFE_INTEGER),
+				item.pricePerUnit.takeIf { it.isFinite() }?.coerceIn(0.0, MAX_PRICE_PER_UNIT) ?: 0.0,
+			)
+		}.take(MAX_CANONICAL_ITEMS).toMap().toMutableMap(),
+		kills = data.kills.coerceIn(0L, MAX_SAFE_INTEGER),
+		totalDurationMs = data.totalDurationMs.coerceIn(0L, MAX_SAFE_INTEGER),
+	)
 
-		totalData.totalDurationMs = estimatedDurationMs
-		legacyTotalDurationUnknown = false
-		applyLivePricesToData(totalData, livePrices)
-		LOGGER.info(
-			"Shard tracker: migrated legacy total duration using remote baseline ({} ms -> {} ms)",
-			remoteData.totalDurationMs,
-			estimatedDurationMs,
+	private fun sanitizePendingMutation(mutation: PendingMutation): PendingMutation? {
+		if (!REQUEST_ID_PATTERN.matches(mutation.requestId) || mutation.type !in setOf("increment", "reset")) return null
+		if (mutation.type == "reset") return PendingMutation(
+			requestId = mutation.requestId,
+			expectedRevision = mutation.expectedRevision.coerceAtLeast(-1L),
+			type = "reset",
 		)
-		return true
+		return PendingMutation(
+			requestId = mutation.requestId,
+			expectedRevision = mutation.expectedRevision.coerceAtLeast(-1L),
+			kills = mutation.kills.coerceIn(0L, MAX_SAFE_INTEGER),
+			totalDurationMs = mutation.totalDurationMs.coerceIn(0L, MAX_SAFE_INTEGER),
+			items = sanitizeData(TrackerData(items = mutation.items)).items.entries.take(MAX_TRACKED_ITEMS)
+				.associate { it.key to it.value }.toMutableMap(),
+		)
 	}
 
-	private fun estimateLegacyDurationFromRemote(localData: TrackerData, remoteData: TrackerData): Long {
-		if (remoteData.totalDurationMs <= 0L || !hasMeaningfulTrackerData(remoteData)) {
-			return 0L
-		}
+	private fun copyData(data: TrackerData): TrackerData = TrackerData(
+		items = data.items.mapValues { (_, item) -> item.copy() }.toMutableMap(),
+		kills = data.kills,
+		totalDurationMs = data.totalDurationMs,
+	)
 
-		val progressionRatios = mutableListOf<Double>()
-		if (remoteData.kills > 0L && localData.kills >= remoteData.kills) {
-			progressionRatios += localData.kills.toDouble() / remoteData.kills.toDouble()
-		}
+	private fun copyMutation(mutation: PendingMutation): PendingMutation = mutation.copy(
+		items = mutation.items.mapValues { (_, item) -> item.copy() }.toMutableMap(),
+	)
 
-		val localTotalShards = totalShardCount(localData)
-		val remoteTotalShards = totalShardCount(remoteData)
-		if (remoteTotalShards > 0L && localTotalShards >= remoteTotalShards) {
-			progressionRatios += localTotalShards.toDouble() / remoteTotalShards.toDouble()
+	private fun sanitizeItemName(name: String): String {
+		val result = StringBuilder(MAX_ITEM_NAME_LENGTH)
+		for (character in name.trim()) {
+			if (result.length >= MAX_ITEM_NAME_LENGTH) break
+			if (!character.isISOControl()) result.append(character)
 		}
-
-		for ((name, remoteItem) in remoteData.items) {
-			if (remoteItem.amount <= 0L) {
-				continue
-			}
-			val localAmount = localData.items[name]?.amount ?: 0L
-			if (localAmount >= remoteItem.amount) {
-				progressionRatios += localAmount.toDouble() / remoteItem.amount.toDouble()
-			}
-		}
-
-		val scale = progressionRatios.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
-		return (remoteData.totalDurationMs.toDouble() * scale).roundToLong().coerceAtLeast(remoteData.totalDurationMs)
+		return result.toString().trim()
 	}
 
-	private fun isRemoteSupersetOfLocal(remoteData: TrackerData, localData: TrackerData): Boolean {
-		if (remoteData.kills < localData.kills) {
-			return false
-		}
+	private fun normalizeUuid(value: String): String = value.replace("-", "").lowercase(Locale.ROOT)
 
-		for ((name, localItem) in localData.items) {
-			val remoteAmount = remoteData.items[name]?.amount ?: 0L
-			if (remoteAmount < localItem.amount) {
-				return false
-			}
-		}
+	private fun safeAdd(left: Long, right: Long): Long =
+		if (right > MAX_SAFE_INTEGER - left) MAX_SAFE_INTEGER else left + right
 
-		return true
-	}
-
-	private fun BackendHideonleafStatsUpload.toTrackerData(): TrackerData =
+	private fun BackendHideonleafState.toTrackerData(): TrackerData =
 		TrackerData(
 			items = items.mapValues { (_, item) ->
 				TrackedItem(
@@ -923,9 +1050,17 @@ object HideonleafShardTracker {
 		}
 	}
 
-	private const val SHARE_UPLOAD_INTERVAL_MS = 30_000L
-	private const val SHARE_UPLOAD_MIN_INTERVAL_MS = 5_000L
+	private val REQUEST_ID_PATTERN = Regex("[A-Za-z0-9_-]{8,128}")
+	private const val TRACKER_FILE_VERSION = 2
+	private const val MAX_TRACKED_ITEMS = 256
+	private const val MAX_CANONICAL_ITEMS = 4096
+	private const val MAX_ITEM_NAME_LENGTH = 96
+	private const val MAX_PRICE_PER_UNIT = 1_000_000_000_000.0
+	private const val MAX_SAFE_INTEGER = 9_007_199_254_740_991L
+	private const val DURATION_CHECKPOINT_INTERVAL_MS = 30_000L
 	private const val REMOTE_SYNC_INTERVAL_MS = 5_000L
+	private const val REMOTE_RETRY_INTERVAL_MS = 5_000L
+	private const val CONFLICT_RETRY_INTERVAL_MS = 250L
 	private const val SESSION_RATE_FLOOR_DURATION_MS = 12 * 60 * 1000L
 	private const val SESSION_STABILIZATION_BLEND_MS = 12 * 60 * 1000L
 	private const val HISTORY_BASELINE_MIN_DURATION_MS = 20 * 60 * 1000L
@@ -1070,22 +1205,12 @@ object HideonleafShardTrackerHudElement : XclipsenHudElement(
 		// Store click bounds so handleClick() knows where the toggle is
 		if (!example) refreshToggleBounds(totalWidth)
 
-		// ── Background & border ───────────────────────────────────────
-		context.fill(-2, -2, totalWidth + 2, totalHeight + 2, BORDER_COLOR)
-		context.fill(0, 0, totalWidth, totalHeight, BACKGROUND_COLOR)
-
 		// ── Render lines ──────────────────────────────────────────────
 		var y = PADDING
 		for (line in lines) {
 			if (line.isSeparator) {
-				context.fill(PADDING, y + 4, totalWidth - PADDING, y + 5, SEPARATOR_COLOR)
 				y += LINE_HEIGHT
 				continue
-			}
-
-			// Subtle background highlight behind the toggle row
-			if (line.isToggle) {
-				context.fill(0, y - 1, totalWidth, y + LINE_HEIGHT, TOGGLE_HOVER_BG)
 			}
 
 			val segments = parseColoredText(line.text)

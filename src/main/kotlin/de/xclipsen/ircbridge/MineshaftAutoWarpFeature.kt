@@ -1,7 +1,7 @@
 package de.xclipsen.ircbridge
 
-import com.autocroesus.util.ColorUtil
 import de.xclipsen.ircbridge.FrozenCorpseDetector.FrozenCorpseType
+import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
 import net.minecraft.world.entity.decoration.ArmorStand
 import net.minecraft.network.chat.Component
@@ -428,7 +428,7 @@ object MineshaftAutoWarpFeature {
 	}
 
 	private fun normalize(raw: String): String {
-		return ColorUtil.stripColors(raw)
+		return ChatFormatting.stripFormatting(raw).orEmpty()
 			.replace('\r', ' ')
 			.replace('\n', ' ')
 			.replace(WHITESPACE_PATTERN, " ")

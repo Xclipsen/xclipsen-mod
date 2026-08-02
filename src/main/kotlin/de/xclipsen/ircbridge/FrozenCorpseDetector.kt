@@ -11,7 +11,7 @@ import java.util.Locale
 
 object FrozenCorpseDetector {
 	fun isInMineshaftArea(): Boolean {
-		return LocationTracker.isOnHypixelSkyBlock && LocationTracker.currentArea.contains("mineshaft", ignoreCase = true)
+		return LocationTracker.isInMineshaft
 	}
 
 	fun findNearbyCorpses(client: Minecraft, range: Double = DEFAULT_SCAN_RANGE): List<DetectedFrozenCorpse> {

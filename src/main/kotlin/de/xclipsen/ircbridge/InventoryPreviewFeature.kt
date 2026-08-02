@@ -34,7 +34,7 @@ object InventoryPreviewHudElement : XclipsenHudElement(
 		}
 
 		if (example && player == null) {
-			context.text(client.font, "Preview", PADDING, panelHeight.toInt() - 10, TEXT_MUTED, true)
+			context.text(client.font, "Preview", PADDING, panelHeight.toInt() - 10, XclipsenUiTokens.TEXT_MUTED, true)
 		}
 
 		return panelWidth to panelHeight
@@ -56,7 +56,6 @@ object InventoryPreviewHudElement : XclipsenHudElement(
 
 	private fun drawArmorSlots(context: GuiGraphicsExtractor, player: AbstractClientPlayer?, panelHeight: Int) {
 		val armorTop = PADDING + ((panelHeight - (PADDING * 2) - ARMOR_HEIGHT) / 2).coerceAtLeast(0)
-		val left = PADDING
 		val stacks = listOf(
 			player?.getItemBySlot(EquipmentSlot.HEAD) ?: ItemStack.EMPTY,
 			player?.getItemBySlot(EquipmentSlot.CHEST) ?: ItemStack.EMPTY,
@@ -65,16 +64,16 @@ object InventoryPreviewHudElement : XclipsenHudElement(
 		)
 
 		for ((index, stack) in stacks.withIndex()) {
-			drawSlot(context, left, armorTop + index * SLOT_SIZE, stack)
+			drawSlot(context, PADDING, armorTop + index * SLOT_SIZE, stack)
 		}
 	}
 
 	private fun drawSlot(context: GuiGraphicsExtractor, left: Int, top: Int, stack: ItemStack) {
-		context.fill(left, top, left + SLOT_SIZE, top + SLOT_SIZE, SLOT_BACKGROUND)
-		context.fill(left, top, left + SLOT_SIZE, top + 1, SLOT_BORDER)
-		context.fill(left, top + SLOT_SIZE - 1, left + SLOT_SIZE, top + SLOT_SIZE, SLOT_BORDER)
-		context.fill(left, top, left + 1, top + SLOT_SIZE, SLOT_BORDER)
-		context.fill(left + SLOT_SIZE - 1, top, left + SLOT_SIZE, top + SLOT_SIZE, SLOT_BORDER)
+		context.fill(left, top, left + SLOT_SIZE, top + SLOT_SIZE, XclipsenUiTokens.SURFACE_PANEL_BODY)
+		context.fill(left, top, left + SLOT_SIZE, top + 1, XclipsenUiTokens.BORDER_SUBTLE)
+		context.fill(left, top + SLOT_SIZE - 1, left + SLOT_SIZE, top + SLOT_SIZE, XclipsenUiTokens.BORDER_SUBTLE)
+		context.fill(left, top, left + 1, top + SLOT_SIZE, XclipsenUiTokens.BORDER_SUBTLE)
+		context.fill(left + SLOT_SIZE - 1, top, left + SLOT_SIZE, top + SLOT_SIZE, XclipsenUiTokens.BORDER_SUBTLE)
 
 		if (!stack.isEmpty) {
 			context.item(stack, left + 1, top + 1)
@@ -87,9 +86,8 @@ object InventoryPreviewHudElement : XclipsenHudElement(
 		return (PADDING + armorWidth + GRID_WIDTH + PADDING).toFloat()
 	}
 
-	private fun preferredHeight(): Float {
-		return (PADDING + (3 * SLOT_SIZE) + HOTBAR_GAP + SLOT_SIZE + PADDING).toFloat()
-	}
+	private fun preferredHeight(): Float =
+		(PADDING + (3 * SLOT_SIZE) + HOTBAR_GAP + SLOT_SIZE + PADDING).toFloat()
 
 	private const val SLOT_SIZE = 18
 	private const val GRID_WIDTH = SLOT_SIZE * 9
@@ -98,7 +96,4 @@ object InventoryPreviewHudElement : XclipsenHudElement(
 	private const val SECTION_GAP = 8
 	private const val ARMOR_BLOCK_WIDTH = SLOT_SIZE
 	private const val ARMOR_HEIGHT = SLOT_SIZE * 4
-	private const val SLOT_BACKGROUND = 0xAA121212.toInt()
-	private const val SLOT_BORDER = 0x50FFFFFF
-	private const val TEXT_MUTED = 0xFFA0A0A0.toInt()
 }

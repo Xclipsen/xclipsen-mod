@@ -1,6 +1,6 @@
 package de.xclipsen.ircbridge
 
-import com.autocroesus.util.ColorUtil
+import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -13,7 +13,7 @@ import net.minecraft.world.inventory.Slot
 import net.minecraft.network.chat.HoverEvent
 import net.minecraft.network.chat.Component
 import java.util.Locale
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.ceil
 import kotlin.math.min
@@ -34,6 +34,24 @@ object SlayerFeature {
 	private var alertVisibleUntil = 0L
 	@Volatile
 	private var wikiFetchInFlight = false
+	private val backendExecutor = Executors.newSingleThreadExecutor { runnable ->
+		Thread(runnable, "xclipsen-slayer-backend").apply { isDaemon = true }
+	}
+
+	fun onWorldChange() {
+		lastAnnounceAt = 0L
+		lastStateSaveAt = 0L
+		screenScanTickCounter = 0
+		lastSlayerFromChat = ""
+		currentAlertText = ""
+		alertVisibleUntil = 0L
+		wikiFetchInFlight = false
+	}
+
+	fun shutdown() {
+		onWorldChange()
+		backendExecutor.shutdownNow()
+	}
 
 	fun onIncomingMessage(message: Component?) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
@@ -631,7 +649,8 @@ object SlayerFeature {
 			return
 		}
 		wikiFetchInFlight = true
-		CompletableFuture.runAsync {
+		val generation = ClientSessionLifecycle.snapshot()
+		backendExecutor.execute {
 			try {
 				val response = XclipsenIrcBridgeClient.instance?.backendBridge()?.fetchSlayerRngMeterDrops()
 				val parsed = response?.drops
@@ -647,6 +666,7 @@ object SlayerFeature {
 					.orEmpty()
 				if (parsed.isNotEmpty()) {
 					Minecraft.getInstance().execute {
+						if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 						config.slayerRngMeterWikiCache.putAll(parsed)
 						config.slayerRngMeterWikiCacheUpdatedAtMs = response?.updatedAt?.takeIf { it > 0L } ?: System.currentTimeMillis()
 						saveCurrentConfig()
@@ -654,11 +674,12 @@ object SlayerFeature {
 				}
 			} catch (_: Exception) {
 				Minecraft.getInstance().execute {
+					if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 					config.slayerRngMeterWikiCacheUpdatedAtMs = System.currentTimeMillis()
 					saveCurrentConfig()
 				}
 			} finally {
-				wikiFetchInFlight = false
+				if (ClientSessionLifecycle.isCurrent(generation)) wikiFetchInFlight = false
 			}
 		}
 	}
@@ -754,7 +775,7 @@ object SlayerFeature {
 	}
 
 	private fun normalize(raw: String): String {
-		return ColorUtil.stripColors(stripMinecraftFormatting(raw))
+		return ChatFormatting.stripFormatting(stripMinecraftFormatting(raw)).orEmpty()
 			.replace('\r', ' ')
 			.replace('\n', ' ')
 			.replace(Regex("\\s+"), " ")
@@ -880,32 +901,13 @@ object SlayerSpawnAnnouncerHudElement : XclipsenHudElement(
 		val width = max(DEFAULT_WIDTH, textRenderer.width(text) + (PADDING_X * 2))
 		val height = PADDING_Y + textRenderer.lineHeight + PADDING_Y
 
-		drawAlertPanel(context, textRenderer, text, width, height)
+		context.text(textRenderer, text, (width - textRenderer.width(text)) / 2, PADDING_Y, TEXT_COLOR, true)
 		return width.toFloat() to height.toFloat()
-	}
-
-	private fun drawAlertPanel(
-		context: GuiGraphicsExtractor,
-		textRenderer: Font,
-		text: String,
-		width: Int,
-		height: Int,
-	) {
-		context.fill(0, 0, width, height, BACKGROUND)
-		context.fill(0, 0, width, 1, ACCENT)
-		context.fill(0, height - 1, width, height, ACCENT)
-		context.fill(0, 0, 1, height, ACCENT)
-		context.fill(width - 1, 0, width, height, ACCENT)
-		context.fill(3, 3, width - 3, height - 3, INNER_BACKGROUND)
-		context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
 	}
 
 	private const val DEFAULT_WIDTH = 180
 	private const val PADDING_X = 8
 	private const val PADDING_Y = 6
-	private const val BACKGROUND = 0xC0181818.toInt()
-	private const val INNER_BACKGROUND = 0x4055E3FF
-	private const val ACCENT = 0xFF55E3FF.toInt()
 	private const val TEXT_COLOR = 0xFFFFFFFF.toInt()
 }
 

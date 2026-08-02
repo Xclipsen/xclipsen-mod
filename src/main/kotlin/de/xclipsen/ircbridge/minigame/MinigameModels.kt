@@ -2,6 +2,7 @@ package de.xclipsen.ircbridge.minigame
 
 import com.google.gson.JsonObject
 import net.minecraft.world.item.Item
+import net.minecraft.client.gui.screens.Screen
 
 enum class GameType {
 	AI,
@@ -67,7 +68,7 @@ interface Minigame {
 	val description: List<String>
 	val supportedModes: Set<GameType>
 
-	fun openModeMenu(controller: MinigameController)
+	fun openModeMenu(parent: Screen, controller: MinigameController)
 	fun startAiGame(controller: MinigameController)
 	fun startMultiplayerGame(controller: MinigameController, targetUsername: String)
 }

@@ -341,9 +341,7 @@ object M5Feature {
 		val normalY = (delta.y / length).toFloat()
 		val normalZ = (delta.z / length).toFloat()
 
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
+		val (red, green, blue) = ClientColor.rgbChannels(color)
 
 		matrices.pushPose()
 		matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z)
@@ -405,12 +403,6 @@ object M5IceSprayHudElement : XclipsenHudElement(
 		val boxWidth = max(MIN_WIDTH, contentWidth + (PADDING_X * 2))
 		val boxHeight = PADDING_Y + textRenderer.lineHeight + LINE_GAP + textRenderer.lineHeight + PADDING_Y
 
-		context.fill(0, 0, boxWidth, boxHeight, BACKGROUND)
-		context.fill(0, 0, boxWidth, 1, ACCENT)
-		context.fill(0, boxHeight - 1, boxWidth, boxHeight, ACCENT)
-		context.fill(0, 0, 1, boxHeight, ACCENT)
-		context.fill(boxWidth - 1, 0, boxWidth, boxHeight, ACCENT)
-		context.fill(3, 3, boxWidth - 3, boxHeight - 3, INNER_BACKGROUND)
 		context.text(textRenderer, title, PADDING_X, PADDING_Y, LABEL_TEXT, true)
 		context.text(textRenderer, value, PADDING_X, PADDING_Y + textRenderer.lineHeight + LINE_GAP, VALUE_TEXT, true)
 
@@ -421,11 +413,8 @@ object M5IceSprayHudElement : XclipsenHudElement(
 	private const val PADDING_Y = 5
 	private const val LINE_GAP = 2
 	private const val MIN_WIDTH = 112
-	private const val BACKGROUND = 0xB4121212.toInt()
-	private const val INNER_BACKGROUND = 0x40202230
 	private const val LABEL_TEXT = 0xFFE8E8E8.toInt()
 	private const val VALUE_TEXT = 0xFF8DEEFF.toInt()
-	private const val ACCENT = 0xFF55E3FF.toInt()
 }
 
 object M5AlertHudElement : XclipsenHudElement(
@@ -452,31 +441,12 @@ object M5AlertHudElement : XclipsenHudElement(
 		val width = max(DEFAULT_WIDTH, textRenderer.width(text) + (PADDING_X * 2))
 		val height = PADDING_Y + textRenderer.lineHeight + PADDING_Y
 
-		drawAlertPanel(context, textRenderer, text, width, height)
+		context.text(textRenderer, text, (width - textRenderer.width(text)) / 2, PADDING_Y, TEXT_COLOR, true)
 		return width.toFloat() to height.toFloat()
-	}
-
-	private fun drawAlertPanel(
-		context: GuiGraphicsExtractor,
-		textRenderer: Font,
-		text: String,
-		width: Int,
-		height: Int,
-	) {
-		context.fill(0, 0, width, height, BACKGROUND)
-		context.fill(0, 0, width, 1, ACCENT)
-		context.fill(0, height - 1, width, height, ACCENT)
-		context.fill(0, 0, 1, height, ACCENT)
-		context.fill(width - 1, 0, width, height, ACCENT)
-		context.fill(3, 3, width - 3, height - 3, INNER_BACKGROUND)
-		context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
 	}
 
 	private const val DEFAULT_WIDTH = 180
 	private const val PADDING_X = 8
 	private const val PADDING_Y = 6
-	private const val BACKGROUND = 0xC0181818.toInt()
-	private const val INNER_BACKGROUND = 0x4055E3FF
-	private const val ACCENT = 0xFF55E3FF.toInt()
 	private const val TEXT_COLOR = 0xFFFFFFFF.toInt()
 }

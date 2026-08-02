@@ -153,6 +153,12 @@ object WormholeFinderFeature {
 		ticksUntilRescan = 0
 	}
 
+	fun statusLine(): String {
+		val enabled = XclipsenIrcBridgeClient.instance?.config()?.wormholeFinderModuleEnabled == true
+		return "enabled=$enabled, skyblock=${LocationTracker.isOnHypixelSkyBlock}, active=${activeWormhole != null}, " +
+			"tracerTarget=${tracerTarget != null}, arrived=${arrivedTarget != null}"
+	}
+
 	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		val active = activeWormhole
@@ -293,9 +299,7 @@ object WormholeFinderFeature {
 		alpha: Int,
 		lineWidth: Float,
 	) {
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
+		val (red, green, blue) = ClientColor.rgbChannels(color)
 		drawCircleRing(lineConsumer, entry, center, RING_RADIUS, red, green, blue, alpha, lineWidth)
 	}
 
@@ -359,9 +363,7 @@ object WormholeFinderFeature {
 		val normalX = (delta.x / length).toFloat()
 		val normalY = (delta.y / length).toFloat()
 		val normalZ = (delta.z / length).toFloat()
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
+		val (red, green, blue) = ClientColor.rgbChannels(color)
 		consumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
 			.setColor(red, green, blue, alpha)
 			.setNormal(entry, normalX, normalY, normalZ)
@@ -466,7 +468,7 @@ object WormholeDepartureAlertHudElement : XclipsenHudElement(
 		val message = alertMessage()
 		val width = (renderer.width(message) + (PADDING_X * 2)).coerceAtLeast(DEFAULT_WIDTH)
 		val height = PADDING_Y + renderer.lineHeight + PADDING_Y
-		drawPanel(context, renderer, message, width, height)
+		context.text(renderer, message, (width - renderer.width(message)) / 2, PADDING_Y, 0xFFFFFFFF.toInt(), true)
 		return width.toFloat() to height.toFloat()
 	}
 
@@ -475,22 +477,6 @@ object WormholeDepartureAlertHudElement : XclipsenHudElement(
 			.withColor(0xAA55AA)
 			.append(Component.literal("Wormhole").withColor(0xFF55FF))
 			.append(Component.literal(" closed up...").withColor(0xAA55AA))
-	}
-
-	private fun drawPanel(
-		context: GuiGraphicsExtractor,
-		renderer: Font,
-		text: Component,
-		width: Int,
-		height: Int,
-	) {
-		context.fill(0, 0, width, height, 0xC018101C.toInt())
-		context.fill(0, 0, width, 1, 0xFFFF55FF.toInt())
-		context.fill(0, height - 1, width, height, 0xFFFF55FF.toInt())
-		context.fill(0, 0, 1, height, 0xFFFF55FF.toInt())
-		context.fill(width - 1, 0, width, height, 0xFFFF55FF.toInt())
-		context.fill(3, 3, width - 3, height - 3, 0x45AA55AA)
-		context.centeredText(renderer, text, width / 2, PADDING_Y, 0xFFFFFFFF.toInt())
 	}
 
 	private const val DEFAULT_WIDTH = 210

@@ -35,9 +35,11 @@ jobs:
       - name: Package download bundle
         run: |
           mkdir -p build/distributions
-          jar_file="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-dev.jar' ! -name '*-sources.jar' | head -n 1)"
-          if [ -z "$jar_file" ]; then
-            echo "No remapped jar found."
+          mod_version="$(cut -d= -f2- < <(grep '^mod_version=' gradle.properties))"
+          archive_base="$(cut -d= -f2- < <(grep '^archives_base_name=' gradle.properties))"
+          jar_file="build/libs/${archive_base}-${mod_version}.jar"
+          if [ ! -f "$jar_file" ]; then
+            echo "Expected remapped jar not found: $jar_file"
             exit 1
           fi
           cp "$jar_file" "build/distributions/"

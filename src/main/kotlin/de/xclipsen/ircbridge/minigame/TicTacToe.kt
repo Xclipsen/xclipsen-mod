@@ -12,8 +12,8 @@ object TicTacToeMinigame : Minigame {
 	override val description: List<String> = listOf("Get three marks in a row.", "Play against AI or another player.")
 	override val supportedModes: Set<GameType> = setOf(GameType.AI, GameType.MULTIPLAYER)
 
-	override fun openModeMenu(controller: MinigameController) {
-		controller.client().setScreen(GameModeSelectionScreen(controller, this))
+	override fun openModeMenu(parent: net.minecraft.client.gui.screens.Screen, controller: MinigameController) {
+		controller.client().setScreen(GameModeSelectionScreen(parent, controller, this))
 	}
 
 	override fun startAiGame(controller: MinigameController) {
@@ -287,8 +287,9 @@ data class TicTacToeVisualState(
 }
 
 class TicTacToeScreen(
+	private val parent: net.minecraft.client.gui.screens.Screen,
 	private val game: TicTacToeMatchController,
-) : ChestLikeScreen(Component.literal(titleFor(game))) {
+) : ChestLikeScreen(parent, Component.literal(titleFor(game))) {
 	override fun slots(): Map<Int, MenuSlot> {
 		val entries = mutableMapOf<Int, MenuSlot>()
 		val visualState = game.visualState()
@@ -317,7 +318,17 @@ class TicTacToeScreen(
 			item = if (game.finished) Items.ARROW else Items.BARRIER,
 			name = if (game.finished) "Back to mini-game menu" else "Leave match",
 			enabled = !game.leaveRequested,
-			action = { if (game.finished) { game.owner.clearActiveGame(); game.owner.openMainMenu() } else game.leave() },
+			action = {
+				if (game.finished) {
+					game.owner.clearActiveGame()
+					minecraft.setScreen(parent)
+				} else if (game.mode == GameType.AI) {
+					game.owner.clearActiveGame()
+					minecraft.setScreen(parent)
+				} else {
+					game.leave()
+				}
+			},
 		)
 		entries[26] = rematchSlot()
 		return entries
@@ -329,7 +340,7 @@ class TicTacToeScreen(
 
 	override fun onClose() {
 		if (!game.finished) {
-			game.owner.feedback("The match is still running. Open it again with /game.")
+			game.owner.feedback("The match is still running. Open it again with /xclipsen game.")
 		}
 		super.onClose()
 	}

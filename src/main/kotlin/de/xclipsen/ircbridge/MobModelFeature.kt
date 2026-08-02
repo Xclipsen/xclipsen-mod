@@ -79,7 +79,6 @@ object MobModelFeature {
 
 	fun onStartup() {
 		uploadDirty = true
-		LOGGER.warn("MOB_MODEL_BUILD_MARKER local-catalog-v2")
 		MobModelCatalog.logDiagnostics("startup")
 		requestImmediateSync()
 	}
@@ -101,15 +100,21 @@ object MobModelFeature {
 		uploadInFlight = false
 	}
 
+	fun shutdown() {
+		onDisconnect()
+		syncExecutor.shutdownNow()
+	}
+
 	fun onTick(client: Minecraft) {
 		val playerName = currentPlayerName(client) ?: return
 		val now = System.currentTimeMillis()
 
 		if (!fetchInFlight && now - lastFetchAt >= FETCH_INTERVAL_MS) {
 			fetchInFlight = true
+			val generation = ClientSessionLifecycle.snapshot()
 			syncExecutor.execute {
 				try {
-					fetchRemoteStates(playerName)
+					fetchRemoteStates(generation)
 				} finally {
 					fetchInFlight = false
 				}
@@ -123,9 +128,11 @@ object MobModelFeature {
 
 		if (!uploadInFlight && (uploadDirty || now - lastUploadAt >= UPLOAD_INTERVAL_MS)) {
 			uploadInFlight = true
+			val generation = ClientSessionLifecycle.snapshot()
+			val configSnapshot = XclipsenIrcBridgeClient.instance?.config()?.copy() ?: return
 			syncExecutor.execute {
 				try {
-					uploadLocalState(playerName)
+					uploadLocalState(playerName, configSnapshot, generation)
 				} finally {
 					uploadInFlight = false
 				}
@@ -229,19 +236,19 @@ object MobModelFeature {
 		return consumed
 	}
 
-	private fun fetchRemoteStates(playerName: String) {
+	private fun fetchRemoteStates(generation: Long) {
 		lastFetchAt = System.currentTimeMillis()
 		val backend = XclipsenIrcBridgeClient.instance?.backendBridge() ?: return
-		val response = backend.fetchMobModelStates(playerName) ?: return
+		val response = backend.fetchMobModelStates() ?: return
+		if (!ClientSessionLifecycle.isCurrent(generation)) return
 		syncedStates = response.states
 			.mapNotNull(::normalizeRemoteState)
 			.associateBy { normalizePlayerName(it.minecraftUsername) }
 		clearRenderCache()
 	}
 
-	private fun uploadLocalState(playerName: String) {
+	private fun uploadLocalState(playerName: String, config: BridgeConfig, generation: Long) {
 		val backend = XclipsenIrcBridgeClient.instance?.backendBridge() ?: return
-		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		val payload = BackendMobModelState().apply {
 			minecraftUsername = playerName
 			enabled = config.mobModelModuleEnabled
@@ -254,9 +261,10 @@ object MobModelFeature {
 			updatedAt = System.currentTimeMillis()
 		}
 
-		if (!backend.uploadMobModelState(playerName, payload)) {
+		if (!backend.uploadMobModelState(payload, generation)) {
 			return
 		}
+		if (!ClientSessionLifecycle.isCurrent(generation)) return
 
 		lastUploadAt = payload.updatedAt
 		lastUploadedSignature = localStateSignature(config)
@@ -501,11 +509,13 @@ object MobModelFeature {
 	private fun requestImmediateSync() {
 		val client = Minecraft.getInstance()
 		val playerName = currentPlayerName(client) ?: return
+		val generation = ClientSessionLifecycle.snapshot()
+		val configSnapshot = XclipsenIrcBridgeClient.instance?.config()?.copy() ?: return
 		if (!uploadInFlight) {
 			uploadInFlight = true
 			syncExecutor.execute {
 				try {
-					uploadLocalState(playerName)
+					uploadLocalState(playerName, configSnapshot, generation)
 				} finally {
 					uploadInFlight = false
 				}
@@ -515,7 +525,7 @@ object MobModelFeature {
 			fetchInFlight = true
 			syncExecutor.execute {
 				try {
-					fetchRemoteStates(playerName)
+					fetchRemoteStates(generation)
 				} finally {
 					fetchInFlight = false
 				}

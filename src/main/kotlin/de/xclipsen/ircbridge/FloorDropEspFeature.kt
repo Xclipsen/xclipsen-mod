@@ -14,6 +14,13 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 object FloorDropEspFeature {
+	fun statusLine(): String {
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: return "Unavailable"
+		val world = Minecraft.getInstance().level ?: return "enabled=${config.floorDropEspModuleEnabled}, world=unavailable"
+		val displays = world.entitiesForRendering().count { it is Display.ItemDisplay && it.isAlive && !it.isRemoved && it.itemStack.item === Items.STRING }
+		return "enabled=${config.floorDropEspModuleEnabled}, candidateDisplays=$displays"
+	}
+
 	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.floorDropEspModuleEnabled) {

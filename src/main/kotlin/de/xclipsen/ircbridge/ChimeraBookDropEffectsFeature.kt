@@ -33,7 +33,7 @@ object ChimeraBookDropEffectsFeature {
 
 	fun runTest(config: BridgeConfig? = null): Boolean {
 		val value = config ?: XclipsenIrcBridgeClient.instance?.config() ?: return false
-		if (!isEnabled(value)) {
+		if (!value.devModeEnabled || !isEnabled(value)) {
 			return false
 		}
 

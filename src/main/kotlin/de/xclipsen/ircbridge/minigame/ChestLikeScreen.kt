@@ -3,6 +3,7 @@ package de.xclipsen.ircbridge.minigame
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.inventory.ContainerScreen
+import net.minecraft.client.gui.screens.Screen
 import net.minecraft.core.component.DataComponents
 import net.minecraft.world.item.component.ItemLore
 import net.minecraft.world.SimpleContainer
@@ -15,7 +16,10 @@ import net.minecraft.world.inventory.ContainerInput
 import net.minecraft.network.chat.Component
 import net.minecraft.ChatFormatting
 
-abstract class ChestLikeScreen(title: Component) : ContainerScreen(createHandler(), playerInventory(), title) {
+abstract class ChestLikeScreen(
+	private val parent: Screen?,
+	title: Component,
+) : ContainerScreen(createHandler(), playerInventory(), title) {
 	protected data class MenuSlot(
 		val item: Item = Items.GRAY_STAINED_GLASS_PANE,
 		val name: String = "",
@@ -47,8 +51,10 @@ abstract class ChestLikeScreen(title: Component) : ContainerScreen(createHandler
 	}
 
 	override fun onClose() {
-		minecraft.setScreen(null)
+		minecraft.setScreen(parent)
 	}
+
+	fun parentScreen(): Screen? = parent
 
 	override fun removed() {
 		// This is a local-only container. Never close or mutate a server-side screen handler.

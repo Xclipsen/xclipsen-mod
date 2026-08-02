@@ -25,6 +25,7 @@ object MortDoorBarrierFeature {
 	private val DOOR_BLOCK_STATE = Blocks.BARRIER.defaultBlockState()
 
 	private val appliedStates = linkedMapOf<BlockPos, BlockState>()
+	private var appliedWorld: net.minecraft.client.multiplayer.ClientLevel? = null
 	private var cachedDoorCube: DoorCube? = null
 	private var tickCounter = 0
 	private var debugTickCounter = 0
@@ -100,10 +101,16 @@ object MortDoorBarrierFeature {
 		cachedDoorCube = null
 	}
 
+	fun statusLine(): String {
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: return "Unavailable"
+		return "enabled=${config.dungeonDoorModuleEnabled && config.dungeonDoorEnabled}, area=${LocationTracker.currentArea.ifBlank { "unknown" }}, " +
+			"doorDetected=${cachedDoorCube != null}, barriers=${appliedStates.size}"
+	}
+
 	fun onRender(context: LevelRenderContext) {
 		val client = Minecraft.getInstance()
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
-		if (!config.dungeonDoorModuleEnabled || !config.dungeonDoorDebugEnabled) return
+		if (!config.devModeEnabled || !config.dungeonDoorModuleEnabled || !config.dungeonDoorDebugEnabled) return
 		if (client.player == null || appliedStates.isEmpty()) return
 
 		val cameraPos = context.gameRenderer().mainCamera.position()
@@ -226,6 +233,10 @@ object MortDoorBarrierFeature {
 
 	private fun syncDesiredStates(client: Minecraft, desired: Set<BlockPos>) {
 		val world = client.level ?: return
+		if (appliedWorld !== world) {
+			appliedStates.clear()
+			appliedWorld = world
+		}
 		val stale = appliedStates.keys.filter { it !in desired }
 		stale.forEach { restoreBlock(world, it) }
 
@@ -247,13 +258,16 @@ object MortDoorBarrierFeature {
 	}
 
 	private fun clear(client: Minecraft) {
-		val world = client.level ?: run {
+		val world = client.level
+		if (world == null || appliedWorld !== world) {
 			appliedStates.clear()
+			appliedWorld = null
 			return
 		}
 
 		appliedStates.keys.toList().forEach { restoreBlock(world, it) }
 		appliedStates.clear()
+		appliedWorld = null
 	}
 
 	private fun restoreBlock(world: net.minecraft.client.multiplayer.ClientLevel, pos: BlockPos) {
@@ -264,7 +278,7 @@ object MortDoorBarrierFeature {
 	}
 
 	private fun debug(client: Minecraft, enabled: Boolean, message: String) {
-		if (!enabled) return
+		if (!enabled || XclipsenIrcBridgeClient.instance?.config()?.devModeEnabled != true) return
 		if (++debugTickCounter < DEBUG_INTERVAL_TICKS) return
 		debugTickCounter = 0
 		client.player?.sendSystemMessage(Component.literal("[DoorDebug] $message"))

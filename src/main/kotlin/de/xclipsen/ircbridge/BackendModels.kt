@@ -1,8 +1,21 @@
 package de.xclipsen.ircbridge
 
 class BackendLinkCompleteRequest {
-	@JvmField var playerName: String = ""
 	@JvmField var code: String = ""
+}
+
+class BackendMinecraftAccount {
+	@JvmField var uuid: String = ""
+	@JvmField var name: String = ""
+}
+
+class BackendLinkCompleteResponse {
+	@JvmField var linked: Boolean = false
+	@JvmField var credential: String = ""
+	@JvmField var expiresAt: Long = 0L
+	@JvmField var discordUserId: String = ""
+	@JvmField var account: BackendMinecraftAccount = BackendMinecraftAccount()
+	@JvmField var error: String = ""
 }
 
 class BackendLinkStatusResponse {
@@ -12,6 +25,8 @@ class BackendLinkStatusResponse {
 	@JvmField var playerName: String = ""
 	@JvmField var error: String = ""
 	@JvmField var minecraftUsernames: MutableList<String> = mutableListOf()
+	@JvmField var account: BackendMinecraftAccount = BackendMinecraftAccount()
+	@JvmField var credentialExpiresAt: Long = 0L
 }
 
 class BackendMessage {
@@ -89,16 +104,13 @@ class BridgeConfig {
 	@JvmField var auctionHouseModuleEnabled: Boolean = false
 	@JvmField var auctionHouseAutoCopyUnderbidEnabled: Boolean = true
 	@JvmField var highClassDiceTrackerEnabled: Boolean = false
-	@JvmField var autoCroesusModuleEnabled: Boolean = false
 	@JvmField var experimentationTableModuleEnabled: Boolean = false
 	@JvmField var autoExperimentsClickDelayMs: Int = 200
 	@JvmField var autoExperimentsDelayVarietyMs: Int = 50
-	@JvmField var autoExperimentsEnabled: Boolean = true
 	@JvmField var autoExperimentsAutoClose: Boolean = true
 	@JvmField var autoExperimentsAutoPairs: Boolean = true
 	@JvmField var autoExperimentsSerumCount: Int = 0
 	@JvmField var autoExperimentsGetMaxXp: Boolean = false
-	@JvmField var autoExperimentsShowSolver: Boolean = false
 	@JvmField var dungeonDoorModuleEnabled: Boolean = false
 	@JvmField var dungeonDoorEnabled: Boolean = false
 	@JvmField var dungeonDoorDebugEnabled: Boolean = false
@@ -122,6 +134,7 @@ class BridgeConfig {
 	@JvmField var mobModelScale: Float = 1.0f
 	@JvmField var inventoryPreviewModuleEnabled: Boolean = false
 	@JvmField var inventoryPreviewShowArmor: Boolean = true
+	@JvmField var itemUpdateFixModuleEnabled: Boolean = false
 	@JvmField var customCrosshairModuleEnabled: Boolean = false
 	@JvmField var customCrosshairShowInFirstPerson: Boolean = false
 	@JvmField var customCrosshairVisibleInF5: Boolean = false
@@ -161,6 +174,7 @@ class BridgeConfig {
 	@JvmField var pickaxeAbilityCooldownAlertSoundVolume: Float = 1.0f
 	@JvmField var pickaxeAbilityCooldownAlertSoundPitch: Float = 1.0f
 	@JvmField var pickaxeAbilityCooldownAlertText: String = PickaxeAbilityCooldownFeature.DEFAULT_ALERT_TEXT
+	@JvmField var pickobulusHelperModuleEnabled: Boolean = false
 	@JvmField var fireFreezeModuleEnabled: Boolean = false
 	@JvmField var fireFreezeMobTimerEnabled: Boolean = true
 	@JvmField var fireFreezeFreezeTimerEnabled: Boolean = true
@@ -243,16 +257,13 @@ class BridgeConfig {
 		it.auctionHouseModuleEnabled = auctionHouseModuleEnabled
 		it.auctionHouseAutoCopyUnderbidEnabled = auctionHouseAutoCopyUnderbidEnabled
 		it.highClassDiceTrackerEnabled = highClassDiceTrackerEnabled
-		it.autoCroesusModuleEnabled = autoCroesusModuleEnabled
 		it.experimentationTableModuleEnabled = experimentationTableModuleEnabled
 		it.autoExperimentsClickDelayMs = autoExperimentsClickDelayMs
 		it.autoExperimentsDelayVarietyMs = autoExperimentsDelayVarietyMs
-		it.autoExperimentsEnabled = autoExperimentsEnabled
 		it.autoExperimentsAutoClose = autoExperimentsAutoClose
 		it.autoExperimentsAutoPairs = autoExperimentsAutoPairs
 		it.autoExperimentsSerumCount = autoExperimentsSerumCount
 		it.autoExperimentsGetMaxXp = autoExperimentsGetMaxXp
-		it.autoExperimentsShowSolver = autoExperimentsShowSolver
 		it.dungeonDoorModuleEnabled = dungeonDoorModuleEnabled
 		it.dungeonDoorEnabled = dungeonDoorEnabled
 		it.dungeonDoorDebugEnabled = dungeonDoorDebugEnabled
@@ -276,6 +287,7 @@ class BridgeConfig {
 		it.mobModelScale = mobModelScale
 		it.inventoryPreviewModuleEnabled = inventoryPreviewModuleEnabled
 		it.inventoryPreviewShowArmor = inventoryPreviewShowArmor
+		it.itemUpdateFixModuleEnabled = itemUpdateFixModuleEnabled
 		it.customCrosshairModuleEnabled = customCrosshairModuleEnabled
 		it.customCrosshairShowInFirstPerson = customCrosshairShowInFirstPerson
 		it.customCrosshairVisibleInF5 = customCrosshairVisibleInF5
@@ -315,6 +327,7 @@ class BridgeConfig {
 		it.pickaxeAbilityCooldownAlertSoundVolume = pickaxeAbilityCooldownAlertSoundVolume
 		it.pickaxeAbilityCooldownAlertSoundPitch = pickaxeAbilityCooldownAlertSoundPitch
 		it.pickaxeAbilityCooldownAlertText = pickaxeAbilityCooldownAlertText
+		it.pickobulusHelperModuleEnabled = pickobulusHelperModuleEnabled
 		it.fireFreezeModuleEnabled = fireFreezeModuleEnabled
 		it.fireFreezeMobTimerEnabled = fireFreezeMobTimerEnabled
 		it.fireFreezeFreezeTimerEnabled = fireFreezeFreezeTimerEnabled
@@ -411,16 +424,50 @@ class BackendHideonleafTrackedItem {
 	@JvmField var pricePerUnit: Double = 0.0
 }
 
-class BackendHideonleafStatsUpload {
-	@JvmField var playerName: String = ""
+class BackendHideonleafState {
+	@JvmField var minecraftUuid: String = ""
+	@JvmField var minecraftUsername: String = ""
 	@JvmField var kills: Long = 0L
 	@JvmField var totalShards: Long = 0L
 	@JvmField var totalProfit: Double = 0.0
 	@JvmField var profitPerHour: Double = 0.0
 	@JvmField var totalDurationMs: Long = 0L
 	@JvmField var updatedAt: Long = 0L
+	@JvmField var revision: Long = 0L
 	@JvmField var items: MutableMap<String, BackendHideonleafTrackedItem> = mutableMapOf()
 }
+
+sealed class BackendHideonleafMutation {
+	abstract val type: String
+}
+
+class BackendHideonleafIncrementMutation : BackendHideonleafMutation() {
+	override val type: String = "increment"
+	@JvmField var kills: Long = 0L
+	@JvmField var totalDurationMs: Long = 0L
+	@JvmField var items: MutableMap<String, BackendHideonleafTrackedItem> = mutableMapOf()
+}
+
+class BackendHideonleafResetMutation : BackendHideonleafMutation() {
+	override val type: String = "reset"
+}
+
+class BackendHideonleafMutationRequest {
+	@JvmField var requestId: String = ""
+	@JvmField var expectedRevision: Long = 0L
+	@JvmField var mutation: BackendHideonleafMutation = BackendHideonleafResetMutation()
+}
+
+class BackendHideonleafMutationResponse {
+	@JvmField var replayed: Boolean = false
+	@JvmField var state: BackendHideonleafState = BackendHideonleafState()
+	@JvmField var error: String = ""
+}
+
+data class BackendHideonleafMutationResult(
+	val httpStatus: Int,
+	val response: BackendHideonleafMutationResponse?,
+)
 
 class BackendMobModelState {
 	@JvmField var minecraftUsername: String = ""
@@ -450,6 +497,29 @@ class ItemPrice {
 	@JvmField var sellPrice: Double = 0.0
 	/** Unix-ms timestamp when the Bot last fetched this from Hypixel. */
 	@JvmField var lastUpdated: Long = 0L
+}
+
+class BackendAuctionHousePriceResponse {
+	@JvmField var items: MutableList<BackendAuctionHouseItemPrice> = mutableListOf()
+	@JvmField var sources: BackendAuctionHouseSources = BackendAuctionHouseSources()
+	@JvmField var partial: Boolean = false
+}
+
+class BackendAuctionHouseItemPrice {
+	@JvmField var itemId: String = ""
+	@JvmField var lowestBin: Double? = null
+	@JvmField var bazaarSellReference: Double? = null
+}
+
+class BackendAuctionHouseSources {
+	@JvmField var lowestBin: BackendAuctionHouseSourceStatus = BackendAuctionHouseSourceStatus()
+	@JvmField var bazaar: BackendAuctionHouseSourceStatus = BackendAuctionHouseSourceStatus()
+}
+
+class BackendAuctionHouseSourceStatus {
+	@JvmField var available: Boolean = false
+	@JvmField var fetchedAt: Long? = null
+	@JvmField var stale: Boolean = false
 }
 
 class BackendHighClassDiceTrackerResponse {

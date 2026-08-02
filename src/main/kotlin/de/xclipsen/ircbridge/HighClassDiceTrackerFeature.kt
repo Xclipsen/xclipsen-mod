@@ -40,8 +40,14 @@ object HighClassDiceTrackerFeature {
 		scheduler = null
 	}
 
+	fun onWorldChange() {
+		lastAlertAt = 0L
+		currentlyGood = false
+	}
+
 	fun requestStatus(onMessage: (Component) -> Unit) {
 		ensureScheduler()
+		val generation = ClientSessionLifecycle.snapshot()
 		scheduler?.execute {
 			val response = fetchTracker()
 			val text = if (response == null) {
@@ -50,7 +56,7 @@ object HighClassDiceTrackerFeature {
 				statusText(response)
 			}
 			Minecraft.getInstance().execute {
-				onMessage(text)
+				if (ClientSessionLifecycle.isCurrent(generation)) onMessage(text)
 			}
 		}
 	}
@@ -71,6 +77,7 @@ object HighClassDiceTrackerFeature {
 	}
 
 	private fun poll() {
+		val generation = ClientSessionLifecycle.snapshot()
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.highClassDiceTrackerEnabled) {
 			currentlyGood = false
@@ -78,6 +85,7 @@ object HighClassDiceTrackerFeature {
 		}
 
 		val response = fetchTracker() ?: return
+		if (!ClientSessionLifecycle.isCurrent(generation)) return
 		if (!response.ok) {
 			logger.debug("High Class Dice tracker returned not-ok: {}", response.error)
 			return
@@ -96,7 +104,7 @@ object HighClassDiceTrackerFeature {
 
 		currentlyGood = true
 		lastAlertAt = now
-		sendNotification(notificationText(response))
+		sendNotification(notificationText(response), generation)
 	}
 
 	private fun fetchTracker(): BackendHighClassDiceTrackerResponse? {
@@ -108,9 +116,10 @@ object HighClassDiceTrackerFeature {
 		}
 	}
 
-	private fun sendNotification(message: String) {
+	private fun sendNotification(message: String, generation: Long) {
 		val client = Minecraft.getInstance()
 		client.execute {
+			if (!ClientSessionLifecycle.isCurrent(generation)) return@execute
 			client.player?.sendSystemMessage(Component.literal(message))
 		}
 	}

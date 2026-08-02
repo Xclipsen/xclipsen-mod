@@ -99,6 +99,14 @@ object ExperimentationTableFeature {
 		this.handler = null
 	}
 
+	fun onWorldChange() = reset()
+
+	fun statusLine(): String {
+		val enabled = XclipsenIrcBridgeClient.instance?.config()?.experimentationTableModuleEnabled == true
+		val screen = Minecraft.getInstance().screen
+		return "enabled=$enabled, container=${screen is ContainerScreen}, handler=${handler?.javaClass?.simpleName ?: "none"}"
+	}
+
 	fun onSlotUpdate(screenHandler: AbstractContainerMenu) {
 		if (!isEnabled()) {
 			return
@@ -145,11 +153,9 @@ object ExperimentationTableFeature {
 		superpairsVisibility.reset()
 	}
 
-	private fun superpairsDebugEnabled(): Boolean = true
-
 	private fun debug(message: () -> String) {
-		if (superpairsDebugEnabled()) {
-			LOGGER.info("[superpairs-debug] {}", message())
+		if (LOGGER.isDebugEnabled) {
+			LOGGER.debug("[superpairs-debug] {}", message())
 		}
 	}
 

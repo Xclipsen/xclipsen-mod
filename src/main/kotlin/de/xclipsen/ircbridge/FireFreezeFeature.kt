@@ -35,6 +35,12 @@ object FireFreezeFeature {
 	private var alertVisibleUntil = 0L
 	private var tickCounter = 0
 
+	fun statusLine(): String {
+		val enabled = XclipsenIrcBridgeClient.instance?.config()?.fireFreezeModuleEnabled == true
+		return "enabled=$enabled, skyblock=${LocationTracker.isOnHypixelSkyBlock}, areas=${fireFreezes.size}, frozenMobs=${frozenMobs.size}, " +
+			"suppressedAreas=${suppressedEffectAreas.size}"
+	}
+
 	fun onTick(client: Minecraft) {
 		val config = XclipsenIrcBridgeClient.instance?.config()
 		if (config?.fireFreezeModuleEnabled != true || client.level == null || client.player == null || !LocationTracker.isOnHypixelSkyBlock) {
@@ -119,7 +125,7 @@ object FireFreezeFeature {
 		val fillConsumer = consumers.getBuffer(XclipsenRenderLayers.getXrayFill())
 
 		if (config.fireFreezeCustomCircleEnabled) {
-			val color = parseColor(config.fireFreezeCircleColorHex) ?: DEFAULT_CIRCLE_COLOR
+			val color = ClientColor.parseRgb(config.fireFreezeCircleColorHex) ?: DEFAULT_CIRCLE_COLOR
 			for (fireFreeze in fireFreezes.values) {
 				if (!fireFreeze.hasFinished(now)) {
 					drawCircle(circleLineConsumer, entry, fireFreeze.center.add(0.0, 1.0, 0.0), RADIUS, circleLineWidth, color)
@@ -279,9 +285,7 @@ object FireFreezeFeature {
 		matrices: com.mojang.blaze3d.vertex.PoseStack,
 		color: Int,
 	) {
-		val red = (color shr 16 and 0xFF) / 255.0f
-		val green = (color shr 8 and 0xFF) / 255.0f
-		val blue = (color and 0xFF) / 255.0f
+		val (red, green, blue) = ClientColor.rgbFloatChannels(color)
 		val box = entity.boundingBox.inflate(0.1)
 		XclipsenWorldRenderUtils.drawFilledBox(
 			matrices.last(),
@@ -308,9 +312,7 @@ object FireFreezeFeature {
 		lineWidth: Float,
 		color: Int,
 	) {
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
+		val (red, green, blue) = ClientColor.rgbChannels(color)
 		val ringCount = ceil(lineWidth.toDouble()).toInt().coerceIn(1, 8)
 		val startOffset = -((ringCount - 1) * CIRCLE_THICKNESS_STEP) / 2.0
 		for (ring in 0 until ringCount) {
@@ -353,15 +355,7 @@ object FireFreezeFeature {
 
 	private fun refreezeColor(remainingMs: Long): Int {
 		val percent = (1.0 - ((remainingMs - REFREEZE_THRESHOLD_MS).toDouble() / REFREEZE_THRESHOLD_MS)).coerceIn(0.0, 1.0)
-		return blend(YELLOW, RED, percent)
-	}
-
-	private fun blend(from: Int, to: Int, percent: Double): Int {
-		val inverse = 1.0 - percent
-		val red = (((from shr 16 and 0xFF) * inverse) + ((to shr 16 and 0xFF) * percent)).toInt().coerceIn(0, 255)
-		val green = (((from shr 8 and 0xFF) * inverse) + ((to shr 8 and 0xFF) * percent)).toInt().coerceIn(0, 255)
-		val blue = (((from and 0xFF) * inverse) + ((to and 0xFF) * percent)).toInt().coerceIn(0, 255)
-		return (red shl 16) or (green shl 8) or blue
+		return ClientColor.mix(YELLOW, RED, percent)
 	}
 
 	private fun playAlertSound(config: BridgeConfig) {
@@ -391,11 +385,6 @@ object FireFreezeFeature {
 	private fun isInsideSuppressedEffectArea(pos: Vec3, now: Long): Boolean {
 		return fireFreezes.values.any { !it.hasFinished(now) && it.isInside(pos, extra = EFFECT_SUPPRESSION_EXTRA_RADIUS) } ||
 			suppressedEffectAreas.values.any { it.expiresAtMs > now && it.isInside(pos) }
-	}
-
-	private fun parseColor(hex: String): Int? {
-		val candidate = hex.trim().removePrefix("#")
-		return if (HEX_COLOR_PATTERN.matches(candidate)) candidate.toInt(16) else null
 	}
 
 	private fun formatRemainingMs(remainingMs: Long): String {
@@ -468,7 +457,6 @@ object FireFreezeFeature {
 	private const val DEFAULT_CIRCLE_COLOR = 0x00F5FF
 	private const val YELLOW = 0xFFE066
 	private const val RED = 0xFF3030
-	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 	private val SECTION_FORMATTING_PATTERN = Regex("§.")
 	private val MYTHOLOGICAL_MOB_NAMES = listOf(
 		"minos hunter",
@@ -519,8 +507,6 @@ object FireFreezeTimersHudElement : XclipsenHudElement(
 		val renderer = Minecraft.getInstance().font
 		val width = lines.maxOf { renderer.width(it) }.coerceAtLeast(98) + 12
 		val height = 8 + (lines.size * (renderer.lineHeight + 2))
-		context.fill(0, 0, width, height, 0xB4121212.toInt())
-		context.fill(0, 0, width, 1, 0xFF00F5FF.toInt())
 		var y = 5
 		for (line in lines) {
 			context.text(renderer, line, 6, y, 0xFFE8FFFF.toInt(), true)
@@ -547,11 +533,7 @@ object FireFreezeRefreezeAlertHudElement : XclipsenHudElement(
 		val text = if (example) "Refreeze now!" else FireFreezeFeature.currentAlertText()
 		val width = (renderer.width(text) + 18).coerceAtLeast(170)
 		val height = renderer.lineHeight + 12
-		context.fill(0, 0, width, height, 0xC0181818.toInt())
-		context.fill(0, 0, width, 1, 0xFFFF3030.toInt())
-		context.fill(0, height - 1, width, height, 0xFFFF3030.toInt())
-		context.fill(3, 3, width - 3, height - 3, 0x40FF3030)
-		context.centeredText(renderer, text, width / 2, 6, 0xFFFFFFFF.toInt())
+		context.text(renderer, text, (width - renderer.width(text)) / 2, 6, 0xFFFFFFFF.toInt(), true)
 		return width.toFloat() to height.toFloat()
 	}
 }

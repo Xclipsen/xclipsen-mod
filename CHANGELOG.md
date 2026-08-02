@@ -1,10 +1,16 @@
 # Changelog
 
-## v0.5.23
+## v1.0.0
 
 - Ported the client target from Minecraft `1.21.11` to `26.1.2` with Java 25 and unobfuscated Mojang names.
-- Added Floor Drop ESP, high-class dice tracking, and related tracker updates.
+- Added player-scoped configuration, credential isolation, lifecycle resets, and resilient backend synchronization.
+- Added Floor Drop ESP, Item Update Fix, Pickobulus Helper, high-class dice tracking, and related tracker updates.
+- Added shared responsive ClickGUI controls, color and sound pickers, keyboard focus states, and plain-text movable HUD rendering.
+- Hardened commands, minigames, image previews, updater installation, network validation, and client-thread handoffs.
+- Reworked Hideonleaf tracking with revisioned idempotent synchronization, durable mutation replay, and backend-provided pricing.
+- Fixed configurable alert sounds being attenuated at the world origin instead of playing as relative client alerts.
 - Removed Blaze Auto Dagger and its automatic weapon-swapping configuration while retaining Blaze phase displays and colored mobs.
+- Removed the AutoCroesus module, commands, configuration, and ClickGUI integration.
 
 ## v0.5.22
 

@@ -112,20 +112,11 @@ object IrcChatTabHudElement : XclipsenHudElement(
 		textRenderer: net.minecraft.client.gui.Font,
 		active: Boolean,
 	) {
-		val fill = if (active) ACTIVE_FILL else INACTIVE_FILL
-		val border = if (active) ACTIVE_BORDER else INACTIVE_BORDER
 		val textColor = if (active) ACTIVE_TEXT else INACTIVE_TEXT
-		val glow = if (active) ACTIVE_GLOW else INACTIVE_GLOW
 		val label = "IRC"
 		val labelX = (BUTTON_WIDTH - textRenderer.width(label)) / 2
 		val labelY = (BUTTON_HEIGHT - textRenderer.lineHeight) / 2
 
-		context.fill(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, fill)
-		context.fill(0, 0, BUTTON_WIDTH, 1, border)
-		context.fill(0, BUTTON_HEIGHT - 1, BUTTON_WIDTH, BUTTON_HEIGHT, border)
-		context.fill(0, 0, 1, BUTTON_HEIGHT, border)
-		context.fill(BUTTON_WIDTH - 1, 0, BUTTON_WIDTH, BUTTON_HEIGHT, border)
-		context.fill(2, 2, BUTTON_WIDTH - 2, BUTTON_HEIGHT - 2, glow)
 		context.text(textRenderer, label, labelX, labelY, textColor, true)
 	}
 
@@ -135,6 +126,8 @@ object IrcChatTabHudElement : XclipsenHudElement(
 		val current = config?.hudElements?.get(id)
 		if (current != null && current.x.isFinite() && current.y.isFinite() && current.x >= 0f && current.y >= 0f) {
 			current.scale = current.scale.takeIf { it.isFinite() }?.coerceIn(0.5f, 4f) ?: 1f
+			current.x = current.x.coerceAtMost((window.guiScaledWidth - BUTTON_WIDTH * current.scale).coerceAtLeast(0f))
+			current.y = current.y.coerceAtMost((window.guiScaledHeight - BUTTON_HEIGHT * current.scale).coerceAtLeast(0f))
 			return current
 		}
 
@@ -145,12 +138,6 @@ object IrcChatTabHudElement : XclipsenHudElement(
 
 	private const val BUTTON_WIDTH = 24
 	private const val BUTTON_HEIGHT = 20
-	private const val ACTIVE_FILL = 0xB21B472F.toInt()
-	private const val ACTIVE_BORDER = 0xFF4FCB7A.toInt()
-	private const val ACTIVE_GLOW = 0x2E4FCB7A
 	private const val ACTIVE_TEXT = 0xFFFFFFFF.toInt()
-	private const val INACTIVE_FILL = 0x960A0A0A.toInt()
-	private const val INACTIVE_BORDER = 0x70FFFFFF
-	private const val INACTIVE_GLOW = 0x18202020
 	private const val INACTIVE_TEXT = 0xFFB9B9B9.toInt()
 }

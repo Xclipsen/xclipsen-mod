@@ -391,22 +391,25 @@ object PickaxeAbilityCooldownHudElement : XclipsenHudElement(
 			?: return 96f to 26f
 		val client = Minecraft.getInstance()
 		val textRenderer = client.font
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: BridgeConfig()
 		val title = status.name.uppercase(Locale.ROOT)
 		val value = status.stateText
-		val contentWidth = max(textRenderer.width(title), textRenderer.width(value))
+		val predicted = if (config.pickobulusHelperModuleEnabled && status.name.equals("Pickobulus", ignoreCase = true)) {
+			"Predicted: ${if (example) EXAMPLE_PREDICTED_BLOCKS else PickobulusHelperFeature.predictedBlockCount()}"
+		} else {
+			null
+		}
+		val contentWidth = listOfNotNull(title, value, predicted).maxOf(textRenderer::width)
 		val boxWidth = max(MIN_WIDTH, contentWidth + (PADDING_X * 2))
-		val boxHeight = PADDING_Y + textRenderer.lineHeight + LINE_GAP + textRenderer.lineHeight + PADDING_Y
-		val accent = if (status.ready) READY_ACCENT else COOLDOWN_ACCENT
+		val lineCount = if (predicted == null) 2 else 3
+		val boxHeight = PADDING_Y + (lineCount * textRenderer.lineHeight) + ((lineCount - 1) * LINE_GAP) + PADDING_Y
 		val valueColor = if (status.ready) READY_TEXT else COOLDOWN_TEXT
 
-		context.fill(0, 0, boxWidth, boxHeight, BACKGROUND)
-		context.fill(0, 0, boxWidth, 1, accent)
-		context.fill(0, boxHeight - 1, boxWidth, boxHeight, accent)
-		context.fill(0, 0, 1, boxHeight, accent)
-		context.fill(boxWidth - 1, 0, boxWidth, boxHeight, accent)
-		context.fill(3, 3, boxWidth - 3, boxHeight - 3, INNER_BACKGROUND)
 		context.text(textRenderer, title, PADDING_X, PADDING_Y, LABEL_TEXT, true)
 		context.text(textRenderer, value, PADDING_X, PADDING_Y + textRenderer.lineHeight + LINE_GAP, valueColor, true)
+		if (predicted != null) {
+			context.text(textRenderer, predicted, PADDING_X, PADDING_Y + (2 * (textRenderer.lineHeight + LINE_GAP)), PREDICTED_TEXT, true)
+		}
 
 		return boxWidth.toFloat() to boxHeight.toFloat()
 	}
@@ -415,13 +418,11 @@ object PickaxeAbilityCooldownHudElement : XclipsenHudElement(
 	private const val PADDING_Y = 5
 	private const val LINE_GAP = 2
 	private const val MIN_WIDTH = 90
-	private const val BACKGROUND = 0xB4121212.toInt()
-	private const val INNER_BACKGROUND = 0x40181818
+	private const val EXAMPLE_PREDICTED_BLOCKS = 38
 	private const val LABEL_TEXT = 0xFFE8E8E8.toInt()
 	private const val READY_TEXT = 0xFF8CF5A9.toInt()
 	private const val COOLDOWN_TEXT = 0xFFFFC76B.toInt()
-	private const val READY_ACCENT = 0xFF2FAD5A.toInt()
-	private const val COOLDOWN_ACCENT = 0xFFE39A2D.toInt()
+	private const val PREDICTED_TEXT = 0xFF55FFFF.toInt()
 }
 
 object PickaxeAbilityReadyAlertHudElement : XclipsenHudElement(
@@ -449,31 +450,12 @@ object PickaxeAbilityReadyAlertHudElement : XclipsenHudElement(
 		val width = max(DEFAULT_WIDTH, textRenderer.width(text) + (PADDING_X * 2))
 		val height = PADDING_Y + textRenderer.lineHeight + PADDING_Y
 
-		drawAlertPanel(context, textRenderer, text, width, height)
+		context.text(textRenderer, text, (width - textRenderer.width(text)) / 2, PADDING_Y, TEXT_COLOR, true)
 		return width.toFloat() to height.toFloat()
-	}
-
-	private fun drawAlertPanel(
-		context: GuiGraphicsExtractor,
-		textRenderer: Font,
-		text: String,
-		width: Int,
-		height: Int,
-	) {
-		context.fill(0, 0, width, height, BACKGROUND)
-		context.fill(0, 0, width, 1, ACCENT)
-		context.fill(0, height - 1, width, height, ACCENT)
-		context.fill(0, 0, 1, height, ACCENT)
-		context.fill(width - 1, 0, width, height, ACCENT)
-		context.fill(3, 3, width - 3, height - 3, INNER_BACKGROUND)
-		context.centeredText(textRenderer, text, width / 2, PADDING_Y, TEXT_COLOR)
 	}
 
 	private const val DEFAULT_WIDTH = 180
 	private const val PADDING_X = 8
 	private const val PADDING_Y = 6
-	private const val BACKGROUND = 0xC0181818.toInt()
-	private const val INNER_BACKGROUND = 0x402FAD5A
-	private const val ACCENT = 0xFF2FAD5A.toInt()
 	private const val TEXT_COLOR = 0xFFFFFFFF.toInt()
 }

@@ -58,19 +58,19 @@ object PurpleTerracottaHighlightFeature {
 		ticksUntilRescan = 0
 	}
 
+	fun statusLine(): String {
+		val enabled = XclipsenIrcBridgeClient.instance?.config()?.purpleTerracottaHighlightModuleEnabled == true
+		return "enabled=$enabled, onEnd=${LocationTracker.isOnEndIsland}, highlighted=${highlightedBlocks.size}"
+	}
+
 	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.purpleTerracottaHighlightModuleEnabled || !LocationTracker.isOnEndIsland || highlightedBlocks.isEmpty()) {
 			return
 		}
 
-		val color = parseColor(config.purpleTerracottaHighlightColorHex) ?: DEFAULT_COLOR
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
-		val redFloat = red / 255.0f
-		val greenFloat = green / 255.0f
-		val blueFloat = blue / 255.0f
+		val color = ClientColor.parseRgb(config.purpleTerracottaHighlightColorHex) ?: DEFAULT_COLOR
+		val (redFloat, greenFloat, blueFloat) = ClientColor.rgbFloatChannels(color)
 		val cameraPos = context.levelState().cameraRenderState.pos
 		val matrices = context.poseStack()
 		val consumers = context.bufferSource()
@@ -170,13 +170,4 @@ object PurpleTerracottaHighlightFeature {
 		)
 	}
 
-	private fun parseColor(hex: String): Int? {
-		val candidate = hex.trim().removePrefix("#")
-		if (!HEX_COLOR_PATTERN.matches(candidate)) {
-			return null
-		}
-		return candidate.toInt(16)
-	}
-
-	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 }

@@ -11,8 +11,9 @@ import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 
 class MinigameMainMenuScreen(
+	parent: Screen?,
 	private val controller: MinigameController,
-) : ChestLikeScreen(Component.literal("Minigames")) {
+) : ChestLikeScreen(parent, Component.literal("Minigames")) {
 	override fun slots(): Map<Int, MenuSlot> {
 		val entries = mutableMapOf<Int, MenuSlot>()
 		MinigameRegistry.all().forEachIndexed { index, game ->
@@ -21,7 +22,7 @@ class MinigameMainMenuScreen(
 				item = game.icon,
 				name = game.displayName,
 				lore = game.description + "Click to open",
-				action = { game.openModeMenu(controller) },
+				action = { game.openModeMenu(this, controller) },
 			)
 		}
 		if (controller.hasActiveGame()) {
@@ -29,7 +30,7 @@ class MinigameMainMenuScreen(
 				item = Items.LIME_DYE,
 				name = "Continue current match",
 				lore = listOf("Click to open"),
-				action = { controller.openActiveMatch() },
+				action = { controller.openActiveMatch(this) },
 			)
 		}
 		if (controller.invites().isNotEmpty()) {
@@ -37,7 +38,7 @@ class MinigameMainMenuScreen(
 				item = Items.PAPER,
 				name = "Pending game invites",
 				lore = listOf("${controller.invites().size} invite(s)"),
-				action = { minecraft.setScreen(InviteListScreen(controller)) },
+				action = { minecraft.setScreen(InviteListScreen(this, controller)) },
 			)
 		}
 		entries[26] = MenuSlot(item = Items.BARRIER, name = "Close", action = { onClose() })
@@ -46,9 +47,10 @@ class MinigameMainMenuScreen(
 }
 
 class GameModeSelectionScreen(
+	private val parent: Screen,
 	private val controller: MinigameController,
 	private val minigame: Minigame,
-) : ChestLikeScreen(Component.literal("${minigame.displayName}: Choose mode")) {
+) : ChestLikeScreen(parent, Component.literal("${minigame.displayName}: Choose mode")) {
 	override fun slots(): Map<Int, MenuSlot> = mapOf(
 		11 to MenuSlot(
 			item = Items.REDSTONE,
@@ -64,14 +66,15 @@ class GameModeSelectionScreen(
 			enabled = GameType.MULTIPLAYER in minigame.supportedModes,
 			action = { minecraft.setScreen(PlayerNameInputSignScreen(this, controller, minigame)) },
 		),
-		18 to MenuSlot(item = Items.ARROW, name = "Back", action = { controller.openMainMenu() }),
+		18 to MenuSlot(item = Items.ARROW, name = "Back", action = { minecraft.setScreen(parent) }),
 		26 to MenuSlot(item = Items.BARRIER, name = "Close", action = { onClose() }),
 	)
 }
 
 class InviteListScreen(
+	private val parent: Screen,
 	private val controller: MinigameController,
-) : ChestLikeScreen(Component.literal("Pending game invites")) {
+) : ChestLikeScreen(parent, Component.literal("Pending game invites")) {
 	override fun slots(): Map<Int, MenuSlot> {
 		val entries = mutableMapOf<Int, MenuSlot>()
 		controller.invites().take(18).forEachIndexed { index, invite ->
@@ -85,7 +88,7 @@ class InviteListScreen(
 				},
 			)
 		}
-		entries[18] = MenuSlot(item = Items.ARROW, name = "Back", action = { controller.openMainMenu() })
+		entries[18] = MenuSlot(item = Items.ARROW, name = "Back", action = { minecraft.setScreen(parent) })
 		entries[26] = MenuSlot(item = Items.BARRIER, name = "Close", action = { onClose() })
 		return entries
 	}
@@ -105,24 +108,27 @@ class PlayerNameInputSignScreen(
 	}
 
 	override fun removed() {
-		if (handledRemoval) return
-		handledRemoval = true
-		if (cancelled) return
-		val username = sign.frontText.getMessage(1, false).string.trim()
-		val error = when {
-			!USERNAME_PATTERN.matches(username) -> "Invalid player name."
-			username.equals(minecraft.user.name, ignoreCase = true) -> "You cannot challenge yourself."
-			else -> ""
-		}
-		minecraft.execute {
-			minecraft.setScreen(parent)
-			if (error.isBlank()) {
-				minigame.startMultiplayerGame(controller, username)
-			} else {
-				controller.feedback(error, error = true)
+		try {
+			if (handledRemoval) return
+			handledRemoval = true
+			if (cancelled) return
+			val username = sign.frontText.getMessage(1, false).string.trim()
+			val error = when {
+				!USERNAME_PATTERN.matches(username) -> "Invalid player name."
+				username.equals(minecraft.user.name, ignoreCase = true) -> "You cannot challenge yourself."
+				else -> ""
 			}
+			minecraft.execute {
+				minecraft.setScreen(parent)
+				if (error.isBlank()) {
+					minigame.startMultiplayerGame(controller, username)
+				} else {
+					controller.feedback(error, error = true)
+				}
+			}
+		} finally {
+			minecraft.textInputManager().stopTextInput()
 		}
-		minecraft.textInputManager().stopTextInput()
 		// Deliberately do not call super.removed(): Vanilla sends ServerboundSignUpdatePacket there.
 	}
 

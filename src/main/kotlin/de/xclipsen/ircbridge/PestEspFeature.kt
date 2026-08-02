@@ -16,6 +16,12 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 object PestEspFeature {
+	fun statusLine(): String {
+		val config = XclipsenIrcBridgeClient.instance?.config() ?: return "Unavailable"
+		val pests = Minecraft.getInstance().level?.entitiesForRendering()?.count { it is LivingEntity && isGardenPest(it) } ?: 0
+		return "enabled=${config.pestEspModuleEnabled}, onGarden=${LocationTracker.isOnGarden}, detected=$pests"
+	}
+
 	fun render(context: LevelRenderContext) {
 		val config = XclipsenIrcBridgeClient.instance?.config() ?: return
 		if (!config.pestEspModuleEnabled || !LocationTracker.isOnGarden) {
@@ -37,13 +43,8 @@ object PestEspFeature {
 			return
 		}
 
-		val color = parseColor(config.pestEspColorHex) ?: DEFAULT_COLOR
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
-		val redFloat = red / 255.0f
-		val greenFloat = green / 255.0f
-		val blueFloat = blue / 255.0f
+		val color = ClientColor.parseRgb(config.pestEspColorHex) ?: DEFAULT_COLOR
+		val (redFloat, greenFloat, blueFloat) = ClientColor.rgbFloatChannels(color)
 		val cameraPos = context.levelState().cameraRenderState.pos
 		val matrices = context.poseStack()
 		val consumers = context.bufferSource()
@@ -118,9 +119,7 @@ object PestEspFeature {
 		val normalX = (delta.x / length).toFloat()
 		val normalY = (delta.y / length).toFloat()
 		val normalZ = (delta.z / length).toFloat()
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
+		val (red, green, blue) = ClientColor.rgbChannels(color)
 
 		lineConsumer.addVertex(entry, start.x.toFloat(), start.y.toFloat(), start.z.toFloat())
 			.setColor(red, green, blue, LINE_ALPHA)
@@ -188,17 +187,8 @@ object PestEspFeature {
 		return PEST_NAMES.any { pestName -> candidate.contains(pestName, ignoreCase = true) }
 	}
 
-	private fun parseColor(hex: String): Int? {
-		val candidate = hex.trim().removePrefix("#")
-		if (!HEX_COLOR_PATTERN.matches(candidate)) {
-			return null
-		}
-		return candidate.toInt(16)
-	}
-
 	private fun Double.isFinite(): Boolean = !isNaN() && kotlin.math.abs(this) != Double.POSITIVE_INFINITY
 
-	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 	private const val NAME_SEARCH_RANGE_XZ = 2.25
 	private const val NAME_SEARCH_RANGE_Y = 3.5
 	private const val NAME_SEARCH_DISTANCE_SQUARED = 12.25

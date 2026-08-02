@@ -10,20 +10,41 @@ import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.net.InetAddress
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.security.MessageDigest
 import java.time.Duration
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
+import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import javax.imageio.ImageIO
 import kotlin.math.max
 import kotlin.math.min
 
 object ImagePreviewManager {
+	private const val MAX_REDIRECTS = 4
+	private const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+	private const val MAX_IMAGE_DIMENSION = 4096
+	private const val MAX_IMAGE_PIXELS = 16_777_216L
+	private const val MAX_CACHE_ENTRIES = 32
+	private val allowedContentTypes = setOf("image/png", "image/jpeg", "image/gif")
+	private val trustedImageHosts = setOf(
+		"cdn.discordapp.com",
+		"media.discordapp.net",
+		"images-ext-1.discordapp.net",
+		"images-ext-2.discordapp.net",
+	)
 	private val httpClient: HttpClient = HttpClient.newBuilder()
-		.followRedirects(HttpClient.Redirect.NORMAL)
+		.followRedirects(HttpClient.Redirect.NEVER)
 		.connectTimeout(Duration.ofSeconds(10))
 		.build()
 
@@ -31,7 +52,11 @@ object ImagePreviewManager {
 		Thread(runnable, "xclipsen-image-preview").apply { isDaemon = true }
 	}
 
-	private val previews = ConcurrentHashMap<String, PreviewState>()
+	private val cacheLock = Any()
+	private val previews = LinkedHashMap<String, PreviewState>(16, 0.75f, true)
+	private val generation = AtomicLong()
+	private val textureSequence = AtomicLong()
+	private val shutDown = AtomicBoolean()
 	@Volatile
 	private var hoverPreviewActive = false
 
@@ -40,7 +65,7 @@ object ImagePreviewManager {
 		hoverPreviewActive = imageUrl != null
 		XclipsenIrcBridgeClient.instance?.setPreviewHoverPaused(imageUrl != null)
 		imageUrl ?: return
-		val state = previews.computeIfAbsent(imageUrl) { PreviewState() }
+		val state = previewState(imageUrl)
 		state.requestLoad(imageUrl)
 
 		val client = Minecraft.getInstance() ?: return
@@ -180,70 +205,272 @@ object ImagePreviewManager {
 
 	fun isHoverPreviewActive(): Boolean = hoverPreviewActive
 
-	private fun isPreviewableImageUrl(url: String): Boolean {
-		if (!url.startsWith("http://") && !url.startsWith("https://")) {
-			return false
+	/** Invalidates in-flight work and releases cached textures. Call on disconnect or world replacement. */
+	fun reset() {
+		generation.incrementAndGet()
+		hoverPreviewActive = false
+		val removed = synchronized(cacheLock) {
+			previews.values.toList().also { previews.clear() }
 		}
+		removed.forEach(PreviewState::dispose)
+	}
 
-		val path = try {
-			URI.create(url).path.orEmpty().lowercase()
+	/** Permanently stops image loading. Call once when the Minecraft client is stopping. */
+	fun shutdown() {
+		if (shutDown.compareAndSet(false, true)) {
+			reset()
+			downloadExecutor.shutdownNow()
+		}
+	}
+
+	private fun previewState(url: String): PreviewState {
+		val removed = ArrayList<PreviewState>(1)
+		val state = synchronized(cacheLock) {
+			previews[url] ?: PreviewState(generation.get()).also {
+				previews[url] = it
+				while (previews.size > MAX_CACHE_ENTRIES) {
+					val iterator = previews.entries.iterator()
+					removed += iterator.next().value
+					iterator.remove()
+				}
+			}
+		}
+		removed.forEach(PreviewState::dispose)
+		return state
+	}
+
+	private fun isPreviewableImageUrl(url: String): Boolean {
+		val uri = try {
+			URI.create(url)
 		} catch (_: IllegalArgumentException) {
 			return false
 		}
+		if (uri.scheme?.lowercase(Locale.ROOT) != "https" || uri.rawUserInfo != null) {
+			return false
+		}
+		val path = uri.path.orEmpty().lowercase(Locale.ROOT)
 
 		return path.endsWith(".png") ||
 			path.endsWith(".jpg") ||
 			path.endsWith(".jpeg") ||
-			path.endsWith(".webp") ||
 			path.endsWith(".gif")
 	}
 
-	private class PreviewState {
+	private fun validatedPublicUri(uri: URI): URI {
+		val scheme = uri.scheme?.lowercase(Locale.ROOT)
+		val host = uri.host?.lowercase(Locale.ROOT)
+		require(scheme == "https") { "Image previews require HTTPS" }
+		require(uri.rawUserInfo == null) { "Image URL userinfo is not allowed" }
+		require(host in trustedImageHosts && uri.port == -1) { "Image URL host is not trusted" }
+		val addresses = InetAddress.getAllByName(host)
+		require(addresses.isNotEmpty() && addresses.all(::isPublicAddress)) { "Image URL is not public" }
+		return uri
+	}
+
+	private fun isPublicAddress(address: InetAddress): Boolean {
+		if (address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress ||
+			address.isSiteLocalAddress || address.isMulticastAddress
+		) {
+			return false
+		}
+		val bytes = address.address
+		if (bytes.size == 4) {
+			val first = bytes[0].toInt() and 0xff
+			val second = bytes[1].toInt() and 0xff
+			val third = bytes[2].toInt() and 0xff
+			return when {
+				first == 0 || first == 10 || first == 127 || first >= 224 -> false
+				first == 100 && second in 64..127 -> false
+				first == 169 && second == 254 -> false
+				first == 172 && second in 16..31 -> false
+				first == 192 && second == 0 && (third == 0 || third == 2) -> false
+				first == 192 && second == 88 && third == 99 -> false
+				first == 192 && second == 168 -> false
+				first == 198 && second in 18..19 -> false
+				first == 198 && second == 51 && third == 100 -> false
+				first == 203 && second == 0 && third == 113 -> false
+				else -> true
+			}
+		}
+		if (bytes.size != 16) {
+			return false
+		}
+		val first = bytes[0].toInt() and 0xff
+		val second = bytes[1].toInt() and 0xff
+		return when {
+			first and 0xfe == 0xfc -> false
+			first == 0x00 && second == 0x64 && bytes[2] == 0xff.toByte() && bytes[3] == 0x9b.toByte() -> false
+			first == 0x01 && second == 0x00 -> false
+			first == 0x20 && second == 0x01 && bytes[2] == 0x0d.toByte() && bytes[3] == 0xb8.toByte() -> false
+			first == 0x20 && second == 0x01 && bytes[2] == 0.toByte() && bytes[3] == 0.toByte() -> false
+			first == 0x20 && second == 0x02 -> false
+			first == 0x3f && second and 0xf0 == 0xf0 -> false
+			first == 0x5f -> false
+			else -> true
+		}
+	}
+
+	private fun download(uri: URI): ByteArray {
+		var current = validatedPublicUri(uri)
+		repeat(MAX_REDIRECTS + 1) { redirectCount ->
+			val request = HttpRequest.newBuilder(current)
+				.timeout(Duration.ofSeconds(15))
+				.header("Accept", allowedContentTypes.joinToString(", "))
+				.GET()
+				.build()
+			val response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
+			response.body().use { body ->
+				if (response.statusCode() in setOf(301, 302, 303, 307, 308)) {
+					require(redirectCount < MAX_REDIRECTS) { "Too many image redirects" }
+					val location = response.headers().firstValue("Location").orElseThrow {
+						IllegalArgumentException("Image redirect has no location")
+					}
+					val target = validatedPublicUri(current.resolve(location))
+					require(current.scheme.lowercase(Locale.ROOT) != "https" || target.scheme.lowercase(Locale.ROOT) == "https") {
+						"HTTPS image redirect downgrade rejected"
+					}
+					current = target
+					return@use
+				}
+				require(response.statusCode() == 200) { "Image response was ${response.statusCode()}" }
+				val contentType = response.headers().firstValue("Content-Type").orElse("")
+					.substringBefore(';').trim().lowercase(Locale.ROOT)
+				require(contentType in allowedContentTypes) { "Unsupported image content type" }
+				val contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L)
+				require(contentLength in -1L..MAX_RESPONSE_BYTES.toLong()) { "Image response is too large" }
+				return readBounded(body)
+			}
+		}
+		error("Too many image redirects")
+	}
+
+	private fun readBounded(input: InputStream): ByteArray {
+		val output = ByteArrayOutputStream()
+		val buffer = ByteArray(8192)
+		var total = 0
+		while (true) {
+			val read = input.read(buffer)
+			if (read < 0) break
+			total += read
+			require(total <= MAX_RESPONSE_BYTES) { "Image response is too large" }
+			output.write(buffer, 0, read)
+		}
+		return output.toByteArray()
+	}
+
+	private fun probeDimensions(data: ByteArray): Pair<Int, Int> {
+		ImageIO.createImageInputStream(ByteArrayInputStream(data)).use { input ->
+			val readers = ImageIO.getImageReaders(input)
+			require(readers.hasNext()) { "Unsupported image encoding" }
+			val reader = readers.next()
+			try {
+				reader.input = input
+				return reader.getWidth(0) to reader.getHeight(0)
+			} finally {
+				reader.dispose()
+			}
+		}
+	}
+
+	private fun dimensionsAllowed(width: Int, height: Int): Boolean =
+		width > 0 && height > 0 && width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION &&
+			width.toLong() * height.toLong() <= MAX_IMAGE_PIXELS
+
+	private fun textureId(url: String): Identifier {
+		val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray(Charsets.UTF_8))
+		val hash = digest.joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+		return Identifier.fromNamespaceAndPath(
+			"xclipsen_mod",
+			"preview/$hash/${generation.get()}-${textureSequence.incrementAndGet()}",
+		)
+	}
+
+	private fun releaseTexture(textureId: Identifier) {
+		val client = Minecraft.getInstance()
+		if (client.isSameThread) {
+			client.textureManager.release(textureId)
+		} else {
+			client.execute { client.textureManager.release(textureId) }
+		}
+	}
+
+	private class PreviewState(private val requestGeneration: Long) {
 		val state: AtomicReference<Any> = AtomicReference(NotLoadedPreview)
+		private val disposed = AtomicBoolean()
+		private val pendingImage = AtomicReference<NativeImage?>()
 
 		fun requestLoad(url: String) {
-			if (!state.compareAndSet(NotLoadedPreview, LoadingPreview)) {
+			if (shutDown.get() || disposed.get() || !state.compareAndSet(NotLoadedPreview, LoadingPreview)) {
 				return
 			}
 
-			downloadExecutor.execute {
-				try {
-					val request = HttpRequest.newBuilder(URI.create(url))
-						.timeout(Duration.ofSeconds(15))
-						.GET()
-						.build()
-					val response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray())
-					if (response.statusCode() != 200) {
-						state.set(FailedPreview("Image preview failed (${response.statusCode()})."))
-						return@execute
-					}
-
-					ByteArrayInputStream(response.body()).use { stream ->
-						val image = NativeImage.read(stream)
-						val width = image.width
-						val height = image.height
-						val client = Minecraft.getInstance()
-						if (client == null) {
-							image.close()
-							state.set(FailedPreview("Minecraft client unavailable."))
-							return@use
+			try {
+				downloadExecutor.execute {
+					try {
+						val imageData = download(URI.create(url))
+						val (probedWidth, probedHeight) = probeDimensions(imageData)
+						if (!dimensionsAllowed(probedWidth, probedHeight)) {
+							fail("Image dimensions are too large.")
+							return@execute
 						}
-
-						client.execute {
-							try {
-								val textureId = Identifier.fromNamespaceAndPath("xclipsen_mod", "preview/${url.hashCode().toUInt().toString(16)}")
-								client.textureManager.register(textureId, DynamicTexture({ "IRC preview" }, image))
-								state.set(LoadedPreview(textureId, width, height))
-							} catch (exception: Exception) {
+						ByteArrayInputStream(imageData).use { stream ->
+							val image = NativeImage.read(stream)
+							val width = image.width
+							val height = image.height
+							if (!dimensionsAllowed(width, height) || width != probedWidth || height != probedHeight) {
 								image.close()
-								state.set(FailedPreview("Image preview failed."))
+								fail("Image dimensions are too large.")
+								return@use
+							}
+							if (!isCurrent() || !pendingImage.compareAndSet(null, image)) {
+								image.close()
+								return@use
+							}
+							val client = Minecraft.getInstance()
+
+							client.execute {
+								val ownedImage = pendingImage.getAndSet(null) ?: return@execute
+								if (!isCurrent()) {
+									ownedImage.close()
+									return@execute
+								}
+								var texture: DynamicTexture? = null
+								try {
+									val textureId = textureId(url)
+									texture = DynamicTexture({ "IRC preview" }, ownedImage)
+									client.textureManager.register(textureId, texture)
+									val loaded = LoadedPreview(textureId, width, height)
+									if (!isCurrent() || !state.compareAndSet(LoadingPreview, loaded)) {
+										client.textureManager.release(textureId)
+									}
+								} catch (exception: Exception) {
+									texture?.close() ?: ownedImage.close()
+									fail("Image preview failed.")
+								}
 							}
 						}
+					} catch (_: InterruptedException) {
+						Thread.currentThread().interrupt()
+						fail("Image preview cancelled.")
+					} catch (_: Exception) {
+						fail("Image preview failed.")
 					}
-				} catch (_: Exception) {
-					state.set(FailedPreview("Image preview failed."))
 				}
+			} catch (_: RejectedExecutionException) {
+				fail("Image preview unavailable.")
 			}
+		}
+
+		fun dispose() {
+			if (!disposed.compareAndSet(false, true)) return
+			pendingImage.getAndSet(null)?.close()
+			(state.getAndSet(NotLoadedPreview) as? LoadedPreview)?.let { releaseTexture(it.textureId) }
+		}
+
+		private fun isCurrent(): Boolean = !disposed.get() && !shutDown.get() && generation.get() == requestGeneration
+
+		private fun fail(message: String) {
+			if (isCurrent()) state.set(FailedPreview(message))
 		}
 	}
 

@@ -134,7 +134,7 @@ object MobModelCatalog {
 	}
 
 	fun logDiagnostics(reason: String) {
-		LOGGER.info(
+		LOGGER.debug(
 			"MobModelCatalog[{}]: localCount={}, zombieAvailable={}, sample={}",
 			reason,
 			localTypesById.size,

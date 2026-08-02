@@ -41,6 +41,8 @@ object AutoSprintFeature {
 		return original || config.autoSprintModuleEnabled
 	}
 
+	fun onWorldChange() = clearSprintKeyBlock()
+
 	private fun blockSprintKey(client: Minecraft, player: LocalPlayer) {
 		client.options.keySprint.setDown(false)
 		wasBlockingSprintKey = true

@@ -36,7 +36,7 @@ object ShulkerTracerRenderer {
 		}
 		val shulkerCenters = shulkerPath.map { it.center }
 
-		val color = parseColor(config.shulkerTracerLineColorHex) ?: DEFAULT_LINE_COLOR
+		val color = ClientColor.parseRgb(config.shulkerTracerLineColorHex) ?: DEFAULT_LINE_COLOR
 		val start = crosshairStart(cameraPos)
 		val lineWidth = config.shulkerTracerLineWidth.coerceIn(1.0f, 8.0f)
 		var previous = start
@@ -119,9 +119,7 @@ object ShulkerTracerRenderer {
 		val normalY = (delta.y / length).toFloat()
 		val normalZ = (delta.z / length).toFloat()
 
-		val red = color shr 16 and 0xFF
-		val green = color shr 8 and 0xFF
-		val blue = color and 0xFF
+		val (red, green, blue) = ClientColor.rgbChannels(color)
 		val alpha = 230
 
 		matrices.pushPose()
@@ -141,17 +139,8 @@ object ShulkerTracerRenderer {
 		matrices.popPose()
 	}
 
-	private fun parseColor(hex: String): Int? {
-		val candidate = hex.trim().removePrefix("#")
-		if (!HEX_COLOR_PATTERN.matches(candidate)) {
-			return null
-		}
-		return candidate.toInt(16)
-	}
-
 	private fun Double.isFinite(): Boolean = !isNaN() && kotlin.math.abs(this) != Double.POSITIVE_INFINITY
 
-	private val HEX_COLOR_PATTERN = Regex("[0-9a-fA-F]{6}")
 	private const val CROSSHAIR_OFFSET = 2.0
 	private const val DEFAULT_LINE_COLOR = 0x36C5F0
 

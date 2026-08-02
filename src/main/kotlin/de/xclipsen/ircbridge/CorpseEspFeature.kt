@@ -5,6 +5,11 @@ import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.decoration.ArmorStand
 
 object CorpseEspFeature {
+	fun statusLine(): String {
+		val enabled = XclipsenIrcBridgeClient.instance?.config()?.corpseEspModuleEnabled == true
+		return "enabled=$enabled, inMineshaft=${FrozenCorpseDetector.isInMineshaftArea()}"
+	}
+
 	fun shouldGlow(entity: Entity): Boolean {
 		return matchingCorpseType(entity) != null
 	}
